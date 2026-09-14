@@ -461,6 +461,8 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         email = session.email,
                         firstName = session.firstName,
                         lastName = session.lastName,
+                        publicKey = session.publicKey,
+                        isLiveMode = session.isLiveMode,
                         onDismiss = { viewModel.closeChapaPayment() },
                         onPaymentSuccess = { txRef ->
                             session.onPaymentCompleted(txRef)

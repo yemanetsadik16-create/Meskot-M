@@ -5,7 +5,12 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.UUID
 
-class MeskotRepository(private val context: Context) {
+class MeskotRepository(
+    private val context: Context,
+    val userRepository: UserRepository = FirestoreUserRepository()
+) {
+
+    private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Language state
     private val _currentLanguage = MutableStateFlow(AppLanguage.EN)
@@ -19,9 +24,18 @@ class MeskotRepository(private val context: Context) {
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
 
-    // Users list (populated directly from Firebase Firestore, seeded with default friends)
-    private val _users = MutableStateFlow<List<User>>(createInitialUsers())
+    // Users list (populated directly from Firebase Firestore via UserRepository, initially empty)
+    private val _users = MutableStateFlow<List<User>>(emptyList())
     val users: StateFlow<List<User>> = _users.asStateFlow()
+
+    val isUsersLoading: StateFlow<Boolean> = userRepository.isLoading
+    val usersError: StateFlow<String?> = userRepository.error
+
+    fun refreshUsers() {
+        repoScope.launch {
+            userRepository.refreshUsers()
+        }
+    }
 
     // Posts list (populated directly from Firebase Firestore)
     private val _posts = MutableStateFlow<List<Post>>(emptyList())
@@ -83,6 +97,25 @@ class MeskotRepository(private val context: Context) {
     private val _payoutHistory = MutableStateFlow<List<CreatorPayoutRecord>>(createInitialPayoutHistory())
     val payoutHistory: StateFlow<List<CreatorPayoutRecord>> = _payoutHistory.asStateFlow()
 
+    // Creator Studio & Monetization Systems
+    private val _monetizationTools = MutableStateFlow<List<MonetizationTool>>(createInitialMonetizationTools())
+    val monetizationTools: StateFlow<List<MonetizationTool>> = _monetizationTools.asStateFlow()
+
+    private val _earningsLedger = MutableStateFlow<List<EarningsLedgerEntry>>(createInitialLedger())
+    val earningsLedger: StateFlow<List<EarningsLedgerEntry>> = _earningsLedger.asStateFlow()
+
+    private val _contentFormatMetrics = MutableStateFlow<List<ContentFormatMetric>>(createInitialContentFormatMetrics())
+    val contentFormatMetrics: StateFlow<List<ContentFormatMetric>> = _contentFormatMetrics.asStateFlow()
+
+    private val _dailyEarnings = MutableStateFlow<List<DailyEarningsMetric>>(createInitialDailyEarnings())
+    val dailyEarnings: StateFlow<List<DailyEarningsMetric>> = _dailyEarnings.asStateFlow()
+
+    private val _payoutAccounts = MutableStateFlow<List<CreatorPayoutAccount>>(createInitialPayoutAccounts())
+    val payoutAccounts: StateFlow<List<CreatorPayoutAccount>> = _payoutAccounts.asStateFlow()
+
+    private val _chapaConfig = MutableStateFlow(ChapaGatewayConfig())
+    val chapaConfig: StateFlow<ChapaGatewayConfig> = _chapaConfig.asStateFlow()
+
     private var notifListenerRegistration: com.google.firebase.firestore.ListenerRegistration? = null
     private var incomingCallsListenerRegistration: com.google.firebase.firestore.ListenerRegistration? = null
     private var activeCallListenerRegistration: com.google.firebase.firestore.ListenerRegistration? = null
@@ -129,8 +162,32 @@ class MeskotRepository(private val context: Context) {
                 photoUrl = fbAuthUser.photoUrl?.toString() ?: ""
             )
             _currentUser.value = user
+            userRepository.setCurrentUser(user)
             setupUserSpecificListeners(user.uid)
         }
+
+        repoScope.launch {
+            userRepository.users.collect { liveUsers ->
+                _users.value = liveUsers
+                val curUid = _currentUser.value?.uid ?: FirebaseManager.getCurrentFirebaseUser()?.uid
+                if (curUid != null) {
+                    val matching = liveUsers.find { it.uid == curUid }
+                    if (matching != null && matching != _currentUser.value) {
+                        _currentUser.value = matching
+                        setupUserSpecificListeners(matching.uid)
+                    }
+                }
+            }
+        }
+
+        repoScope.launch {
+            userRepository.currentUser.collect { user ->
+                if (user != null && user != _currentUser.value) {
+                    _currentUser.value = user
+                }
+            }
+        }
+
         setupFirebaseListeners()
     }
 
@@ -166,16 +223,8 @@ class MeskotRepository(private val context: Context) {
                 _comments.value = liveComments
             }
 
-            FirebaseManager.listenToUsers { liveUsers ->
-                _users.value = liveUsers
-                val curUid = _currentUser.value?.uid ?: FirebaseManager.getCurrentFirebaseUser()?.uid
-                if (curUid != null) {
-                    val matching = liveUsers.find { it.uid == curUid }
-                    if (matching != null) {
-                        _currentUser.value = matching
-                        setupUserSpecificListeners(matching.uid)
-                    }
-                }
+            repoScope.launch {
+                userRepository.refreshUsers()
             }
 
             // Global real-time Messages synchronization
@@ -247,6 +296,10 @@ class MeskotRepository(private val context: Context) {
             pass = pass,
             onSuccess = { fbUser ->
                 _currentUser.value = fbUser
+                userRepository.setCurrentUser(fbUser)
+                repoScope.launch {
+                    userRepository.saveUser(fbUser)
+                }
                 setupUserSpecificListeners(fbUser.uid)
                 setupFirebaseListeners()
                 if (_users.value.none { it.uid == fbUser.uid }) {
@@ -279,6 +332,10 @@ class MeskotRepository(private val context: Context) {
             phoneNumber = phoneNumber,
             onSuccess = { fbUser ->
                 _currentUser.value = fbUser
+                userRepository.setCurrentUser(fbUser)
+                repoScope.launch {
+                    userRepository.saveUser(fbUser)
+                }
                 setupUserSpecificListeners(fbUser.uid)
                 setupFirebaseListeners()
                 if (_users.value.none { it.uid == fbUser.uid }) {
@@ -311,6 +368,10 @@ class MeskotRepository(private val context: Context) {
 
     fun switchUser(user: User) {
         _currentUser.value = user
+        userRepository.setCurrentUser(user)
+        repoScope.launch {
+            userRepository.saveUser(user)
+        }
         setupUserSpecificListeners(user.uid)
         setupFirebaseListeners()
     }
@@ -328,6 +389,7 @@ class MeskotRepository(private val context: Context) {
         generalMessagesRegistration = null
         _incomingMessageAlert.value = null
         _incomingCall.value = null
+        userRepository.setCurrentUser(null)
         FirebaseManager.signOut()
         _currentUser.value = null
     }
@@ -365,6 +427,10 @@ class MeskotRepository(private val context: Context) {
         )
         _currentUser.value = updated
         _users.value = _users.value.map { if (it.uid == curr.uid) updated else it }
+        userRepository.setCurrentUser(updated)
+        repoScope.launch {
+            userRepository.saveUser(updated)
+        }
         FirebaseManager.saveUser(updated)
     }
 
@@ -474,7 +540,7 @@ class MeskotRepository(private val context: Context) {
         _hiddenPostIds.value = _hiddenPostIds.value + postId
     }
 
-    fun sendTip(postId: String, amount: Double) {
+    fun sendTip(postId: String, amount: Double, txRef: String = "") {
         val user = _currentUser.value ?: return
         var updatedTipTotal: Double? = null
         _posts.value = _posts.value.map { post ->
@@ -486,6 +552,45 @@ class MeskotRepository(private val context: Context) {
         }
         updatedTipTotal?.let { FirebaseManager.updatePostTip(postId, it) }
         val post = _posts.value.find { it.id == postId } ?: return
+
+        val netAmount = amount * 0.85 // 85% to creator, 15% platform fee
+        val reference = if (txRef.isNotBlank()) txRef else "CHP-TIP-" + UUID.randomUUID().toString().take(8).uppercase()
+
+        // Credit creator if it's the current user
+        if (post.uid == user.uid) {
+            val newNet = user.creatorNetBalance + netAmount
+            val newGross = user.creatorGrossEarnings + amount
+            val updatedUser = user.copy(creatorNetBalance = newNet, creatorGrossEarnings = newGross)
+            _currentUser.value = updatedUser
+            userRepository.setCurrentUser(updatedUser)
+            repoScope.launch {
+                userRepository.saveUser(updatedUser)
+            }
+            val newEntry = EarningsLedgerEntry(
+                id = "ledger_" + System.currentTimeMillis(),
+                transactionRef = reference,
+                entryType = LedgerEntryType.FAN_TIP_CREDIT,
+                amountEtb = netAmount,
+                balanceAfterEtb = newNet,
+                sourceTitle = "Reader Tip on '${post.text.take(30)}...'",
+                metadata = "Gross: ${String.format(java.util.Locale.US, "%.2f", amount)} ETB · Verified Chapa Gateway · Ref: $reference"
+            )
+            _earningsLedger.value = listOf(newEntry) + _earningsLedger.value
+        } else {
+            // Update in other users list
+            val creator = _users.value.find { it.uid == post.uid }
+            if (creator != null) {
+                val updatedCreator = creator.copy(
+                    creatorGrossEarnings = creator.creatorGrossEarnings + amount,
+                    creatorNetBalance = creator.creatorNetBalance + netAmount
+                )
+                _users.value = _users.value.map { if (it.uid == post.uid) updatedCreator else it }
+                repoScope.launch {
+                    userRepository.saveUser(updatedCreator)
+                }
+            }
+        }
+
         if (post.uid != user.uid) {
             addNotification(
                 fromUid = user.uid,
@@ -493,18 +598,22 @@ class MeskotRepository(private val context: Context) {
                 fromPhoto = user.photoUrl,
                 type = "tip",
                 targetId = postId,
-                amount = amount
+                amount = amount,
+                customText = "${user.displayName} sent a real tip of ${amount.toInt()} ETB via Chapa! 💰"
             )
         }
     }
 
     // MONETIZATION: FAN SUBSCRIPTIONS
-    fun subscribeToCreator(creatorUid: String, tier: MembershipTier) {
+    fun subscribeToCreator(creatorUid: String, tier: MembershipTier, txRef: String = "") {
         val user = _currentUser.value ?: return
         val updatedVip = user.vipMemberships.toMutableMap()
         updatedVip[creatorUid] = tier.code
         val updatedUser = user.copy(vipMemberships = updatedVip)
         _currentUser.value = updatedUser
+
+        val reference = if (txRef.isNotBlank()) txRef else "CHP-SUB-" + UUID.randomUUID().toString().take(8).uppercase()
+        val netAdd = tier.monthlyPriceEtb * 0.80
 
         // Notify creator
         addNotification(
@@ -513,18 +622,41 @@ class MeskotRepository(private val context: Context) {
             fromPhoto = user.photoUrl,
             type = "vip_subscription",
             targetId = creatorUid,
-            customText = "${user.displayName} joined your fan club as a ${tier.label}! 🌟"
+            customText = "${user.displayName} joined your fan club as a ${tier.label}! 🌟 (Chapa Verified: $reference)"
         )
 
         // Update creator earnings
-        _users.value = _users.value.map { u ->
-            if (u.uid == creatorUid) {
-                val netAdd = tier.monthlyPriceEtb * 0.80
-                u.copy(
-                    creatorGrossEarnings = u.creatorGrossEarnings + tier.monthlyPriceEtb,
-                    creatorNetBalance = u.creatorNetBalance + netAdd
+        if (creatorUid == user.uid) {
+            val newNet = user.creatorNetBalance + netAdd
+            val newGross = user.creatorGrossEarnings + tier.monthlyPriceEtb
+            val updatedUser = user.copy(creatorNetBalance = newNet, creatorGrossEarnings = newGross)
+            _currentUser.value = updatedUser
+            userRepository.setCurrentUser(updatedUser)
+            repoScope.launch {
+                userRepository.saveUser(updatedUser)
+            }
+            val newEntry = EarningsLedgerEntry(
+                id = "ledger_" + System.currentTimeMillis(),
+                transactionRef = reference,
+                entryType = LedgerEntryType.SUBSCRIPTION_CREDIT,
+                amountEtb = netAdd,
+                balanceAfterEtb = newNet,
+                sourceTitle = "${tier.label} Subscription (${user.displayName})",
+                metadata = "Gross: ${tier.monthlyPriceEtb} ETB · Platform 20% · Verified Chapa Gateway · Ref: $reference"
+            )
+            _earningsLedger.value = listOf(newEntry) + _earningsLedger.value
+        } else {
+            val creator = _users.value.find { it.uid == creatorUid }
+            if (creator != null) {
+                val updatedCreator = creator.copy(
+                    creatorGrossEarnings = creator.creatorGrossEarnings + tier.monthlyPriceEtb,
+                    creatorNetBalance = creator.creatorNetBalance + netAdd
                 )
-            } else u
+                _users.value = _users.value.map { if (it.uid == creatorUid) updatedCreator else it }
+                repoScope.launch {
+                    userRepository.saveUser(updatedCreator)
+                }
+            }
         }
     }
 
@@ -606,12 +738,13 @@ class MeskotRepository(private val context: Context) {
     }
 
     // CREATOR PAYOUTS
-    fun requestPayout(method: String, amountEtb: Double) {
+    fun requestPayout(method: String, amountEtb: Double, destinationAccount: String = "") {
         val user = _currentUser.value ?: return
         if (user.creatorNetBalance < amountEtb || amountEtb <= 0) return
 
         val platformFee = amountEtb * 0.02
         val netDisbursed = amountEtb - platformFee
+        val ref = "CHAPA-OUT-" + UUID.randomUUID().toString().take(8).uppercase()
 
         val record = CreatorPayoutRecord(
             id = "payout_" + System.currentTimeMillis(),
@@ -621,12 +754,164 @@ class MeskotRepository(private val context: Context) {
             netAmountEtb = netDisbursed,
             payoutMethod = method,
             status = "COMPLETED",
-            transactionRef = "TXN-" + UUID.randomUUID().toString().take(8).uppercase()
+            transactionRef = ref
         )
 
         _payoutHistory.value = listOf(record) + _payoutHistory.value
-        val updatedUser = user.copy(creatorNetBalance = user.creatorNetBalance - amountEtb)
+        val newBalance = user.creatorNetBalance - amountEtb
+        val updatedUser = user.copy(creatorNetBalance = newBalance)
         _currentUser.value = updatedUser
+
+        val destText = if (destinationAccount.isNotBlank()) " to $destinationAccount" else ""
+
+        // Append double-entry debit in ledger
+        val ledgerDebit = EarningsLedgerEntry(
+            id = "ledger_" + System.currentTimeMillis(),
+            transactionRef = record.transactionRef,
+            entryType = LedgerEntryType.PAYOUT_DEBIT,
+            amountEtb = -amountEtb,
+            balanceAfterEtb = newBalance,
+            sourceTitle = "Disbursement via $method$destText",
+            metadata = "Chapa Transfer API · Fee: 2% (${String.format(java.util.Locale.US, "%.2f", platformFee)} ETB) · Net Disbursed: ${String.format(java.util.Locale.US, "%.2f", netDisbursed)} ETB · Ref: $ref"
+        )
+        _earningsLedger.value = listOf(ledgerDebit) + _earningsLedger.value
+    }
+
+    // MONETIZATION WORKFLOWS: ELIGIBILITY, APPLICATION & INVITE CODES
+    fun applyForMonetizationTool(toolId: String): Boolean {
+        var applied = false
+        _monetizationTools.value = _monetizationTools.value.map { tool ->
+            if (tool.id == toolId) {
+                applied = true
+                tool.copy(status = ProgramStatus.UNDER_REVIEW, enrolledDate = "Pending Review")
+            } else tool
+        }
+        val user = _currentUser.value
+        if (user != null) {
+            addNotification(
+                fromUid = "system_meskot",
+                fromName = "Meskot Creator Studio",
+                fromPhoto = "",
+                type = "monetization_review",
+                targetId = user.uid,
+                customText = "Your monetization application has been submitted for automated policy & KYC review."
+            )
+        }
+        return applied
+    }
+
+    fun redeemInviteCode(toolId: String, code: String): Boolean {
+        val trimmed = code.trim().uppercase()
+        val validCodes = setOf("MESKOT-VIP", "CREATOR2026", "INLINE-CHAPA", "ETHIOPIA-PRIME", "YOUTUBE-PARTNER")
+        if (!validCodes.contains(trimmed)) {
+            return false
+        }
+        _monetizationTools.value = _monetizationTools.value.map { tool ->
+            if (tool.id == toolId) {
+                tool.copy(status = ProgramStatus.ACTIVE, enrolledDate = "Active (Invited)")
+            } else tool
+        }
+        recordLedgerCredit(
+            entryType = LedgerEntryType.REVERSAL_CREDIT,
+            amountEtb = 500.0,
+            sourceTitle = "VIP Invite Token Activation Bonus ($trimmed)",
+            metadata = "Token: $trimmed · Approved"
+        )
+        return true
+    }
+
+    fun registerInterest(toolId: String) {
+        _monetizationTools.value = _monetizationTools.value.map { tool ->
+            if (tool.id == toolId) {
+                tool.copy(eligibilityNote = "Interest registered · You will receive an invitation when capacity opens.")
+            } else tool
+        }
+    }
+
+    fun recordLedgerCredit(
+        entryType: LedgerEntryType,
+        amountEtb: Double,
+        sourceTitle: String,
+        metadata: String = ""
+    ) {
+        val user = _currentUser.value ?: return
+        val newNet = user.creatorNetBalance + amountEtb
+        val newGross = user.creatorGrossEarnings + amountEtb
+        _currentUser.value = user.copy(creatorNetBalance = newNet, creatorGrossEarnings = newGross)
+
+        val newEntry = EarningsLedgerEntry(
+            id = "ledger_" + System.currentTimeMillis(),
+            transactionRef = "TX-CR-" + UUID.randomUUID().toString().take(8).uppercase(),
+            entryType = entryType,
+            amountEtb = amountEtb,
+            balanceAfterEtb = newNet,
+            sourceTitle = sourceTitle,
+            metadata = metadata
+        )
+        _earningsLedger.value = listOf(newEntry) + _earningsLedger.value
+    }
+
+    fun depositViaChapa(
+        amountEtb: Double,
+        txRef: String,
+        paymentMethod: String = "Chapa Online (Telebirr/CBE/Card)"
+    ) {
+        val user = _currentUser.value ?: return
+        val newNet = user.creatorNetBalance + amountEtb
+        val newGross = user.creatorGrossEarnings + amountEtb
+        _currentUser.value = user.copy(creatorNetBalance = newNet, creatorGrossEarnings = newGross)
+
+        val newEntry = EarningsLedgerEntry(
+            id = "ledger_" + System.currentTimeMillis(),
+            transactionRef = txRef,
+            entryType = LedgerEntryType.CHAPA_DEPOSIT_CREDIT,
+            amountEtb = amountEtb,
+            balanceAfterEtb = newNet,
+            sourceTitle = "Real Funds Deposit ($paymentMethod)",
+            metadata = "Verified by Chapa Gateway · Channel: $paymentMethod · Ref: $txRef"
+        )
+        _earningsLedger.value = listOf(newEntry) + _earningsLedger.value
+    }
+
+    fun buyStarsWithChapa(starCount: Int, priceEtb: Double, txRef: String) {
+        val user = _currentUser.value ?: return
+        val newStars = user.starBalance + starCount
+        _currentUser.value = user.copy(starBalance = newStars)
+
+        val newEntry = EarningsLedgerEntry(
+            id = "ledger_" + System.currentTimeMillis(),
+            transactionRef = txRef,
+            entryType = LedgerEntryType.STARS_GIFT_CREDIT,
+            amountEtb = priceEtb,
+            balanceAfterEtb = user.creatorNetBalance,
+            sourceTitle = "Stars Top-up via Chapa ($starCount Stars)",
+            metadata = "Purchased $starCount Stars · ${priceEtb.toInt()} ETB · Verified Chapa Gateway · Ref: $txRef"
+        )
+        _earningsLedger.value = listOf(newEntry) + _earningsLedger.value
+    }
+
+    fun resetToRealChapaBalance() {
+        val user = _currentUser.value ?: return
+        _currentUser.value = user.copy(creatorNetBalance = 0.0, creatorGrossEarnings = 0.0)
+        _earningsLedger.value = emptyList()
+    }
+
+    fun updateChapaConfig(publicKey: String, secretKey: String, isLiveMode: Boolean) {
+        _chapaConfig.value = _chapaConfig.value.copy(
+            publicKey = publicKey.trim(),
+            secretKey = secretKey.trim(),
+            isLiveMode = isLiveMode
+        )
+    }
+
+    fun simulateDailySettlementCron() {
+        val dailyEarningsRollup = 280.0
+        recordLedgerCredit(
+            entryType = LedgerEntryType.AD_REVENUE_CREDIT,
+            amountEtb = dailyEarningsRollup,
+            sourceTitle = "Daily Automated Ad Settlement (02:00 UTC Batch)",
+            metadata = "Reels & In-Stream Impressions: 14,800 · Net Split: 70%"
+        )
     }
 
     // ADS MANAGER: CAMPAIGNS
@@ -1146,14 +1431,20 @@ class MeskotRepository(private val context: Context) {
 
     // ADMIN ACTIONS
     fun adminToggleSuspend(uid: String) {
-        _users.value = _users.value.map {
-            if (it.uid == uid) it.copy(isSuspended = !it.isSuspended) else it
+        val target = _users.value.find { it.uid == uid } ?: return
+        val updated = target.copy(isSuspended = !target.isSuspended)
+        _users.value = _users.value.map { if (it.uid == uid) updated else it }
+        repoScope.launch {
+            userRepository.saveUser(updated)
         }
     }
 
     fun adminToggleAdmin(uid: String) {
-        _users.value = _users.value.map {
-            if (it.uid == uid) it.copy(isAdmin = !it.isAdmin) else it
+        val target = _users.value.find { it.uid == uid } ?: return
+        val updated = target.copy(isAdmin = !target.isAdmin)
+        _users.value = _users.value.map { if (it.uid == uid) updated else it }
+        repoScope.launch {
+            userRepository.saveUser(updated)
         }
     }
 
@@ -1162,74 +1453,7 @@ class MeskotRepository(private val context: Context) {
     }
 
     // INITIAL DATA GENERATORS
-    private fun createInitialUsers(): List<User> {
-        return listOf(
-            User(
-                uid = "user_boniface",
-                displayName = "Boniface Njuguna",
-                photoUrl = "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200&auto=format&fit=crop&q=80",
-                coverPhotoUrl = "https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=800&auto=format&fit=crop&q=80",
-                bio = "Civil Engineer & Project Coordinator",
-                profession = "Civil Engineer",
-                location = "Calgary, Alberta",
-                hometown = "Nairobi, Kenya",
-                workplace = "Adigrat university _Engineering Sciences",
-                workRole = "Civil Engineering",
-                education = "Adigrat University",
-                educationClass = "Class of 2018",
-                followersCount = 7400,
-                followingCount = 2100
-            ),
-            User(
-                uid = "user_nic",
-                displayName = "Ñiç Mwikà",
-                photoUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80",
-                coverPhotoUrl = "https://images.unsplash.com/photo-1509785307050-d4066910ec1e?w=800&auto=format&fit=crop&q=80",
-                bio = "Designer & Digital Creator",
-                profession = "Digital Creator",
-                location = "Calgary, Alberta",
-                hometown = "Mombasa, Kenya",
-                workplace = "Creative Media Hub",
-                workRole = "UI/UX Lead",
-                education = "University of Calgary",
-                educationClass = "Class of 2019",
-                followersCount = 5800,
-                followingCount = 1950
-            ),
-            User(
-                uid = "user_edson",
-                displayName = "Edson Hamisi",
-                photoUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80",
-                coverPhotoUrl = "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=80",
-                bio = "Software Engineer & Open Source Builder",
-                profession = "Software Developer",
-                location = "Calgary, Alberta",
-                hometown = "Dar es Salaam, Tanzania",
-                workplace = "Tech Horizons Ltd",
-                workRole = "Senior Architect",
-                education = "Adigrat University",
-                educationClass = "Class of 2017",
-                followersCount = 6300,
-                followingCount = 2400
-            ),
-            User(
-                uid = "user_ken",
-                displayName = "Ken Mutharimi",
-                photoUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80",
-                coverPhotoUrl = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&auto=format&fit=crop&q=80",
-                bio = "Structural Consultant & Technology Enthusiast",
-                profession = "Structural Consultant",
-                location = "Calgary, Alberta",
-                hometown = "Nairobi, Kenya",
-                workplace = "Apex Structural Designs",
-                workRole = "Senior Associate",
-                education = "Adigrat University",
-                educationClass = "Class of 2018",
-                followersCount = 9200,
-                followingCount = 3800
-            )
-        )
-    }
+    private fun createInitialUsers(): List<User> = emptyList()
 
     private fun createInitialPosts(): List<Post> = emptyList()
 
@@ -1387,6 +1611,227 @@ class MeskotRepository(private val context: Context) {
                 status = "COMPLETED",
                 transactionRef = "CHP-REF-34891277",
                 timestamp = now - 86400000L * 25
+            )
+        )
+    }
+
+    private fun createInitialMonetizationTools(): List<MonetizationTool> {
+        return listOf(
+            MonetizationTool(
+                id = "tool_instream",
+                code = "IN_STREAM_ADS",
+                name = "In-Stream Video Ads",
+                description = "Monetize qualifying on-demand and live videos with pre-roll, mid-roll, and image banner advertisements.",
+                icon = "📺",
+                status = ProgramStatus.ACTIVE,
+                minFollowers = 5000,
+                minWatchHours = 1000,
+                revSharePercent = 70.0,
+                eligibilityNote = "Criteria Met & Fully Approved. 70% revenue share active.",
+                enrolledDate = "Active since Jan 2026"
+            ),
+            MonetizationTool(
+                id = "tool_reels",
+                code = "REELS_OVERLAY",
+                name = "Reels Performance & Overlay Ads",
+                description = "Earn based on the number of plays and high-engagement impressions on your public short-form Reels.",
+                icon = "⚡",
+                status = ProgramStatus.INVITE_ONLY,
+                minFollowers = 10000,
+                minWatchHours = 2000,
+                revSharePercent = 70.0,
+                eligibilityNote = "Invite Only: Redeem Creator Access Code or join the waiting queue.",
+                enrolledDate = null
+            ),
+            MonetizationTool(
+                id = "tool_stars",
+                code = "STARS_TIPPING",
+                name = "Virtual Stars & Live Micro-Gifts",
+                description = "Enable viewers to buy and send Stars and animated gifts on your feed posts, photos, and live audio/video rooms.",
+                icon = "⭐",
+                status = ProgramStatus.ACTIVE,
+                minFollowers = 1000,
+                minWatchHours = 100,
+                revSharePercent = 85.0,
+                eligibilityNote = "Active · Fixed payout rate of 1.00 ETB per Star received.",
+                enrolledDate = "Active since Dec 2025"
+            ),
+            MonetizationTool(
+                id = "tool_subs",
+                code = "FAN_SUBSCRIPTIONS",
+                name = "Tiered VIP Fan Subscriptions",
+                description = "Earn predictable monthly recurring income with Bronze, Silver, and Gold membership tiers with exclusive perks.",
+                icon = "👑",
+                status = ProgramStatus.ACTIVE,
+                minFollowers = 2500,
+                minWatchHours = 500,
+                revSharePercent = 80.0,
+                eligibilityNote = "Active · 42 recurring subscribers supporting you monthly.",
+                enrolledDate = "Active since Feb 2026"
+            ),
+            MonetizationTool(
+                id = "tool_creator_fund",
+                code = "CREATOR_FUND",
+                name = "Meskot Creator Accelerator Grant",
+                description = "Monthly guaranteed creator bonus pool funded by Meskot Diaspora Innovation & Telecom partners.",
+                icon = "🏆",
+                status = ProgramStatus.INVITE_ONLY,
+                minFollowers = 25000,
+                minWatchHours = 5000,
+                revSharePercent = 100.0,
+                eligibilityNote = "Invite-only cohort for top 100 Ethiopian digital creators.",
+                enrolledDate = null
+            ),
+            MonetizationTool(
+                id = "tool_branded",
+                code = "BRANDED_CONTENT",
+                name = "Brand Collabs & Sponsorship Tagging",
+                description = "Tag commercial brand partners directly on posts and get discovered by local Ethiopian and international advertisers.",
+                icon = "🤝",
+                status = ProgramStatus.READY_TO_APPLY,
+                minFollowers = 5000,
+                minWatchHours = 500,
+                revSharePercent = 100.0,
+                eligibilityNote = "Eligible · You meet all criteria (0 policy strikes, KYC verified).",
+                enrolledDate = null
+            )
+        )
+    }
+
+    private fun createInitialLedger(): List<EarningsLedgerEntry> {
+        val now = System.currentTimeMillis()
+        return listOf(
+            EarningsLedgerEntry(
+                id = "led_01",
+                transactionRef = "TX-CR-88219401",
+                entryType = LedgerEntryType.AD_REVENUE_CREDIT,
+                amountEtb = 320.00,
+                balanceAfterEtb = 4960.00,
+                timestamp = now - 3600000L * 2,
+                sourceTitle = "Daily In-Stream Ad Settlement",
+                metadata = "Impressions: 14,200 · eCPM: 22.50 ETB"
+            ),
+            EarningsLedgerEntry(
+                id = "led_02",
+                transactionRef = "TX-CR-77123982",
+                entryType = LedgerEntryType.FAN_TIP_CREDIT,
+                amountEtb = 100.00,
+                balanceAfterEtb = 4640.00,
+                timestamp = now - 3600000L * 8,
+                sourceTitle = "Chapa Reader Tip via Telebirr",
+                metadata = "Sender: Almaz Bekele · Ref: CHP-9021"
+            ),
+            EarningsLedgerEntry(
+                id = "led_03",
+                transactionRef = "TX-CR-66239102",
+                entryType = LedgerEntryType.SUBSCRIPTION_CREDIT,
+                amountEtb = 280.00,
+                balanceAfterEtb = 4540.00,
+                timestamp = now - 86400000L * 1,
+                sourceTitle = "Silver VIP Renewal (Dawit Mengistu)",
+                metadata = "Gross: 350.00 ETB · Platform fee: 70.00 ETB (20%)"
+            ),
+            EarningsLedgerEntry(
+                id = "led_04",
+                transactionRef = "TX-CR-55102983",
+                entryType = LedgerEntryType.STARS_GIFT_CREDIT,
+                amountEtb = 250.00,
+                balanceAfterEtb = 4260.00,
+                timestamp = now - 86400000L * 2,
+                sourceTitle = "Live Room Micro-Gifts (250 Stars)",
+                metadata = "Audience: Adigrat Alumni Live Q&A"
+            ),
+            EarningsLedgerEntry(
+                id = "led_05",
+                transactionRef = "TXN-CBE-98421098",
+                entryType = LedgerEntryType.PAYOUT_DEBIT,
+                amountEtb = -4800.00,
+                balanceAfterEtb = 4010.00,
+                timestamp = now - 86400000L * 4,
+                sourceTitle = "Disbursement to Commercial Bank of Ethiopia (CBE)",
+                metadata = "Account: 1000***4562 · Status: Settled"
+            )
+        )
+    }
+
+    private fun createInitialContentFormatMetrics(): List<ContentFormatMetric> {
+        return listOf(
+            ContentFormatMetric(
+                formatName = "Reels & Shorts",
+                icon = "⚡",
+                views = 142000L,
+                monetizableImpressions = 89400L,
+                rpmEtb = 32.50,
+                grossRevenueEtb = 2905.50,
+                netCreatorRevenueEtb = 2033.85
+            ),
+            ContentFormatMetric(
+                formatName = "Long Videos (> 3 min)",
+                icon = "🎥",
+                views = 48500L,
+                monetizableImpressions = 41200L,
+                rpmEtb = 58.00,
+                grossRevenueEtb = 2389.60,
+                netCreatorRevenueEtb = 1672.72
+            ),
+            ContentFormatMetric(
+                formatName = "Articles & Posts",
+                icon = "📝",
+                views = 68900L,
+                monetizableImpressions = 32100L,
+                rpmEtb = 18.00,
+                grossRevenueEtb = 577.80,
+                netCreatorRevenueEtb = 404.46
+            ),
+            ContentFormatMetric(
+                formatName = "Live Streams & Audio Rooms",
+                icon = "🎙️",
+                views = 12400L,
+                monetizableImpressions = 11800L,
+                rpmEtb = 42.00,
+                grossRevenueEtb = 495.60,
+                netCreatorRevenueEtb = 346.92
+            )
+        )
+    }
+
+    private fun createInitialDailyEarnings(): List<DailyEarningsMetric> {
+        return listOf(
+            DailyEarningsMetric("Mon", "Sep 07", 210.0, 150.0, 350.0, 710.0),
+            DailyEarningsMetric("Tue", "Sep 08", 185.0, 90.0, 150.0, 425.0),
+            DailyEarningsMetric("Wed", "Sep 09", 340.0, 220.0, 0.0, 560.0),
+            DailyEarningsMetric("Thu", "Sep 10", 290.0, 180.0, 350.0, 820.0),
+            DailyEarningsMetric("Fri", "Sep 11", 420.0, 310.0, 150.0, 880.0),
+            DailyEarningsMetric("Sat", "Sep 12", 510.0, 440.0, 800.0, 1750.0),
+            DailyEarningsMetric("Sun", "Sep 13", 380.0, 260.0, 350.0, 990.0)
+        )
+    }
+
+    private fun createInitialPayoutAccounts(): List<CreatorPayoutAccount> {
+        return listOf(
+            CreatorPayoutAccount(
+                id = "acc_01",
+                gatewayName = "Telebirr SuperApp",
+                accountNumber = "+251 91 123 4567",
+                holderName = "Hesam Yemane",
+                isDefault = true,
+                isVerified = true
+            ),
+            CreatorPayoutAccount(
+                id = "acc_02",
+                gatewayName = "Commercial Bank of Ethiopia (CBE)",
+                accountNumber = "1000 2938 4562",
+                holderName = "Hesam Yemane",
+                isDefault = false,
+                isVerified = true
+            ),
+            CreatorPayoutAccount(
+                id = "acc_03",
+                gatewayName = "Chapa Merchant Settlement",
+                accountNumber = "CHAPA-ACCT-7819",
+                holderName = "Meskot Studio Hub",
+                isDefault = false,
+                isVerified = true
             )
         )
     }

@@ -83,6 +83,8 @@ fun ChapaPaymentModal(
     email: String,
     firstName: String,
     lastName: String,
+    publicKey: String = "CHAPUBK_TEST-1PW1FKvNMh2tx4k5hHPibEZA4A6GPpRc",
+    isLiveMode: Boolean = false,
     onDismiss: () -> Unit,
     onPaymentSuccess: (txRef: String) -> Unit
 ) {
@@ -90,7 +92,7 @@ fun ChapaPaymentModal(
 
     val formattedAmount = if (amount % 1.0 == 0.0) amount.toInt().toString() else "%.2f".format(amount)
 
-    val htmlContent = remember(amount, txRef, email, firstName, lastName) {
+    val htmlContent = remember(amount, txRef, email, firstName, lastName, publicKey) {
         """
         <!DOCTYPE html>
         <html>
@@ -263,7 +265,7 @@ fun ChapaPaymentModal(
 
             try {
               const chapa = new ChapaCheckout({
-                publicKey: 'CHAPUBK_TEST-1PW1FKvNMh2tx4k5hHPibEZA4A6GPpRc',
+                publicKey: '$publicKey',
                 amount: amount,
                 currency: 'ETB',
                 tx_ref: tx_ref,
@@ -330,7 +332,7 @@ fun ChapaPaymentModal(
                         Column {
                           Row(verticalAlignment = Alignment.CenterVertically) {
                               Text(
-                                  text = "Chapa Pay",
+                                  text = if (isLiveMode) "Chapa Live Pay" else "Chapa Pay",
                                   fontSize = 17.sp,
                                   fontWeight = FontWeight.Bold,
                                   color = Ink
@@ -339,14 +341,14 @@ fun ChapaPaymentModal(
                               Box(
                                   modifier = Modifier
                                       .clip(RoundedCornerShape(4.dp))
-                                      .background(Color(0xFFE8F5E9))
+                                      .background(if (isLiveMode) Color(0xFFE8F5E9) else Color(0xFFFEF3C7))
                                       .padding(horizontal = 6.dp, vertical = 2.dp)
                               ) {
                                   Text(
-                                      text = "VERIFIED",
+                                      text = if (isLiveMode) "LIVE ETB" else "TEST GATEWAY",
                                       fontSize = 9.sp,
                                       fontWeight = FontWeight.ExtraBold,
-                                      color = Color(0xFF2E7D32)
+                                      color = if (isLiveMode) Color(0xFF2E7D32) else Color(0xFFB45309)
                                   )
                               }
                           }
@@ -354,14 +356,14 @@ fun ChapaPaymentModal(
                               Icon(
                                   imageVector = Icons.Default.Lock,
                                   contentDescription = "Secure",
-                                  tint = MutedText,
+                                  tint = if (isLiveMode) Color(0xFF2E7D32) else MutedText,
                                   modifier = Modifier.size(10.dp)
                               )
                               Spacer(modifier = Modifier.width(3.dp))
                               Text(
-                                  text = "256-Bit SSL Encrypted",
+                                  text = if (isLiveMode) "Real Money (ETB) · 256-Bit SSL" else "256-Bit SSL · Sandbox Mode",
                                   fontSize = 11.sp,
-                                  color = MutedText
+                                  color = if (isLiveMode) Color(0xFF2E7D32) else MutedText
                               )
                           }
                         }

@@ -143,53 +143,9 @@ fun ProfileScreen(
     var isSeeMoreWorkOpen by remember { mutableStateOf(false) }
     var isAccountMenuOpen by remember { mutableStateOf(false) }
 
-    // Curated or dynamic friends list matching screenshot
+    // Dynamic friends list populated from real Firestore users
     val displayFriends = remember(allUsers, user.uid) {
-        val filtered = allUsers.filter { it.uid != user.uid }
-        if (filtered.size >= 4) {
-            filtered.take(4)
-        } else {
-            val defaults = listOf(
-                User(
-                    uid = "user_boniface",
-                    displayName = "Boniface Njuguna",
-                    photoUrl = "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200&auto=format&fit=crop&q=80",
-                    bio = "Civil Engineer & Project Coordinator",
-                    followersCount = 7400
-                ),
-                User(
-                    uid = "user_nic",
-                    displayName = "Ñiç Mwikà",
-                    photoUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80",
-                    bio = "Designer & Digital Creator",
-                    followersCount = 5800
-                ),
-                User(
-                    uid = "user_edson",
-                    displayName = "Edson Hamisi",
-                    photoUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80",
-                    bio = "Software Engineer",
-                    followersCount = 6300
-                ),
-                User(
-                    uid = "user_ken",
-                    displayName = "Ken Mutharimi",
-                    photoUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80",
-                    bio = "Structural Consultant",
-                    followersCount = 9200
-                )
-            )
-            (filtered + defaults.filterNot { d -> filtered.any { it.displayName.equals(d.displayName, ignoreCase = true) } }).take(4)
-        }
-    }
-
-    val mutualFriendCounts = remember {
-        mapOf(
-            "Boniface Njuguna" to "71 mutual friends",
-            "Ñiç Mwikà" to "Mutual friend",
-            "Edson Hamisi" to "54 mutual friends",
-            "Ken Mutharimi" to "112 mutual friends"
-        )
+        allUsers.filter { it.uid != user.uid }.take(4)
     }
 
     fun formatStats(count: Int): String {
@@ -497,43 +453,52 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     // Stats: Followers · Following · Posts
-                    val followersFormatted = formatStats(if (user.followersCount > 0) user.followersCount else 8500)
-                    val followingFormatted = formatStats(if (user.followingCount > 0) user.followingCount else 3700)
-                    val postsCount = if (userPosts.isNotEmpty()) userPosts.size else 284
+                    val safeFollowers = if (user.followersCount == 8500) 0 else user.followersCount
+                    val safeFollowing = if (user.followingCount == 3700) 0 else user.followingCount
+                    val followersFormatted = formatStats(safeFollowers)
+                    val followingFormatted = formatStats(if (safeFollowing > 0) safeFollowing else friendUids.size)
+                    val postsCount = userPosts.size
+                    val postsWord = if (postsCount == 1) "post" else "posts"
                     Text(
-                        text = "$followersFormatted followers · $followingFormatted following · $postsCount posts",
+                        text = "$followersFormatted followers · $followingFormatted following · $postsCount $postsWord",
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = fbTextGray
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    // Bio Text (only show if set)
+                    val cleanBio = if (user.bio.trim().equals("Engineer is a problem solver", ignoreCase = true)) "" else user.bio.trim()
+                    if (cleanBio.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = cleanBio,
+                            fontSize = 14.5.sp,
+                            color = fbDark,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 18.dp)
+                        )
+                    }
 
-                    // Bio Text
-                    val bioText = if (user.bio.isNotBlank()) user.bio else "Engineer is a problem solver"
-                    Text(
-                        text = bioText,
-                        fontSize = 14.5.sp,
-                        color = fbDark,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 18.dp)
-                    )
+                    // Quick Meta line: Profession · City · Alma Mater (only show real entries)
+                    val cleanProfession = if (user.profession.trim().equals("Public figure", ignoreCase = true)) "" else user.profession.trim()
+                    val cleanLocation = if (user.location.trim().equals("Calgary, Alberta", ignoreCase = true) || user.location.trim().equals("Calgary", ignoreCase = true)) "" else user.location.trim()
+                    val cleanEdu = if (user.education.trim().equals("Adigrat University", ignoreCase = true)) "" else user.education.trim()
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    val metaList = mutableListOf<String>()
+                    if (cleanProfession.isNotBlank()) metaList.add("💼 $cleanProfession")
+                    if (cleanLocation.isNotBlank()) metaList.add("📍 $cleanLocation")
+                    if (cleanEdu.isNotBlank()) metaList.add("🏛️ $cleanEdu")
 
-                    // Quick Meta line: Profession · City · Alma Mater
-                    val professionText = if (user.profession.isNotBlank()) user.profession else "Public figure"
-                    val locationShort = if (user.location.isNotBlank()) {
-                        user.location.split(",").firstOrNull()?.trim() ?: "Calgary"
-                    } else "Calgary"
-                    val eduShort = if (user.education.isNotBlank()) user.education.take(18) else "Adigrat University"
-
-                    Text(
-                        text = "💼 $professionText · 📍 $locationShort, AB · 🏛️ $eduShort",
-                        fontSize = 12.5.sp,
-                        color = fbTextGray,
-                        textAlign = TextAlign.Center
-                    )
+                    if (metaList.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = metaList.joinToString(" · "),
+                            fontSize = 12.5.sp,
+                            color = fbTextGray,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 18.dp)
+                        )
+                    }
                 }
             }
 
@@ -699,6 +664,123 @@ fun ProfileScreen(
                 }
             }
 
+            // CREATOR MONETIZATION STUDIO QUICK ENTRY
+            if (isMe) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .clickable { viewModel.navigateTo(ScreenTab.CREATOR_STUDIO) }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF334155)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = "👑", fontSize = 18.sp)
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Creator Monetization Studio",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(Color(0xFF065F46))
+                                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                                        ) {
+                                            Text(text = "ACTIVE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF34D399))
+                                        }
+                                    }
+                                    Text(
+                                        text = "Net Balance: ${String.format(java.util.Locale.US, "%,.2f", user.creatorNetBalance)} ETB · Ledger & Payouts",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF94A3B8)
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "Open →",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFBBF24)
+                            )
+                        }
+                    }
+                }
+
+                // Chapa Real ETB & Stars Wallet Card
+                item {
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(text = "⭐", fontSize = 20.sp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = "${user.starBalance} Stars Balance",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = fbDark
+                                    )
+                                    Text(
+                                        text = "Send tips & support creators via Chapa",
+                                        fontSize = 11.sp,
+                                        color = fbTextGray
+                                    )
+                                }
+                            }
+
+                            Button(
+                                onClick = { viewModel.buyStarsViaChapa(500, 200.0) },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = "+ Top Up (Chapa)",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // NAVIGATION TABS: All | Reels | Photos
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -772,52 +854,88 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Location
-                    val loc = if (user.location.isNotBlank()) user.location else "Calgary, Alberta"
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = "Location",
-                            tint = fbTextGray,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(text = loc, fontSize = 14.5.sp, color = fbDark)
-                    }
+                    val cleanLocation = if (user.location.trim().equals("Calgary, Alberta", ignoreCase = true) || user.location.trim().equals("Calgary", ignoreCase = true)) "" else user.location.trim()
+                    val cleanHometown = if (user.hometown.trim().equals("Calgary, Alberta", ignoreCase = true) || user.hometown.trim().equals("Calgary", ignoreCase = true)) "" else user.hometown.trim()
+                    val cleanBirthDate = if (user.birthDate.trim().equals("May 11, 1994", ignoreCase = true)) "" else user.birthDate.trim()
+                    val cleanGender = user.gender.trim()
 
-                    // Hometown
-                    val home = if (user.hometown.isNotBlank()) user.hometown else "Calgary, Alberta"
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Home,
-                            contentDescription = "Hometown",
-                            tint = fbTextGray,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(text = "From $home", fontSize = 14.5.sp, color = fbDark)
-                    }
+                    val hasAnyDetails = cleanLocation.isNotBlank() || cleanHometown.isNotBlank() || cleanBirthDate.isNotBlank() || cleanGender.isNotBlank()
 
-                    // Birthday
-                    val bday = if (user.birthDate.isNotBlank()) user.birthDate else "May 11, 1994"
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Cake,
-                            contentDescription = "Birthday",
-                            tint = fbTextGray,
-                            modifier = Modifier.size(20.dp)
+                    if (!hasAnyDetails) {
+                        Text(
+                            text = if (isMe) "No personal details added yet. Tap the edit icon to add your city, hometown, and birthday." else "No personal details shared.",
+                            fontSize = 13.5.sp,
+                            color = fbTextGray,
+                            modifier = Modifier.padding(vertical = 4.dp)
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(text = "Born $bday", fontSize = 14.5.sp, color = fbDark)
+                    } else {
+                        // Location
+                        if (cleanLocation.isNotBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = "Location",
+                                    tint = fbTextGray,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(text = cleanLocation, fontSize = 14.5.sp, color = fbDark)
+                            }
+                        }
+
+                        // Hometown
+                        if (cleanHometown.isNotBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Home,
+                                    contentDescription = "Hometown",
+                                    tint = fbTextGray,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(text = "From $cleanHometown", fontSize = 14.5.sp, color = fbDark)
+                            }
+                        }
+
+                        // Birthday
+                        if (cleanBirthDate.isNotBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Cake,
+                                    contentDescription = "Birthday",
+                                    tint = fbTextGray,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(text = "Born $cleanBirthDate", fontSize = 14.5.sp, color = fbDark)
+                            }
+                        }
+
+                        // Gender
+                        if (cleanGender.isNotBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Gender",
+                                    tint = fbTextGray,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(text = cleanGender, fontSize = 14.5.sp, color = fbDark)
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
@@ -871,60 +989,73 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val workplaceText = if (user.workplace.isNotBlank()) user.workplace else "Adigrat university _Engineering Sciences"
-                    val workRoleText = if (user.workRole.isNotBlank()) user.workRole else "Civil Engineering"
+                    val cleanWorkplace = if (user.workplace.trim().equals("Adigrat university _Engineering Sciences", ignoreCase = true)) "" else user.workplace.trim()
+                    val cleanWorkRole = if (user.workRole.trim().equals("Civil Engineering", ignoreCase = true)) "" else user.workRole.trim()
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(fbLightGray),
-                            contentAlignment = Alignment.Center
+                    if (cleanWorkplace.isBlank() && cleanWorkRole.isBlank()) {
+                        Text(
+                            text = if (isMe) "No work experience listed yet. Tap the edit icon to add your workplace." else "No workplace listed.",
+                            fontSize = 13.5.sp,
+                            color = fbTextGray,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 4.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Work,
-                                contentDescription = "Work",
-                                tint = fbDark,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = workplaceText,
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = fbDark
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(fbLightGray),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Work,
+                                    contentDescription = "Work",
+                                    tint = fbDark,
+                                    modifier = Modifier.size(22.dp)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "🔒", fontSize = 12.sp)
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = workRoleText,
-                                fontSize = 13.sp,
-                                color = fbTextGray
-                            )
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column {
+                                if (cleanWorkplace.isNotBlank()) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = cleanWorkplace,
+                                            fontSize = 14.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = fbDark
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(text = "🔒", fontSize = 12.sp)
+                                    }
+                                }
+                                if (cleanWorkRole.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = cleanWorkRole,
+                                        fontSize = 13.sp,
+                                        color = fbTextGray
+                                    )
+                                }
+                            }
                         }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = "See more work",
+                            fontSize = 14.sp,
+                            color = fbTextGray,
+                            modifier = Modifier
+                                .clickable { isSeeMoreWorkOpen = true }
+                                .padding(vertical = 4.dp)
+                        )
                     }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = "See more work",
-                        fontSize = 14.sp,
-                        color = fbTextGray,
-                        modifier = Modifier
-                            .clickable { isSeeMoreWorkOpen = true }
-                            .padding(vertical = 4.dp)
-                    )
 
                     Spacer(modifier = Modifier.height(8.dp))
                     HorizontalDivider(color = fbLightGray, thickness = 1.dp)
@@ -966,47 +1097,60 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val eduText = if (user.education.isNotBlank()) user.education else "Adigrat University"
-                    val classText = if (user.educationClass.isNotBlank()) user.educationClass else "Class of 2018"
+                    val cleanEdu = if (user.education.trim().equals("Adigrat University", ignoreCase = true)) "" else user.education.trim()
+                    val cleanEduClass = if (user.educationClass.trim().equals("Class of 2018", ignoreCase = true)) "" else user.educationClass.trim()
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(fbLightGray),
-                            contentAlignment = Alignment.Center
+                    if (cleanEdu.isBlank() && cleanEduClass.isBlank()) {
+                        Text(
+                            text = if (isMe) "No education info added yet. Tap the edit icon to add your school." else "No education info listed.",
+                            fontSize = 13.5.sp,
+                            color = fbTextGray,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 4.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.School,
-                                contentDescription = "Education",
-                                tint = fbDark,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = eduText,
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = fbDark
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(fbLightGray),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.School,
+                                    contentDescription = "Education",
+                                    tint = fbDark,
+                                    modifier = Modifier.size(22.dp)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "🔒", fontSize = 12.sp)
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = classText,
-                                fontSize = 13.sp,
-                                color = fbTextGray
-                            )
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column {
+                                if (cleanEdu.isNotBlank()) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = cleanEdu,
+                                            fontSize = 14.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = fbDark
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(text = "🔒", fontSize = 12.sp)
+                                    }
+                                }
+                                if (cleanEduClass.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = cleanEduClass,
+                                        fontSize = 13.sp,
+                                        color = fbTextGray
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -1051,7 +1195,12 @@ fun ProfileScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         displayFriends.forEach { friend ->
-                            val mutualText = mutualFriendCounts[friend.displayName] ?: "Mutual friend"
+                            val mutualText = when {
+                                friendUids.contains(friend.uid) -> "Friend"
+                                friend.location.isNotBlank() -> friend.location
+                                friend.profession.isNotBlank() -> friend.profession
+                                else -> "Member"
+                            }
                             Column(
                                 modifier = Modifier
                                     .weight(1f)
@@ -1443,26 +1592,51 @@ fun ProfileScreen(
 
                     Text("Overview", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = fbTextGray)
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text("• Category: ${user.profession.ifBlank { "Public figure" }}", fontSize = 14.sp, color = fbDark)
-                    Text("• Current City: ${user.location.ifBlank { "Calgary, Alberta" }}", fontSize = 14.sp, color = fbDark)
-                    Text("• Hometown: ${user.hometown.ifBlank { "Calgary, Alberta" }}", fontSize = 14.sp, color = fbDark)
-                    Text("• Birthday: ${user.birthDate.ifBlank { "May 11, 1994" }}", fontSize = 14.sp, color = fbDark)
+                    val catText = if (user.profession.equals("Public figure", ignoreCase = true)) "" else user.profession.trim()
+                    if (catText.isNotBlank()) {
+                        Text("• Category: $catText", fontSize = 14.sp, color = fbDark)
+                    }
+                    val cityText = if (user.location.equals("Calgary, Alberta", ignoreCase = true) || user.location.equals("Calgary", ignoreCase = true)) "" else user.location.trim()
+                    if (cityText.isNotBlank()) {
+                        Text("• Current City: $cityText", fontSize = 14.sp, color = fbDark)
+                    }
+                    val homeText = if (user.hometown.equals("Calgary, Alberta", ignoreCase = true) || user.hometown.equals("Calgary", ignoreCase = true)) "" else user.hometown.trim()
+                    if (homeText.isNotBlank()) {
+                        Text("• Hometown: $homeText", fontSize = 14.sp, color = fbDark)
+                    }
+                    val bdayText = if (user.birthDate.equals("May 11, 1994", ignoreCase = true)) "" else user.birthDate.trim()
+                    if (bdayText.isNotBlank()) {
+                        Text("• Birthday: $bdayText", fontSize = 14.sp, color = fbDark)
+                    }
                     if (user.gender.isNotBlank()) {
                         Text("• Gender: ${user.gender}", fontSize = 14.sp, color = fbDark)
                     }
+                    if (catText.isBlank() && cityText.isBlank() && homeText.isBlank() && bdayText.isBlank() && user.gender.isBlank()) {
+                        Text("• No overview details provided yet", fontSize = 14.sp, color = fbTextGray)
+                    }
 
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text("Work & Education", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = fbTextGray)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text("• Works at: ${user.workplace.ifBlank { "Adigrat university _Engineering Sciences" }}", fontSize = 14.sp, color = fbDark)
-                    Text("• Role: ${user.workRole.ifBlank { "Civil Engineering" }}", fontSize = 14.sp, color = fbDark)
-                    Text("• Studied at: ${user.education.ifBlank { "Adigrat University" }}", fontSize = 14.sp, color = fbDark)
-                    Text("• Graduation: ${user.educationClass.ifBlank { "Class of 2018" }}", fontSize = 14.sp, color = fbDark)
+                    val workP = if (user.workplace.equals("Adigrat university _Engineering Sciences", ignoreCase = true)) "" else user.workplace.trim()
+                    val workR = if (user.workRole.equals("Civil Engineering", ignoreCase = true)) "" else user.workRole.trim()
+                    val eduU = if (user.education.equals("Adigrat University", ignoreCase = true)) "" else user.education.trim()
+                    val eduC = if (user.educationClass.equals("Class of 2018", ignoreCase = true)) "" else user.educationClass.trim()
+
+                    if (workP.isNotBlank() || workR.isNotBlank() || eduU.isNotBlank() || eduC.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text("Work & Education", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = fbTextGray)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        if (workP.isNotBlank()) Text("• Works at: $workP", fontSize = 14.sp, color = fbDark)
+                        if (workR.isNotBlank()) Text("• Role: $workR", fontSize = 14.sp, color = fbDark)
+                        if (eduU.isNotBlank()) Text("• Studied at: $eduU", fontSize = 14.sp, color = fbDark)
+                        if (eduC.isNotBlank()) Text("• Graduation: $eduC", fontSize = 14.sp, color = fbDark)
+                    }
 
                     Spacer(modifier = Modifier.height(14.dp))
                     Text("Contact Info", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = fbTextGray)
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text("• Email: ${user.email.ifBlank { "contact@meskot.et" }}", fontSize = 14.sp, color = fbDark)
+                    Text("• Email: ${user.email.ifBlank { "Not provided" }}", fontSize = 14.sp, color = fbDark)
+                    if (user.phoneNumber.isNotBlank()) {
+                        Text("• Phone: ${user.phoneNumber}", fontSize = 14.sp, color = fbDark)
+                    }
                     Text("• Privacy: Protected", fontSize = 14.sp, color = fbDark)
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -1515,34 +1689,44 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(fbLightGray),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Work, contentDescription = null, tint = fbDark)
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = user.workplace.ifBlank { "Adigrat university _Engineering Sciences" },
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = fbDark
-                            )
-                            Text(
-                                text = user.workRole.ifBlank { "Civil Engineering" },
-                                fontSize = 13.sp,
-                                color = fbTextGray
-                            )
-                            Text(
-                                text = "2018 - Present · Full-time",
-                                fontSize = 12.sp,
-                                color = fbTextGray
-                            )
+                    val workP = if (user.workplace.equals("Adigrat university _Engineering Sciences", ignoreCase = true)) "" else user.workplace.trim()
+                    val workR = if (user.workRole.equals("Civil Engineering", ignoreCase = true)) "" else user.workRole.trim()
+
+                    if (workP.isBlank() && workR.isBlank()) {
+                        Text(
+                            text = "No work experience listed yet.",
+                            fontSize = 14.sp,
+                            color = fbTextGray
+                        )
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(fbLightGray),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Work, contentDescription = null, tint = fbDark)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                if (workP.isNotBlank()) {
+                                    Text(
+                                        text = workP,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = fbDark
+                                    )
+                                }
+                                if (workR.isNotBlank()) {
+                                    Text(
+                                        text = workR,
+                                        fontSize = 13.sp,
+                                        color = fbTextGray
+                                    )
+                                }
+                            }
                         }
                     }
 

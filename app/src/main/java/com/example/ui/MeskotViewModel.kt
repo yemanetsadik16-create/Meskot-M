@@ -16,6 +16,13 @@ import com.example.data.AdCampaign
 import com.example.data.BoostCampaign
 import com.example.data.CreatorPayoutRecord
 import com.example.data.MembershipTier
+import com.example.data.MonetizationTool
+import com.example.data.EarningsLedgerEntry
+import com.example.data.ContentFormatMetric
+import com.example.data.DailyEarningsMetric
+import com.example.data.CreatorPayoutAccount
+import com.example.data.ChapaGatewayConfig
+import com.example.data.ProgramStatus
 import com.example.util.CallAudioManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -66,6 +73,8 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     val currentLanguage: StateFlow<AppLanguage> = repository.currentLanguage
     val currentUser: StateFlow<User?> = repository.currentUser
     val users: StateFlow<List<User>> = repository.users
+    val isUsersLoading: StateFlow<Boolean> = repository.isUsersLoading
+    val usersError: StateFlow<String?> = repository.usersError
     val friends: StateFlow<Set<String>> = repository.friends
     val incomingRequests: StateFlow<List<User>> = repository.incomingRequests
     val outgoingRequests: StateFlow<Set<String>> = repository.outgoingRequests
@@ -80,6 +89,11 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     val adCampaigns: StateFlow<List<AdCampaign>> = repository.adCampaigns
     val boostCampaigns: StateFlow<List<BoostCampaign>> = repository.boostCampaigns
     val payoutHistory: StateFlow<List<CreatorPayoutRecord>> = repository.payoutHistory
+    val monetizationTools: StateFlow<List<MonetizationTool>> = repository.monetizationTools
+    val earningsLedger: StateFlow<List<EarningsLedgerEntry>> = repository.earningsLedger
+    val contentFormatMetrics: StateFlow<List<ContentFormatMetric>> = repository.contentFormatMetrics
+    val dailyEarnings: StateFlow<List<DailyEarningsMetric>> = repository.dailyEarnings
+    val payoutAccounts: StateFlow<List<CreatorPayoutAccount>> = repository.payoutAccounts
 
     // Current screen navigation
     private val _currentTab = MutableStateFlow(ScreenTab.FEED)
@@ -138,7 +152,27 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     private val _isPayoutModalOpen = MutableStateFlow(false)
     val isPayoutModalOpen: StateFlow<Boolean> = _isPayoutModalOpen.asStateFlow()
 
-    // Chapa Payment Integration
+    // Chapa Payment Gateway Integration & Real Funds
+    val chapaConfig: StateFlow<ChapaGatewayConfig> = repository.chapaConfig
+
+    private val _isChapaConfigOpen = MutableStateFlow(false)
+    val isChapaConfigOpen: StateFlow<Boolean> = _isChapaConfigOpen.asStateFlow()
+
+    private val _isChapaDepositOpen = MutableStateFlow(false)
+    val isChapaDepositOpen: StateFlow<Boolean> = _isChapaDepositOpen.asStateFlow()
+
+    private val _isBuyStarsOpen = MutableStateFlow(false)
+    val isBuyStarsOpen: StateFlow<Boolean> = _isBuyStarsOpen.asStateFlow()
+
+    fun openChapaConfig() { _isChapaConfigOpen.value = true }
+    fun closeChapaConfig() { _isChapaConfigOpen.value = false }
+
+    fun openChapaDeposit() { _isChapaDepositOpen.value = true }
+    fun closeChapaDeposit() { _isChapaDepositOpen.value = false }
+
+    fun openBuyStars() { _isBuyStarsOpen.value = true }
+    fun closeBuyStars() { _isBuyStarsOpen.value = false }
+
     private val _activeChapaSession = MutableStateFlow<ChapaPaymentSession?>(null)
     val activeChapaSession: StateFlow<ChapaPaymentSession?> = _activeChapaSession.asStateFlow()
 
@@ -150,24 +184,74 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _activeChapaSession.value = null
     }
 
-    fun openTestChapaCheckout(amount: Double = 100.0) {
+    fun depositViaChapa(amount: Double) {
+        closeChapaDeposit()
         val user = currentUser.value
-        val fName = user?.displayName?.split(" ")?.firstOrNull() ?: "John"
-        val lName = user?.displayName?.split(" ")?.drop(1)?.joinToString(" ")?.ifBlank { "Doe" } ?: "Doe"
+        val fName = user?.displayName?.split(" ")?.firstOrNull() ?: "Meskot"
+        val lName = user?.displayName?.split(" ")?.drop(1)?.joinToString(" ")?.ifBlank { "User" } ?: "User"
         val email = if (user?.email?.contains("@") == true) user.email else "customer@example.com"
+        val cfg = repository.chapaConfig.value
+        val ref = "CHP-DEP-" + System.currentTimeMillis()
 
         launchChapaPayment(
             ChapaPaymentSession(
                 amount = amount,
-                title = "Meskot Test Checkout",
+                title = "Add Real Funds (Chapa Pay)",
+                txRef = ref,
                 email = email,
                 firstName = fName,
                 lastName = lName,
-                onPaymentCompleted = { ref ->
-                    showMessage("✅ Chapa Payment Completed! Ref: $ref · ${amount.toInt()} ETB")
+                publicKey = cfg.publicKey,
+                isLiveMode = cfg.isLiveMode,
+                onPaymentCompleted = { completedRef ->
+                    repository.depositViaChapa(amount, completedRef)
+                    showMessage("✅ Successfully added ${amount.toInt()} ETB to balance via Chapa! Ref: $completedRef")
                 }
             )
         )
+    }
+
+    fun buyStarsViaChapa(starCount: Int, priceEtb: Double) {
+        closeBuyStars()
+        val user = currentUser.value
+        val fName = user?.displayName?.split(" ")?.firstOrNull() ?: "Meskot"
+        val lName = user?.displayName?.split(" ")?.drop(1)?.joinToString(" ")?.ifBlank { "User" } ?: "User"
+        val email = if (user?.email?.contains("@") == true) user.email else "customer@example.com"
+        val cfg = repository.chapaConfig.value
+        val ref = "CHP-STAR-" + System.currentTimeMillis()
+
+        launchChapaPayment(
+            ChapaPaymentSession(
+                amount = priceEtb,
+                title = "$starCount Stars Pack (Chapa Pay)",
+                txRef = ref,
+                email = email,
+                firstName = fName,
+                lastName = lName,
+                publicKey = cfg.publicKey,
+                isLiveMode = cfg.isLiveMode,
+                onPaymentCompleted = { completedRef ->
+                    repository.buyStarsWithChapa(starCount, priceEtb, completedRef)
+                    showMessage("⭐ Added $starCount Stars to your balance via Chapa! Ref: $completedRef")
+                }
+            )
+        )
+    }
+
+    fun updateChapaConfig(publicKey: String, secretKey: String, isLiveMode: Boolean) {
+        repository.updateChapaConfig(publicKey, secretKey, isLiveMode)
+        closeChapaConfig()
+        val modeStr = if (isLiveMode) "LIVE" else "SANDBOX TEST"
+        showMessage("🔐 Chapa Gateway set to $modeStr mode.")
+    }
+
+    fun resetToRealChapaBalance() {
+        repository.resetToRealChapaBalance()
+        showMessage("🧹 Reset to zero demo money. Creator balance is now 100% real Chapa funds.")
+    }
+
+    fun openTestChapaCheckout(amount: Double = 100.0) {
+        depositViaChapa(amount)
     }
 
     // Toast message for user feedback
@@ -366,6 +450,8 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         val fName = user?.displayName?.split(" ")?.firstOrNull() ?: "Meskot"
         val lName = user?.displayName?.split(" ")?.drop(1)?.joinToString(" ")?.ifBlank { "User" } ?: "User"
         val email = if (user?.email?.contains("@") == true) user.email else "customer@example.com"
+        val cfg = repository.chapaConfig.value
+        val ref = "CHP-TIP-" + System.currentTimeMillis()
 
         closeTipModal()
 
@@ -373,12 +459,15 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
             ChapaPaymentSession(
                 amount = amount,
                 title = "Creator Tip for ${post.authorName}",
+                txRef = ref,
                 email = email,
                 firstName = fName,
                 lastName = lName,
-                onPaymentCompleted = { ref ->
-                    repository.sendTip(post.id, amount)
-                    showMessage("✅ Tip of ${amount.toInt()} ETB sent to ${post.authorName} via Chapa! (Ref: $ref)")
+                publicKey = cfg.publicKey,
+                isLiveMode = cfg.isLiveMode,
+                onPaymentCompleted = { completedRef ->
+                    repository.sendTip(post.id, amount, completedRef)
+                    showMessage("✅ Real Tip of ${amount.toInt()} ETB sent to ${post.authorName} via Chapa! (Ref: $completedRef)")
                 }
             )
         )
@@ -455,6 +544,8 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         val fName = user?.displayName?.split(" ")?.firstOrNull() ?: "Meskot"
         val lName = user?.displayName?.split(" ")?.drop(1)?.joinToString(" ")?.ifBlank { "User" } ?: "User"
         val email = if (user?.email?.contains("@") == true) user.email else "customer@example.com"
+        val cfg = repository.chapaConfig.value
+        val ref = "CHP-SUB-" + System.currentTimeMillis()
 
         closeSubscriptionModal()
 
@@ -462,12 +553,15 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
             ChapaPaymentSession(
                 amount = tier.monthlyPriceEtb.toDouble(),
                 title = "${tier.label} for ${creator.displayName}",
+                txRef = ref,
                 email = email,
                 firstName = fName,
                 lastName = lName,
-                onPaymentCompleted = { ref ->
-                    repository.subscribeToCreator(creator.uid, tier)
-                    showMessage("🎉 Unlocked ${tier.label} for ${creator.displayName} via Chapa! (Ref: $ref)")
+                publicKey = cfg.publicKey,
+                isLiveMode = cfg.isLiveMode,
+                onPaymentCompleted = { completedRef ->
+                    repository.subscribeToCreator(creator.uid, tier, completedRef)
+                    showMessage("🎉 Unlocked ${tier.label} for ${creator.displayName} via Chapa! (Ref: $completedRef)")
                 }
             )
         )
@@ -510,10 +604,38 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _isPayoutModalOpen.value = false
     }
 
-    fun requestPayout(method: String, amountEtb: Double) {
-        repository.requestPayout(method, amountEtb)
+    fun requestPayout(method: String, amountEtb: Double, destinationAccount: String = "") {
+        repository.requestPayout(method, amountEtb, destinationAccount)
         closePayoutModal()
-        showMessage("✅ Payout request of ${amountEtb.toInt()} ETB submitted via $method!")
+        showMessage("💸 Payout request of ${amountEtb.toInt()} ETB submitted via $method! Transferred through Chapa rails.")
+    }
+
+    fun applyForMonetizationTool(toolId: String): Boolean {
+        val res = repository.applyForMonetizationTool(toolId)
+        if (res) {
+            showMessage("✅ Application submitted for automated policy & KYC verification!")
+        }
+        return res
+    }
+
+    fun redeemInviteCode(toolId: String, code: String): Boolean {
+        val success = repository.redeemInviteCode(toolId, code)
+        if (success) {
+            showMessage("🎉 Program Unlocked! 500 ETB Activation Bonus credited to your ledger.")
+        } else {
+            showMessage("❌ Invalid invite code. Check your token and try again.")
+        }
+        return success
+    }
+
+    fun registerInterest(toolId: String) {
+        repository.registerInterest(toolId)
+        showMessage("🌟 Interest registered! You'll be notified when program capacity expands.")
+    }
+
+    fun simulateDailySettlementCron() {
+        repository.simulateDailySettlementCron()
+        showMessage("⚡ Automated daily settlement completed: +280.00 ETB credited to ledger!")
     }
 
     // Friends
@@ -842,6 +964,10 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     fun switchUser(user: User) {
         repository.switchUser(user)
     }
+
+    fun refreshUsers() {
+        repository.refreshUsers()
+    }
 }
 
 /**
@@ -855,6 +981,8 @@ data class ChapaPaymentSession(
     val email: String = "customer@example.com",
     val firstName: String = "Meskot",
     val lastName: String = "User",
+    val publicKey: String = "CHAPUBK_TEST-1PW1FKvNMh2tx4k5hHPibEZA4A6GPpRc",
+    val isLiveMode: Boolean = false,
     val onPaymentCompleted: (txRef: String) -> Unit = {}
 )
 

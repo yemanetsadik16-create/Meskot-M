@@ -45,9 +45,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.example.data.MembershipTier
+import com.example.data.ChapaGatewayConfig
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -1129,15 +1132,17 @@ fun CreatorPayoutModal(
     netBalanceEtb: Double,
     currentLanguage: AppLanguage,
     onDismiss: () -> Unit,
-    onRequestPayout: (method: String, amount: Double) -> Unit
+    onRequestPayout: (method: String, amount: Double, destinationAccount: String) -> Unit
 ) {
-    var amountText by remember { mutableStateOf(netBalanceEtb.toInt().toString()) }
-    var selectedMethod by remember { mutableStateOf("Telebirr SuperApp") }
+    var amountText by remember { mutableStateOf(if (netBalanceEtb > 0) netBalanceEtb.toInt().toString() else "100") }
+    var destinationAccount by remember { mutableStateOf("") }
+    var selectedMethod by remember { mutableStateOf("Telebirr (Chapa Payout API)") }
 
     val methods = listOf(
-        "Telebirr SuperApp",
+        "Telebirr (Chapa Payout API)",
         "CBE Birr (Commercial Bank of Ethiopia)",
-        "Chapa Direct Settlement",
+        "Dashen Bank / Amole (Chapa Rail)",
+        "Awash Bank Direct Transfer",
         "Stripe Connect (Global Diaspora)"
     )
 
@@ -1145,20 +1150,39 @@ fun CreatorPayoutModal(
         Card(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().testTag("creator_payout_modal")
         ) {
             Column(
                 modifier = Modifier
                     .padding(20.dp)
-                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                    .verticalScroll(rememberScrollState())
             ) {
-                Text(
-                    text = "💸 Request Creator Earnings Payout",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Serif,
-                    color = Ink
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "💸 Real Payout Settlement",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Serif,
+                        color = Ink
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFFE8F5E9))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "CHAPA DISBURSAL",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF2E7D32)
+                        )
+                    }
+                }
 
                 Text(
                     text = "Net Available Balance: ${String.format(java.util.Locale.US, "%,.2f", netBalanceEtb)} ETB",
@@ -1192,7 +1216,20 @@ fun CreatorPayoutModal(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = destinationAccount,
+                    onValueChange = { destinationAccount = it },
+                    label = { Text("Recipient Phone / Account Number") },
+                    placeholder = { Text("e.g. 0911234567 or 100023456789") },
+                    textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 13.sp),
+                    colors = com.example.ui.theme.meskotTextFieldColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedTextField(
                     value = amountText,
@@ -1205,7 +1242,7 @@ fun CreatorPayoutModal(
                 )
 
                 Text(
-                    text = "Automated threshold: Min 100 ETB. Standard clearing time is 5-15 mins.",
+                    text = "Automated settlement via Chapa Transfer API to National Bank of Ethiopia rails. Clearing time: 5-15 mins.",
                     fontSize = 10.sp,
                     color = MutedText,
                     modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
@@ -1225,14 +1262,14 @@ fun CreatorPayoutModal(
                     Button(
                         onClick = {
                             if (parsedAmount > 0 && parsedAmount <= netBalanceEtb) {
-                                onRequestPayout(selectedMethod, parsedAmount)
+                                onRequestPayout(selectedMethod, parsedAmount, destinationAccount)
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = GoldDeep, contentColor = Color.White),
                         shape = RoundedCornerShape(10.dp),
                         enabled = parsedAmount > 0 && parsedAmount <= netBalanceEtb
                     ) {
-                        Text(text = "Confirm Payout", fontWeight = FontWeight.Bold)
+                        Text(text = "Confirm Disbursal", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1262,18 +1299,18 @@ fun EditProfileDialog(
     ) -> Unit
 ) {
     var name by remember { mutableStateOf(currentUser.displayName) }
-    var bio by remember { mutableStateOf(currentUser.bio) }
+    var bio by remember { mutableStateOf(if (currentUser.bio.trim().equals("Engineer is a problem solver", ignoreCase = true)) "" else currentUser.bio) }
     var photoUrl by remember { mutableStateOf(currentUser.photoUrl) }
     var coverPhotoUrl by remember { mutableStateOf(currentUser.coverPhotoUrl) }
     var gender by remember { mutableStateOf(currentUser.gender) }
-    var birthDate by remember { mutableStateOf(currentUser.birthDate) }
-    var profession by remember { mutableStateOf(currentUser.profession) }
-    var location by remember { mutableStateOf(currentUser.location) }
-    var hometown by remember { mutableStateOf(currentUser.hometown) }
-    var workplace by remember { mutableStateOf(currentUser.workplace) }
-    var workRole by remember { mutableStateOf(currentUser.workRole) }
-    var education by remember { mutableStateOf(currentUser.education) }
-    var educationClass by remember { mutableStateOf(currentUser.educationClass) }
+    var birthDate by remember { mutableStateOf(if (currentUser.birthDate.trim().equals("May 11, 1994", ignoreCase = true)) "" else currentUser.birthDate) }
+    var profession by remember { mutableStateOf(if (currentUser.profession.trim().equals("Public figure", ignoreCase = true)) "" else currentUser.profession) }
+    var location by remember { mutableStateOf(if (currentUser.location.trim().equals("Calgary, Alberta", ignoreCase = true) || currentUser.location.trim().equals("Calgary", ignoreCase = true)) "" else currentUser.location) }
+    var hometown by remember { mutableStateOf(if (currentUser.hometown.trim().equals("Calgary, Alberta", ignoreCase = true) || currentUser.hometown.trim().equals("Calgary", ignoreCase = true)) "" else currentUser.hometown) }
+    var workplace by remember { mutableStateOf(if (currentUser.workplace.trim().equals("Adigrat university _Engineering Sciences", ignoreCase = true)) "" else currentUser.workplace) }
+    var workRole by remember { mutableStateOf(if (currentUser.workRole.trim().equals("Civil Engineering", ignoreCase = true)) "" else currentUser.workRole) }
+    var education by remember { mutableStateOf(if (currentUser.education.trim().equals("Adigrat University", ignoreCase = true)) "" else currentUser.education) }
+    var educationClass by remember { mutableStateOf(if (currentUser.educationClass.trim().equals("Class of 2018", ignoreCase = true)) "" else currentUser.educationClass) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -1324,7 +1361,8 @@ fun EditProfileDialog(
                 OutlinedTextField(
                     value = profession,
                     onValueChange = { profession = it },
-                    label = { Text("Profession / Category (e.g. Public figure)") },
+                    label = { Text("Profession / Category") },
+                    placeholder = { Text("e.g. Software Engineer, Artist, Public figure") },
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
                     colors = com.example.ui.theme.meskotTextFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
@@ -1336,7 +1374,8 @@ fun EditProfileDialog(
                 OutlinedTextField(
                     value = location,
                     onValueChange = { location = it },
-                    label = { Text("Current City (e.g. Calgary, Alberta)") },
+                    label = { Text("Current City / Location") },
+                    placeholder = { Text("e.g. Addis Ababa, Ethiopia") },
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
                     colors = com.example.ui.theme.meskotTextFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
@@ -1348,7 +1387,8 @@ fun EditProfileDialog(
                 OutlinedTextField(
                     value = hometown,
                     onValueChange = { hometown = it },
-                    label = { Text("Hometown (e.g. Calgary, Alberta)") },
+                    label = { Text("Hometown") },
+                    placeholder = { Text("e.g. Asmara, Eritrea") },
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
                     colors = com.example.ui.theme.meskotTextFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
@@ -1360,7 +1400,8 @@ fun EditProfileDialog(
                 OutlinedTextField(
                     value = workplace,
                     onValueChange = { workplace = it },
-                    label = { Text("Workplace (e.g. Adigrat university _Engineering Sciences)") },
+                    label = { Text("Workplace / Organization") },
+                    placeholder = { Text("e.g. Company or University") },
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
                     colors = com.example.ui.theme.meskotTextFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
@@ -1372,7 +1413,8 @@ fun EditProfileDialog(
                 OutlinedTextField(
                     value = workRole,
                     onValueChange = { workRole = it },
-                    label = { Text("Work Position / Role (e.g. Civil Engineering)") },
+                    label = { Text("Work Position / Role") },
+                    placeholder = { Text("e.g. Project Manager, Designer") },
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
                     colors = com.example.ui.theme.meskotTextFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
@@ -1384,7 +1426,8 @@ fun EditProfileDialog(
                 OutlinedTextField(
                     value = education,
                     onValueChange = { education = it },
-                    label = { Text("College / University (e.g. Adigrat University)") },
+                    label = { Text("College / University") },
+                    placeholder = { Text("e.g. Addis Ababa University") },
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
                     colors = com.example.ui.theme.meskotTextFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
@@ -1396,7 +1439,8 @@ fun EditProfileDialog(
                 OutlinedTextField(
                     value = educationClass,
                     onValueChange = { educationClass = it },
-                    label = { Text("Graduation Class (e.g. Class of 2018)") },
+                    label = { Text("Graduation Class / Year") },
+                    placeholder = { Text("e.g. Class of 2022") },
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
                     colors = com.example.ui.theme.meskotTextFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
@@ -1472,7 +1516,7 @@ fun EditProfileDialog(
                     value = birthDate,
                     onValueChange = { birthDate = it },
                     label = { Text(MeskotStrings.get("birthday", currentLanguage)) },
-                    placeholder = { Text("e.g. May 11, 1994") },
+                    placeholder = { Text("e.g. Sep 11, 1995") },
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
                     colors = com.example.ui.theme.meskotTextFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
@@ -1501,6 +1545,518 @@ fun EditProfileDialog(
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Text(text = MeskotStrings.get("save", currentLanguage), fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Modal to deposit real Ethiopian Birr into Meskot using Chapa inline checkout.
+ */
+@Composable
+fun ChapaDepositModal(
+    config: ChapaGatewayConfig,
+    currentLanguage: AppLanguage,
+    onDismiss: () -> Unit,
+    onProceed: (amount: Double) -> Unit
+) {
+    val presets = listOf(50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0)
+    var selectedAmount by remember { mutableStateOf(100.0) }
+    var customAmountText by remember { mutableStateOf("") }
+    var isCustom by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            modifier = Modifier.fillMaxWidth().testTag("chapa_deposit_modal")
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "⚡ Deposit Real ETB",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Serif,
+                        color = Ink
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (config.isLiveMode) Color(0xFFE8F5E9) else Color(0xFFFEF3C7))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (config.isLiveMode) "CHAPA LIVE" else "CHAPA TEST",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (config.isLiveMode) Color(0xFF2E7D32) else Color(0xFFB45309)
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Add real funds directly to your creator balance or fan wallet using Telebirr, CBE Birr, eBirr, M-Pesa, or Debit/Credit cards.",
+                    fontSize = 12.sp,
+                    color = MutedText,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
+                )
+
+                Text(text = "Choose Amount (ETB):", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Presets Grid
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (row in presets.chunked(3)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEach { amt ->
+                                val isSel = !isCustom && selectedAmount == amt
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSel) Color(0xFF2E7D32) else Paper2)
+                                        .border(1.dp, if (isSel) Color(0xFF2E7D32) else LineBorder, RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            selectedAmount = amt
+                                            isCustom = false
+                                        }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "${amt.toInt()} ETB",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSel) Color.White else Ink
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Custom Amount Input
+                OutlinedTextField(
+                    value = customAmountText,
+                    onValueChange = {
+                        customAmountText = it
+                        val parsed = it.toDoubleOrNull()
+                        if (parsed != null && parsed > 0) {
+                            selectedAmount = parsed
+                            isCustom = true
+                        }
+                    },
+                    label = { Text("Or Enter Custom Amount (ETB)") },
+                    placeholder = { Text("e.g. 350") },
+                    textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
+                    colors = com.example.ui.theme.meskotTextFieldColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Supported Payment Rails Banner
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFF1F5F9))
+                        .padding(10.dp)
+                ) {
+                    Column {
+                        Text(
+                            text = "Supported Channels in Chapa Checkout:",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF475569)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "📱 Telebirr · 🏦 CBE Birr · 💳 eBirr · 📲 M-Pesa · 💳 Visa / MasterCard",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(text = MeskotStrings.get("cancel", currentLanguage), color = MutedText)
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Button(
+                        onClick = {
+                            if (selectedAmount > 0) {
+                                onProceed(selectedAmount)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32), contentColor = Color.White),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            text = "Pay ${selectedAmount.toInt()} ETB via Chapa →",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Modal to configure Chapa API keys and switch between Live Mode (Real Money) and Sandbox Test Mode.
+ */
+@Composable
+fun ChapaConfigModal(
+    currentConfig: ChapaGatewayConfig,
+    currentLanguage: AppLanguage,
+    onDismiss: () -> Unit,
+    onSave: (publicKey: String, secretKey: String, isLiveMode: Boolean) -> Unit,
+    onResetDemoBalance: () -> Unit
+) {
+    var publicKey by remember { mutableStateOf(currentConfig.publicKey) }
+    var secretKey by remember { mutableStateOf(currentConfig.secretKey) }
+    var isLiveMode by remember { mutableStateOf(currentConfig.isLiveMode) }
+    var showResetConfirm by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            modifier = Modifier.fillMaxWidth().testTag("chapa_config_modal")
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "⚙️ Chapa Gateway Settings",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Serif,
+                        color = Ink
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (isLiveMode) Color(0xFFE8F5E9) else Color(0xFFFEF3C7))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (isLiveMode) "LIVE REAL MONEY" else "SANDBOX TEST",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (isLiveMode) Color(0xFF2E7D32) else Color(0xFFB45309)
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Configure your merchant credentials to process real payments or test in the Chapa Sandbox.",
+                    fontSize = 12.sp,
+                    color = MutedText,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
+                )
+
+                // Live Mode Toggle Card
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isLiveMode) Color(0xFFF0FDF4) else Color(0xFFFFFBEB)
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (isLiveMode) Color(0xFF86EFAC) else Color(0xFFFDE68A)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isLiveMode) "🟢 Live Mode (Real Money Active)" else "🟡 Sandbox Test Mode",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isLiveMode) Color(0xFF166534) else Color(0xFF92400E)
+                            )
+                            Text(
+                                text = if (isLiveMode)
+                                    "Transactions deduct real Ethiopian Birr via Telebirr, CBE, or Cards."
+                                else
+                                    "Transactions use Chapa sandbox simulated funds.",
+                                fontSize = 11.sp,
+                                color = if (isLiveMode) Color(0xFF15803D) else Color(0xFFB45309)
+                            )
+                        }
+                        Switch(
+                            checked = isLiveMode,
+                            onCheckedChange = { isLiveMode = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color(0xFF2E7D32),
+                                checkedTrackColor = Color(0xFFA7F3D0)
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Public Key Field
+                OutlinedTextField(
+                    value = publicKey,
+                    onValueChange = { publicKey = it },
+                    label = { Text("Chapa Public Key") },
+                    placeholder = { Text("CHAPUBK_TEST-... or CHAPUBK_LIVE-...") },
+                    textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 12.sp),
+                    colors = com.example.ui.theme.meskotTextFieldColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Secret Key Field
+                OutlinedTextField(
+                    value = secretKey,
+                    onValueChange = { secretKey = it },
+                    label = { Text("Chapa Secret Key (Optional / Backend Disbursals)") },
+                    placeholder = { Text("CHASECK_TEST-... or CHASECK_LIVE-...") },
+                    textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 12.sp),
+                    colors = com.example.ui.theme.meskotTextFieldColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Clear Mock Funds Section
+                Card(
+                    shape = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFECACA)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "🧹 Switch from Demo Money to 100% Real Funds",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF991B1B)
+                        )
+                        Text(
+                            text = "Reset mock creator earnings and start fresh with zero balance so all numbers reflect actual Chapa receipts.",
+                            fontSize = 10.sp,
+                            color = Color(0xFF7F1D1D),
+                            modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                onResetDemoBalance()
+                                onDismiss()
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDC2626)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(text = "Reset to Zero Demo Money", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(text = MeskotStrings.get("cancel", currentLanguage), color = MutedText)
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Button(
+                        onClick = {
+                            onSave(publicKey, secretKey, isLiveMode)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = GoldDeep, contentColor = Color.White),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(text = "Save Configuration", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Modal to buy Virtual Stars with Chapa payment.
+ */
+@Composable
+fun BuyStarsModal(
+    currentStars: Int,
+    currentLanguage: AppLanguage,
+    onDismiss: () -> Unit,
+    onBuy: (starCount: Int, priceEtb: Double) -> Unit
+) {
+    data class StarPack(val stars: Int, val priceEtb: Double, val badge: String = "")
+    val packs = listOf(
+        StarPack(100, 50.0),
+        StarPack(500, 200.0, "POPULAR"),
+        StarPack(1500, 500.0, "BEST VALUE"),
+        StarPack(4000, 1200.0, "VIP CREATOR")
+    )
+    var selectedPack by remember { mutableStateOf(packs[1]) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            modifier = Modifier.fillMaxWidth().testTag("buy_stars_modal")
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "⭐ Top Up Stars",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Serif,
+                        color = Ink
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFFFEF3C7))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "Current: $currentStars ⭐",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = GoldDeep
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Send virtual gifts and support your favorite creators. Pay instantly via Chapa with Telebirr, CBE, or Cards.",
+                    fontSize = 12.sp,
+                    color = MutedText,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    packs.forEach { pack ->
+                        val isSel = selectedPack == pack
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSel) GoldSurface else Paper2)
+                                .border(1.5.dp, if (isSel) GoldDeep else LineBorder, RoundedCornerShape(10.dp))
+                                .clickable { selectedPack = pack }
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(text = "⭐", fontSize = 18.sp)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = "${pack.stars} Stars",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Ink
+                                        )
+                                        if (pack.badge.isNotEmpty()) {
+                                            Text(
+                                                text = pack.badge,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = GoldDeep
+                                            )
+                                        }
+                                    }
+                                }
+                                Text(
+                                    text = "${pack.priceEtb.toInt()} ETB",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSel) GoldDeep else Ink
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(text = MeskotStrings.get("cancel", currentLanguage), color = MutedText)
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Button(
+                        onClick = {
+                            onBuy(selectedPack.stars, selectedPack.priceEtb)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = GoldDeep, contentColor = Color.White),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(text = "Pay ${selectedPack.priceEtb.toInt()} ETB via Chapa", fontWeight = FontWeight.Bold)
                     }
                 }
             }

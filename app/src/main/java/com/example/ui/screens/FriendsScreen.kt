@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -26,12 +27,15 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,6 +80,8 @@ fun FriendsScreen(
 ) {
     var activeSubTab by remember { mutableStateOf(FriendsSubTab.DISCOVER) }
     var searchQuery by remember { mutableStateOf("") }
+    val isUsersLoading by viewModel.isUsersLoading.collectAsState()
+    val usersError by viewModel.usersError.collectAsState()
 
     Column(
         modifier = Modifier
@@ -86,7 +92,7 @@ fun FriendsScreen(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(horizontal = 14.dp, vertical = 8.dp),
             shape = RoundedCornerShape(14.dp),
             color = CardBg,
             border = androidx.compose.foundation.BorderStroke(1.2.dp, com.example.ui.theme.GoldBorder.copy(alpha = 0.6f))
@@ -124,6 +130,50 @@ fun FriendsScreen(
             }
         }
 
+        // Live Firestore status bar with refresh button
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(if (isUsersLoading) Gold else Color(0xFF10B981))
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (isUsersLoading) "Syncing with Firestore..." else "Firestore Live • ${allUsers.size} members",
+                    fontSize = 12.sp,
+                    color = MutedText,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            IconButton(
+                onClick = { viewModel.refreshUsers() },
+                modifier = Modifier.size(32.dp)
+            ) {
+                if (isUsersLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = Gold,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Refresh from Firestore",
+                        tint = Gold,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
         // Search Bar (if Discover tab)
         if (activeSubTab == FriendsSubTab.DISCOVER) {
             OutlinedTextField(
@@ -150,23 +200,62 @@ fun FriendsScreen(
         ) {
             when (activeSubTab) {
                 FriendsSubTab.DISCOVER -> {
-                    val otherUsers = allUsers.filter { it.uid != currentUser?.uid }
-                    val filtered = if (searchQuery.isBlank()) otherUsers else {
-                        otherUsers.filter {
-                            it.displayName.contains(searchQuery, ignoreCase = true) ||
-                                it.bio.contains(searchQuery, ignoreCase = true)
-                        }
-                    }
-
-                    if (filtered.isEmpty()) {
+                    if (isUsersLoading && allUsers.isEmpty()) {
                         item {
-                            EmptyNotice(text = MeskotStrings.get("noPeople", currentLanguage))
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 48.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                CircularProgressIndicator(
+                                    color = Gold,
+                                    strokeWidth = 2.5.dp,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "Connecting to Firebase Firestore...",
+                                    fontSize = 14.sp,
+                                    color = MutedText
+                                )
+                            }
                         }
                     } else {
-                        items(filtered) { user ->
-                            val isFriend = friendUids.contains(user.uid)
-                            val isIncoming = incomingRequests.any { it.uid == user.uid }
-                            val isOutgoing = outgoingRequests.contains(user.uid)
+                        val otherUsers = allUsers.filter { it.uid != currentUser?.uid }
+                        val filtered = if (searchQuery.isBlank()) otherUsers else {
+                            otherUsers.filter {
+                                it.displayName.contains(searchQuery, ignoreCase = true) ||
+                                    it.bio.contains(searchQuery, ignoreCase = true)
+                            }
+                        }
+
+                        if (filtered.isEmpty()) {
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 32.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    EmptyNotice(text = if (allUsers.isEmpty()) "No registered members found in Firestore yet" else MeskotStrings.get("noPeople", currentLanguage))
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    OutlinedButton(
+                                        onClick = { viewModel.refreshUsers() },
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Gold)
+                                    ) {
+                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Sync from Firestore", fontSize = 13.sp)
+                                    }
+                                }
+                            }
+                        } else {
+                            items(filtered) { user ->
+                                val isFriend = friendUids.contains(user.uid)
+                                val isIncoming = incomingRequests.any { it.uid == user.uid }
+                                val isOutgoing = outgoingRequests.contains(user.uid)
 
                             PersonCard(
                                 user = user,
@@ -185,8 +274,9 @@ fun FriendsScreen(
                         }
                     }
                 }
+            }
 
-                FriendsSubTab.REQUESTS -> {
+            FriendsSubTab.REQUESTS -> {
                     if (incomingRequests.isEmpty()) {
                         item {
                             EmptyNotice(text = MeskotStrings.get("noRequests", currentLanguage))

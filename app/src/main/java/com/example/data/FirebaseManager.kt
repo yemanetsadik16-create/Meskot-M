@@ -673,6 +673,10 @@ object FirebaseManager {
         "gender" to u.gender,
         "birthDate" to u.birthDate,
         "phoneNumber" to u.phoneNumber,
+        "starBalance" to u.starBalance,
+        "creatorGrossEarnings" to u.creatorGrossEarnings,
+        "creatorNetBalance" to u.creatorNetBalance,
+        "vipMemberships" to u.vipMemberships,
         "followersCount" to u.followersCount,
         "followingCount" to u.followingCount,
         "profession" to u.profession,
@@ -681,33 +685,59 @@ object FirebaseManager {
         "workplace" to u.workplace,
         "workRole" to u.workRole,
         "education" to u.education,
-        "educationClass" to u.educationClass
+        "educationClass" to u.educationClass,
+        "watchHours" to u.watchHours,
+        "kycVerified" to u.kycVerified,
+        "policyStrikes" to u.policyStrikes,
+        "payoutDestinationAccount" to u.payoutDestinationAccount
     )
 
-    private fun parseUser(uid: String, d: Map<String, Any?>): User = User(
-        uid = uid,
-        displayName = d["displayName"] as? String ?: "User",
-        email = d["email"] as? String ?: "",
-        bio = d["bio"] as? String ?: "Engineer is a problem solver",
-        photoUrl = d["photoUrl"] as? String ?: "",
-        coverPhotoUrl = d["coverPhotoUrl"] as? String ?: "",
-        isAdmin = d["isAdmin"] as? Boolean ?: false,
-        isSuspended = d["isSuspended"] as? Boolean ?: false,
-        lastSeen = (d["lastSeen"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-        createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-        gender = d["gender"] as? String ?: "",
-        birthDate = d["birthDate"] as? String ?: "May 11, 1994",
-        phoneNumber = d["phoneNumber"] as? String ?: "",
-        followersCount = (d["followersCount"] as? Number)?.toInt() ?: 8500,
-        followingCount = (d["followingCount"] as? Number)?.toInt() ?: 3700,
-        profession = d["profession"] as? String ?: "Public figure",
-        location = d["location"] as? String ?: "Calgary, Alberta",
-        hometown = d["hometown"] as? String ?: "Calgary, Alberta",
-        workplace = d["workplace"] as? String ?: "Adigrat university _Engineering Sciences",
-        workRole = d["workRole"] as? String ?: "Civil Engineering",
-        education = d["education"] as? String ?: "Adigrat University",
-        educationClass = d["educationClass"] as? String ?: "Class of 2018"
-    )
+    private fun sanitizeMock(str: String?, mockVal: String): String {
+        val s = str?.trim() ?: ""
+        return if (s.equals(mockVal.trim(), ignoreCase = true)) "" else s
+    }
+
+    fun parseUser(uid: String, d: Map<String, Any?>): User {
+        val rawFollowers = (d["followersCount"] as? Number)?.toInt() ?: 0
+        val rawFollowing = (d["followingCount"] as? Number)?.toInt() ?: 0
+        val safeFollowers = if (rawFollowers == 8500) 0 else rawFollowers
+        val safeFollowing = if (rawFollowing == 3700) 0 else rawFollowing
+
+        return User(
+            uid = uid,
+            displayName = d["displayName"] as? String ?: "User",
+            email = d["email"] as? String ?: "",
+            bio = sanitizeMock(d["bio"] as? String, "Engineer is a problem solver"),
+            photoUrl = d["photoUrl"] as? String ?: "",
+            coverPhotoUrl = d["coverPhotoUrl"] as? String ?: "",
+            isAdmin = d["isAdmin"] as? Boolean ?: false,
+            isSuspended = d["isSuspended"] as? Boolean ?: false,
+            lastSeen = (d["lastSeen"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+            createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+            gender = d["gender"] as? String ?: "",
+            birthDate = sanitizeMock(d["birthDate"] as? String, "May 11, 1994"),
+            phoneNumber = d["phoneNumber"] as? String ?: "",
+            starBalance = (d["starBalance"] as? Number)?.toInt() ?: 0,
+            creatorGrossEarnings = (d["creatorGrossEarnings"] as? Number)?.toDouble() ?: 0.0,
+            creatorNetBalance = (d["creatorNetBalance"] as? Number)?.toDouble() ?: 0.0,
+            vipMemberships = (d["vipMemberships"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                if (k is String && v is String) k to v else null
+            }?.toMap() ?: emptyMap(),
+            followersCount = safeFollowers,
+            followingCount = safeFollowing,
+            profession = sanitizeMock(d["profession"] as? String, "Public figure"),
+            location = sanitizeMock(d["location"] as? String, "Calgary, Alberta"),
+            hometown = sanitizeMock(d["hometown"] as? String, "Calgary, Alberta"),
+            workplace = sanitizeMock(d["workplace"] as? String, "Adigrat university _Engineering Sciences"),
+            workRole = sanitizeMock(d["workRole"] as? String, "Civil Engineering"),
+            education = sanitizeMock(d["education"] as? String, "Adigrat University"),
+            educationClass = sanitizeMock(d["educationClass"] as? String, "Class of 2018"),
+            watchHours = (d["watchHours"] as? Number)?.toDouble() ?: 0.0,
+            kycVerified = d["kycVerified"] as? Boolean ?: false,
+            policyStrikes = (d["policyStrikes"] as? Number)?.toInt() ?: 0,
+            payoutDestinationAccount = d["payoutDestinationAccount"] as? String ?: ""
+        )
+    }
 
     private fun chatMessageToMap(m: ChatMessage): Map<String, Any?> = mapOf(
         "id" to m.id,

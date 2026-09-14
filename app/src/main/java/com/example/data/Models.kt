@@ -21,10 +21,10 @@ enum class MembershipTier(
 }
 
 data class User(
-    val uid: String,
-    val displayName: String,
+    val uid: String = "",
+    val displayName: String = "",
     val email: String = "",
-    val bio: String = "Engineer is a problem solver",
+    val bio: String = "",
     val photoUrl: String = "",
     val coverPhotoUrl: String = "",
     val isAdmin: Boolean = false,
@@ -32,21 +32,25 @@ data class User(
     val lastSeen: Long = System.currentTimeMillis(),
     val createdAt: Long = System.currentTimeMillis(),
     val gender: String = "",
-    val birthDate: String = "May 11, 1994",
+    val birthDate: String = "",
     val phoneNumber: String = "",
-    val starBalance: Int = 1250,
-    val creatorGrossEarnings: Double = 6200.0,
-    val creatorNetBalance: Double = 4960.0,
+    val starBalance: Int = 0,
+    val creatorGrossEarnings: Double = 0.0,
+    val creatorNetBalance: Double = 0.0,
     val vipMemberships: Map<String, String> = emptyMap(), // creatorUid -> Tier code
-    val followersCount: Int = 8500,
-    val followingCount: Int = 3700,
-    val profession: String = "Public figure",
-    val location: String = "Calgary, Alberta",
-    val hometown: String = "Calgary, Alberta",
-    val workplace: String = "Adigrat university _Engineering Sciences",
-    val workRole: String = "Civil Engineering",
-    val education: String = "Adigrat University",
-    val educationClass: String = "Class of 2018"
+    val followersCount: Int = 0,
+    val followingCount: Int = 0,
+    val profession: String = "",
+    val location: String = "",
+    val hometown: String = "",
+    val workplace: String = "",
+    val workRole: String = "",
+    val education: String = "",
+    val educationClass: String = "",
+    val watchHours: Double = 0.0,
+    val kycVerified: Boolean = false,
+    val policyStrikes: Int = 0,
+    val payoutDestinationAccount: String = ""
 )
 
 data class SharedPostPreview(
@@ -241,5 +245,91 @@ data class CreatorPayoutRecord(
     val referenceId: String get() = transactionRef
     val createdAt: String get() = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(timestamp))
 }
+
+enum class ProgramStatus(val label: String) {
+    ACTIVE("Active"),
+    INVITE_ONLY("Invite Only"),
+    READY_TO_APPLY("Criteria Met"),
+    UNDER_REVIEW("Under Review"),
+    CRITERIA_NOT_MET("Ineligible"),
+    SUSPENDED("Suspended")
+}
+
+data class MonetizationTool(
+    val id: String,
+    val code: String,
+    val name: String,
+    val description: String,
+    val icon: String,
+    val status: ProgramStatus,
+    val minFollowers: Int,
+    val minWatchHours: Int,
+    val revSharePercent: Double = 70.0,
+    val eligibilityNote: String = "",
+    val enrolledDate: String? = null
+)
+
+enum class LedgerEntryType(val label: String, val isCredit: Boolean) {
+    AD_REVENUE_CREDIT("In-Stream & Reels Ad Share", true),
+    FAN_TIP_CREDIT("Direct Chapa & Telebirr Tips", true),
+    CHAPA_DEPOSIT_CREDIT("Chapa Real Funds Deposit", true),
+    SUBSCRIPTION_CREDIT("VIP Fan Subscriptions", true),
+    STARS_GIFT_CREDIT("Virtual Stars & Gifts", true),
+    PAYOUT_DEBIT("Disbursement / Cashout", false),
+    PLATFORM_FEE_DEBIT("Platform Maintenance Fee", false),
+    REVERSAL_CREDIT("Settlement Reversal / Refund", true)
+}
+
+data class EarningsLedgerEntry(
+    val id: String,
+    val transactionRef: String,
+    val entryType: LedgerEntryType,
+    val amountEtb: Double,
+    val balanceAfterEtb: Double,
+    val timestamp: Long = System.currentTimeMillis(),
+    val sourceTitle: String,
+    val metadata: String = ""
+) {
+    val formattedDate: String get() = java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.US).format(java.util.Date(timestamp))
+}
+
+data class ContentFormatMetric(
+    val formatName: String,
+    val icon: String,
+    val views: Long,
+    val monetizableImpressions: Long,
+    val rpmEtb: Double,
+    val grossRevenueEtb: Double,
+    val netCreatorRevenueEtb: Double
+)
+
+data class DailyEarningsMetric(
+    val dayLabel: String,
+    val dateStr: String,
+    val adShareEtb: Double,
+    val starsEtb: Double,
+    val subsEtb: Double,
+    val totalEtb: Double
+)
+
+data class CreatorPayoutAccount(
+    val id: String,
+    val gatewayName: String,
+    val accountNumber: String,
+    val holderName: String,
+    val isDefault: Boolean = true,
+    val isVerified: Boolean = true
+)
+
+data class ChapaGatewayConfig(
+    val publicKey: String = "CHAPUBK_TEST-1PW1FKvNMh2tx4k5hHPibEZA4A6GPpRc",
+    val secretKey: String = "",
+    val isLiveMode: Boolean = false,
+    val merchantName: String = "Meskot Media & Creator Studio",
+    val defaultCurrency: String = "ETB",
+    val isConnected: Boolean = true,
+    val supportedMethods: List<String> = listOf("Telebirr", "CBE Birr", "eBirr", "M-Pesa", "Cards")
+)
+
 
 
