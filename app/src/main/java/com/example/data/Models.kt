@@ -264,10 +264,20 @@ data class MonetizationTool(
     val status: ProgramStatus,
     val minFollowers: Int,
     val minWatchHours: Int,
+    val minActivePosts: Int = 5,
     val revSharePercent: Double = 70.0,
     val eligibilityNote: String = "",
-    val enrolledDate: String? = null
-)
+    val enrolledDate: String? = null,
+    val isInviteOnly: Boolean = false,
+    val payoutRateDescription: String = "",
+    val policyCheckPassed: Boolean = true
+) {
+    fun isFollowersMet(followers: Int): Boolean = followers >= minFollowers
+    fun isWatchHoursMet(watchHours: Double): Boolean = minWatchHours == 0 || watchHours >= minWatchHours
+    fun isPostsMet(postsCount: Int): Boolean = postsCount >= minActivePosts
+    fun isAllCriteriaMet(followers: Int, watchHours: Double, postsCount: Int): Boolean =
+        isFollowersMet(followers) && isWatchHoursMet(watchHours) && isPostsMet(postsCount) && policyCheckPassed
+}
 
 enum class LedgerEntryType(val label: String, val isCredit: Boolean) {
     AD_REVENUE_CREDIT("In-Stream & Reels Ad Share", true),
@@ -275,6 +285,9 @@ enum class LedgerEntryType(val label: String, val isCredit: Boolean) {
     CHAPA_DEPOSIT_CREDIT("Chapa Real Funds Deposit", true),
     SUBSCRIPTION_CREDIT("VIP Fan Subscriptions", true),
     STARS_GIFT_CREDIT("Virtual Stars & Gifts", true),
+    BOOST_POST_DEBIT("Post Promotion Boost", false),
+    CREATOR_SUPPORT_DEBIT("Creator Support Tip", false),
+    AD_CAMPAIGN_DEBIT("Ad Campaign Budget", false),
     PAYOUT_DEBIT("Disbursement / Cashout", false),
     PLATFORM_FEE_DEBIT("Platform Maintenance Fee", false),
     REVERSAL_CREDIT("Settlement Reversal / Refund", true)

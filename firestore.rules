@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ========================================================================
+    // FINANCIAL COLLECTIONS (CRITICAL FINANCIAL AUDIT RULES)
+    // Direct client writes to balances, ledgers, or analytics are STRICTLY PROHIBITED.
+    // All balance updates must occur via trusted Cloud Functions with atomic transactions.
+    // ========================================================================
+
+    // 1. Wallets: Users can only read their own wallet. Absolutely NO client writes.
+    match /wallets/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false; // Only Cloud Functions (Firebase Admin SDK) can modify balances
+    }
+
+    // 2. Studio Analytics: Creator can only read their own analytics. NO client writes.
+    match /studio_analytics/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false; // Managed exclusively server-side
+    }
+
+    // 3. Transactions: Users can view transactions where they are sender or recipient. NO client writes.
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        resource.data.recipientId == request.auth.uid
+      );
+      allow write: if false; // Immutable financial ledger
+    }
+
+    // 4. Ad Campaigns: Users can read their own campaigns. Creation & budgeting enforced server-side.
+    match /ad_campaigns/{campaignId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Clients can only update status (e.g. pause/resume) without modifying financial budgets
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+        request.resource.data.status in ['ACTIVE', 'PAUSED'];
+      allow create, delete: if false;
+    }
+
+    // ========================================================================
+    // SOCIAL & CORE APPLICATION COLLECTIONS
+    // ========================================================================
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isOwner(userId);
+      allow delete: if false;
+    }
+
+    // Posts Collection
+    match /posts/{postId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.authorId == request.auth.uid ||
+        // Allow liking/reacting if only likes/reactions/commentsCount are updated
+        request.resource.data.diff(resource.data).affectedKeys().hasAny(['likes', 'reactions', 'commentsCount', 'sharesCount'])
+      );
+      allow delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
+    }
+
+    // Comments Collection
+    match /comments/{commentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
+    }
+
+    // Groups Collection
+    match /groups/{groupId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && resource.data.creatorId == request.auth.uid;
+    }
+
+    // Albums Collection
+    match /albums/{albumId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.creatorId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.creatorId == request.auth.uid;
+    }
+
+    // Messages Collection
+    match /messages/{messageId} {
+      allow read, create: if isAuthenticated() && (
+        request.resource.data.senderId == request.auth.uid ||
+        resource.data.senderId == request.auth.uid ||
+        resource.data.recipientId == request.auth.uid
+      );
+      allow update, delete: if isAuthenticated() && resource.data.senderId == request.auth.uid;
+    }
+
+    // Friend Requests & Friendships
+    match /friend_requests/{requestId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /friendships/{friendshipId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Notifications
+    match /notifications/{notifId} {
+      allow read, update: if isAuthenticated() && resource.data.recipientId == request.auth.uid;
+      allow create: if isAuthenticated();
+      allow delete: if isAuthenticated() && resource.data.recipientId == request.auth.uid;
+    }
+
+    // Calls
+    match /calls/{callId} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

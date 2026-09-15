@@ -17,11 +17,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.MonetizationOn
@@ -34,6 +38,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -131,6 +137,7 @@ fun CreatorDashboardScreen(
     var showConfigModal by remember { mutableStateOf(false) }
     var showInviteModalTool by remember { mutableStateOf<MonetizationTool?>(null) }
     var showApplyModalTool by remember { mutableStateOf<MonetizationTool?>(null) }
+    var showCriteriaModalTool by remember { mutableStateOf<MonetizationTool?>(null) }
 
     if (showPayoutModal) {
         CreatorPayoutModal(
@@ -172,6 +179,32 @@ fun CreatorDashboardScreen(
         )
     }
 
+    showCriteriaModalTool?.let { tool ->
+        FacebookMonetizationCriteriaModal(
+            tool = tool,
+            currentUser = currentUser,
+            postsCount = posts.count { it.authorId == currentUser?.uid }.let { if (it > 0) it else posts.size.coerceAtLeast(3) },
+            onDismiss = { showCriteriaModalTool = null },
+            onApply = {
+                showCriteriaModalTool = null
+                showApplyModalTool = tool
+            },
+            onRedeemInvite = {
+                showCriteriaModalTool = null
+                showInviteModalTool = tool
+            },
+            onRegisterInterest = {
+                viewModel.registerInterest(tool.id)
+            },
+            onAddFollowers = { count ->
+                viewModel.incrementFollowers(count)
+            },
+            onAddWatchHours = { hours ->
+                viewModel.incrementWatchHours(hours)
+            }
+        )
+    }
+
     showInviteModalTool?.let { tool ->
         RedeemInviteCodeModal(
             tool = tool,
@@ -187,8 +220,8 @@ fun CreatorDashboardScreen(
         ApplyMonetizationProgramModal(
             tool = tool,
             onDismiss = { showApplyModalTool = null },
-            onConfirmApply = {
-                viewModel.applyForMonetizationTool(tool.id)
+            onConfirmApply = { payoutMethod, accountNumber ->
+                viewModel.applyForMonetizationTool(tool.id, payoutMethod, accountNumber)
                 showApplyModalTool = null
             }
         )
@@ -623,7 +656,10 @@ fun CreatorDashboardScreen(
                                 val reelsTool = monetizationTools.find { it.code == "REELS_OVERLAY" }
                                     ?: monetizationTools.firstOrNull { it.status == ProgramStatus.INVITE_ONLY }
                                 reelsTool?.let { showInviteModalTool = it }
-                            }
+                            },
+                            onAddFollowers = { viewModel.incrementFollowers(50) },
+                            onAddWatchHours = { viewModel.incrementWatchHours(10.0) },
+                            onSyncMetrics = { viewModel.syncPartnerMetrics() }
                         )
                     }
 
@@ -651,6 +687,9 @@ fun CreatorDashboardScreen(
                     items(monetizationTools) { tool ->
                         MonetizationToolCard(
                             tool = tool,
+                            currentUser = currentUser,
+                            postsCount = posts.count { it.authorId == currentUser?.uid }.let { if (it > 0) it else posts.size.coerceAtLeast(3) },
+                            onViewCriteria = { showCriteriaModalTool = tool },
                             onApply = { showApplyModalTool = tool },
                             onRedeemInvite = { showInviteModalTool = tool },
                             onRegisterInterest = { viewModel.registerInterest(tool.id) }
@@ -887,11 +926,14 @@ fun ContentFormatMetricCard(metric: ContentFormatMetric) {
 @Composable
 fun PartnerEligibilityCard(
     currentUser: com.example.data.User?,
-    onRedeemAnyInvite: () -> Unit
+    onRedeemAnyInvite: () -> Unit,
+    onAddFollowers: () -> Unit = {},
+    onAddWatchHours: () -> Unit = {},
+    onSyncMetrics: () -> Unit = {}
 ) {
-    val followers = currentUser?.followersCount ?: 0
+    val followers = if ((currentUser?.followersCount ?: 0) == 8500) 0 else (currentUser?.followersCount ?: 0)
     val targetFollowers = 10000
-    val watchHours = currentUser?.watchHours ?: 0.0
+    val watchHours = if ((currentUser?.watchHours ?: 0.0) == 3420.0) 0.0 else (currentUser?.watchHours ?: 0.0)
     val targetWatchHours = 4000.0
 
     Card(
@@ -922,18 +964,32 @@ fun PartnerEligibilityCard(
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFFD1FAE5))
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "Good Standing",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF065F46)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFD1FAE5))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "🟢 Active Counting",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF065F46)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(
+                        onClick = onSyncMetrics,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Sync standing",
+                            tint = MutedText,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
 
@@ -942,8 +998,8 @@ fun PartnerEligibilityCard(
             // Followers requirement
             RequirementProgressRow(
                 title = "Followers",
-                current = "$followers",
-                target = "$targetFollowers",
+                current = String.format(java.util.Locale.US, "%,d", followers),
+                target = String.format(java.util.Locale.US, "%,d", targetFollowers),
                 progress = (followers.toFloat() / targetFollowers.toFloat()).coerceIn(0f, 1f)
             )
 
@@ -952,10 +1008,40 @@ fun PartnerEligibilityCard(
             // Watch Hours requirement
             RequirementProgressRow(
                 title = "Watch Hours",
-                current = "${watchHours.toInt()} hrs",
-                target = "${targetWatchHours.toInt()} hrs",
+                current = "${String.format(java.util.Locale.US, "%,.1f", watchHours)} hrs",
+                target = "${String.format(java.util.Locale.US, "%,d", targetWatchHours.toInt())} hrs",
                 progress = (watchHours.toFloat() / targetWatchHours.toFloat()).coerceIn(0f, 1f)
             )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Real-time audience growth & stream testing controls
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onAddFollowers,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(32.dp)
+                ) {
+                    Text(text = "⚡ +50 Followers", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                }
+
+                OutlinedButton(
+                    onClick = onAddWatchHours,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(32.dp)
+                ) {
+                    Text(text = "⏱️ +10 hrs Stream", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                }
+            }
 
             Spacer(modifier = Modifier.height(10.dp))
             HorizontalDivider(color = LineBorder, thickness = 0.5.dp)
@@ -963,7 +1049,8 @@ fun PartnerEligibilityCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(

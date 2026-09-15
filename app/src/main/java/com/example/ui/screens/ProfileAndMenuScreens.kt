@@ -452,15 +452,28 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // Stats: Followers · Following · Posts
-                    val safeFollowers = if (user.followersCount == 8500) 0 else user.followersCount
-                    val safeFollowing = if (user.followingCount == 3700) 0 else user.followingCount
-                    val followersFormatted = formatStats(safeFollowers)
-                    val followingFormatted = formatStats(if (safeFollowing > 0) safeFollowing else friendUids.size)
+                    // Stats: Followers · Following · Posts (Real Meskot metrics)
+                    val realFollowers = if (user.followersCount == 8500) {
+                        if (isMe) friendUids.size else 0
+                    } else if (user.followersCount > 0) {
+                        user.followersCount
+                    } else {
+                        if (isMe) friendUids.size else 0
+                    }
+                    val realFollowing = if (user.followingCount == 3700 || user.followingCount == 370) {
+                        if (isMe) friendUids.size else 0
+                    } else if (user.followingCount > 0) {
+                        user.followingCount
+                    } else {
+                        if (isMe) friendUids.size else 0
+                    }
+                    val followersFormatted = formatStats(realFollowers)
+                    val followingFormatted = formatStats(realFollowing)
                     val postsCount = userPosts.size
                     val postsWord = if (postsCount == 1) "post" else "posts"
+                    val followersWord = if (realFollowers == 1) "follower" else "followers"
                     Text(
-                        text = "$followersFormatted followers · $followingFormatted following · $postsCount $postsWord",
+                        text = "$followersFormatted $followersWord · $followingFormatted following · $postsCount $postsWord",
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = fbTextGray
@@ -1962,55 +1975,8 @@ fun MenuScreen(
             }
         }
 
-        // Language & Log Out
+        // Brand Badge in Menu
         item {
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { viewModel.toggleLanguage() },
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = CardBg),
-                border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = "🌐 " + MeskotStrings.get("language", currentLanguage), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-                    Text(
-                        text = if (currentLanguage == AppLanguage.EN) "English (US)" else "አማርኛ",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = GoldDeep
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { viewModel.logout() },
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = CardBg),
-                border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = "🚪 " + MeskotStrings.get("logOut", currentLanguage), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = CrossRed)
-                }
-            }
-
             Spacer(modifier = Modifier.height(24.dp))
 
             // Modern Meskot Brand Badge in Menu

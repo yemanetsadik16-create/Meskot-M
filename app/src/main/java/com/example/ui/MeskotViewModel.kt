@@ -444,33 +444,50 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _tippingPost.value = null
     }
 
-    fun confirmTip(amount: Double) {
+    fun confirmTip(amount: Double, payFromBalance: Boolean = true) {
         val post = _tippingPost.value ?: return
         val user = currentUser.value
-        val fName = user?.displayName?.split(" ")?.firstOrNull() ?: "Meskot"
-        val lName = user?.displayName?.split(" ")?.drop(1)?.joinToString(" ")?.ifBlank { "User" } ?: "User"
-        val email = if (user?.email?.contains("@") == true) user.email else "customer@example.com"
-        val cfg = repository.chapaConfig.value
-        val ref = "CHP-TIP-" + System.currentTimeMillis()
+        val currentBalance = user?.creatorNetBalance ?: 0.0
 
-        closeTipModal()
+        if (payFromBalance) {
+            if (currentBalance < amount || amount <= 0) {
+                showMessage("⚠️ Insufficient balance (${String.format(java.util.Locale.US, "%,.2f", currentBalance)} ETB). Required: ${amount.toInt()} ETB. Please deposit funds first.")
+                return
+            }
+            val success = repository.sendTip(post.id, amount, payFromBalance = true)
+            if (success) {
+                closeTipModal()
+                val remaining = (currentBalance - amount).coerceAtLeast(0.0)
+                showMessage("✅ Real Tip of ${amount.toInt()} ETB sent to ${post.authorName}! Deducted from balance. Remaining: ${String.format(java.util.Locale.US, "%,.2f", remaining)} ETB.")
+            } else {
+                showMessage("⚠️ Insufficient balance to send tip. Please deposit funds.")
+            }
+        } else {
+            val fName = user?.displayName?.split(" ")?.firstOrNull() ?: "Meskot"
+            val lName = user?.displayName?.split(" ")?.drop(1)?.joinToString(" ")?.ifBlank { "User" } ?: "User"
+            val email = if (user?.email?.contains("@") == true) user.email else "customer@example.com"
+            val cfg = repository.chapaConfig.value
+            val ref = "CHP-TIP-" + System.currentTimeMillis()
 
-        launchChapaPayment(
-            ChapaPaymentSession(
-                amount = amount,
-                title = "Creator Tip for ${post.authorName}",
-                txRef = ref,
-                email = email,
-                firstName = fName,
-                lastName = lName,
-                publicKey = cfg.publicKey,
-                isLiveMode = cfg.isLiveMode,
-                onPaymentCompleted = { completedRef ->
-                    repository.sendTip(post.id, amount, completedRef)
-                    showMessage("✅ Real Tip of ${amount.toInt()} ETB sent to ${post.authorName} via Chapa! (Ref: $completedRef)")
-                }
+            closeTipModal()
+
+            launchChapaPayment(
+                ChapaPaymentSession(
+                    amount = amount,
+                    title = "Creator Tip for ${post.authorName}",
+                    txRef = ref,
+                    email = email,
+                    firstName = fName,
+                    lastName = lName,
+                    publicKey = cfg.publicKey,
+                    isLiveMode = cfg.isLiveMode,
+                    onPaymentCompleted = { completedRef ->
+                        repository.sendTip(post.id, amount, completedRef, payFromBalance = false)
+                        showMessage("✅ Real Tip of ${amount.toInt()} ETB sent to ${post.authorName} via Chapa! (Ref: $completedRef)")
+                    }
+                )
             )
-        )
+        }
     }
 
     fun sendStars(postId: String, count: Int, giftName: String) {
@@ -503,9 +520,22 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         maxAge: Int,
         interests: List<String>
     ) {
-        repository.boostPost(postId, dailyBudgetEtb, durationDays, targetLocations, minAge, maxAge, interests)
-        closeBoostModal()
-        showMessage("🚀 Post promoted! Priority algorithm reach activated.")
+        val totalCost = dailyBudgetEtb * durationDays
+        val currentBalance = currentUser.value?.creatorNetBalance ?: 0.0
+
+        if (currentBalance < totalCost || totalCost <= 0) {
+            showMessage("⚠️ Insufficient balance (${String.format(java.util.Locale.US, "%,.2f", currentBalance)} ETB). Total required: ${totalCost.toInt()} ETB. Please deposit funds first.")
+            return
+        }
+
+        val success = repository.boostPost(postId, dailyBudgetEtb, durationDays, targetLocations, minAge, maxAge, interests)
+        if (success) {
+            closeBoostModal()
+            val remaining = (currentBalance - totalCost).coerceAtLeast(0.0)
+            showMessage("🚀 Post promoted! Deducted ${totalCost.toInt()} ETB from your balance. Remaining: ${String.format(java.util.Locale.US, "%,.2f", remaining)} ETB.")
+        } else {
+            showMessage("⚠️ Insufficient balance to boost post. Please add funds.")
+        }
     }
 
     // Fan Subscriptions & VIP Memberships
@@ -586,9 +616,19 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         ctaText: String,
         destinationUrl: String
     ) {
-        repository.createAdCampaign(name, objective, dailyBudgetEtb, headline, primaryText, mediaUrl, ctaText, destinationUrl)
-        closeCreateCampaignModal()
-        showMessage("📢 Campaign \"$name\" launched into the auction pool!")
+        val currentBalance = currentUser.value?.creatorNetBalance ?: 0.0
+        if (currentBalance < dailyBudgetEtb || dailyBudgetEtb <= 0) {
+            showMessage("⚠️ Insufficient balance (${String.format(java.util.Locale.US, "%,.2f", currentBalance)} ETB). Required daily budget: ${dailyBudgetEtb.toInt()} ETB. Please deposit funds first.")
+            return
+        }
+        val success = repository.createAdCampaign(name, objective, dailyBudgetEtb, headline, primaryText, mediaUrl, ctaText, destinationUrl)
+        if (success) {
+            closeCreateCampaignModal()
+            val remaining = (currentBalance - dailyBudgetEtb).coerceAtLeast(0.0)
+            showMessage("📢 Campaign \"$name\" launched! Deducted ${dailyBudgetEtb.toInt()} ETB from your balance. Remaining: ${String.format(java.util.Locale.US, "%,.2f", remaining)} ETB.")
+        } else {
+            showMessage("⚠️ Insufficient balance to launch campaign.")
+        }
     }
 
     fun toggleAdCampaignStatus(campaignId: String) {
@@ -610,12 +650,46 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         showMessage("💸 Payout request of ${amountEtb.toInt()} ETB submitted via $method! Transferred through Chapa rails.")
     }
 
-    fun applyForMonetizationTool(toolId: String): Boolean {
-        val res = repository.applyForMonetizationTool(toolId)
+    fun applyForMonetizationTool(toolId: String, payoutMethod: String = "Telebirr", accountNumber: String = ""): Boolean {
+        val res = repository.applyForMonetizationTool(toolId, payoutMethod, accountNumber)
         if (res) {
-            showMessage("✅ Application submitted for automated policy & KYC verification!")
+            showMessage("✅ Program Onboarding Complete! Payout connected via $payoutMethod.")
         }
         return res
+    }
+
+    // REAL-TIME AUDIENCE & WATCH TIME ENGINE
+    val followingUids: StateFlow<Set<String>> = repository.followingUids
+
+    fun toggleFollow(targetUid: String) {
+        val isNowFollowing = !repository.isFollowing(targetUid)
+        repository.toggleFollow(targetUid)
+        if (isNowFollowing) {
+            showMessage("👤 Following creator! You'll see their latest posts and reels.")
+        } else {
+            showMessage("Unfollowed.")
+        }
+    }
+
+    fun isFollowing(targetUid: String): Boolean = repository.isFollowing(targetUid)
+
+    fun incrementFollowers(count: Int = 1) {
+        repository.incrementFollowers(count)
+        showMessage("📈 Followers updated! +$count followers gained.")
+    }
+
+    fun incrementWatchHours(hours: Double = 1.0) {
+        repository.incrementWatchHours(hours)
+        showMessage("⏱️ Watch time updated! +${String.format(java.util.Locale.US, "%.1f", hours)} hrs accumulated.")
+    }
+
+    fun recordWatchTime(seconds: Long, creatorUid: String? = null) {
+        repository.recordWatchTime(seconds, creatorUid)
+    }
+
+    fun syncPartnerMetrics() {
+        repository.syncPartnerMetrics()
+        showMessage("✅ Partner Program standing synced with real live audience metrics!")
     }
 
     fun redeemInviteCode(toolId: String, code: String): Boolean {

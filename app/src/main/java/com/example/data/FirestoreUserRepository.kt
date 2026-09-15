@@ -310,8 +310,12 @@ class FirestoreUserRepository(
     fun parseUserDocument(uid: String, d: Map<String, Any?>): User {
         val rawFollowers = (d["followersCount"] as? Number)?.toInt() ?: 0
         val rawFollowing = (d["followingCount"] as? Number)?.toInt() ?: 0
+        val rawWatchHours = (d["watchHours"] as? Number)?.toDouble() ?: 0.0
+
+        // Real Meskot counts: discard legacy mock seeds (8500, 3700, 3420) and use real metrics
         val safeFollowers = if (rawFollowers == 8500) 0 else rawFollowers
-        val safeFollowing = if (rawFollowing == 3700) 0 else rawFollowing
+        val safeFollowing = if (rawFollowing == 3700 || rawFollowing == 370) 0 else rawFollowing
+        val safeWatchHours = if (rawWatchHours == 3420.0) 0.0 else rawWatchHours
 
         return User(
             uid = uid,
@@ -342,7 +346,7 @@ class FirestoreUserRepository(
             workRole = sanitizeMock(d["workRole"] as? String, "Civil Engineering"),
             education = sanitizeMock(d["education"] as? String, "Adigrat University"),
             educationClass = sanitizeMock(d["educationClass"] as? String, "Class of 2018"),
-            watchHours = (d["watchHours"] as? Number)?.toDouble() ?: 0.0,
+            watchHours = safeWatchHours,
             kycVerified = d["kycVerified"] as? Boolean ?: false,
             policyStrikes = (d["policyStrikes"] as? Number)?.toInt() ?: 0,
             payoutDestinationAccount = d["payoutDestinationAccount"] as? String ?: ""

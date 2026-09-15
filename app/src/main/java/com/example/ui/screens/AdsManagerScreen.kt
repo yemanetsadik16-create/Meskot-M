@@ -89,6 +89,7 @@ fun AdsManagerScreen(
     onBack: () -> Unit
 ) {
     val campaigns by viewModel.adCampaigns.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
     val currentLanguage by viewModel.currentLanguage.collectAsState()
     var selectedHierarchyTab by remember { mutableStateOf(AdsHierarchyTab.CAMPAIGNS) }
     var isCreateDialogOpen by remember { mutableStateOf(false) }
@@ -312,7 +313,9 @@ fun AdsManagerScreen(
     // Create Campaign Dialog
     if (isCreateDialogOpen) {
         CreateCampaignDialog(
+            userBalance = currentUser?.creatorNetBalance ?: 0.0,
             onDismiss = { isCreateDialogOpen = false },
+            onDepositClick = { viewModel.openChapaDeposit() },
             onCreate = { name, obj, budget, headline, body, media, cta, dest ->
                 viewModel.createAdCampaign(name, obj, budget, headline, body, media, cta, dest)
                 isCreateDialogOpen = false
@@ -588,7 +591,9 @@ fun CreativePreviewCard(campaign: AdCampaign) {
 
 @Composable
 fun CreateCampaignDialog(
+    userBalance: Double = 0.0,
     onDismiss: () -> Unit,
+    onDepositClick: () -> Unit = {},
     onCreate: (name: String, obj: String, budget: Double, headline: String, body: String, media: String, cta: String, dest: String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
@@ -602,6 +607,7 @@ fun CreateCampaignDialog(
 
     val objectives = listOf("AWARENESS" to "Brand Awareness", "TRAFFIC" to "Website Traffic & Clicks", "CONVERSIONS" to "Leads & Conversions")
     val ctaOptions = listOf("Learn More", "Shop Now", "Sign Up", "Contact Us")
+    val hasEnoughBalance = userBalance >= dailyBudget.toDouble()
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -742,27 +748,90 @@ fun CreateCampaignDialog(
                 }
 
                 item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (hasEnoughBalance) Color(0xFFF0FDF4) else Color(0xFFFEF2F2)
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (hasEnoughBalance) Color(0xFF86EFAC) else Color(0xFFFCA5A5)
+                        )
+                    ) {
+                        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = if (hasEnoughBalance) "💳 " else "⚠️ ", fontSize = 16.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Column {
+                                Text(
+                                    text = "Account Balance: ${String.format(java.util.Locale.US, "%,.2f", userBalance)} ETB",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.5.sp,
+                                    color = if (hasEnoughBalance) Color(0xFF166534) else Color(0xFF991B1B)
+                                )
+                                Text(
+                                    text = if (hasEnoughBalance)
+                                        "${dailyBudget.toInt()} ETB will decrease from balance upon launch."
+                                    else
+                                        "Insufficient balance for daily budget (${dailyBudget.toInt()} ETB). Please deposit funds.",
+                                    fontSize = 11.sp,
+                                    color = if (hasEnoughBalance) Color(0xFF15803D) else Color(0xFFB91C1C),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(onClick = onDismiss) {
                             Text("Cancel", color = MutedText)
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                if (name.isNotBlank() && headline.isNotBlank()) {
-                                    onCreate(name, selectedObjective, dailyBudget.toDouble(), headline, primaryText, mediaUrl, ctaText, destinationUrl)
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (!hasEnoughBalance) {
+                                Button(
+                                    onClick = {
+                                        onDismiss()
+                                        onDepositClick()
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                                ) {
+                                    Text("+ Deposit ETB", fontWeight = FontWeight.Bold, fontSize = 11.5.sp, color = Color.White)
                                 }
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = GoldDeep),
-                            enabled = name.isNotBlank() && headline.isNotBlank()
-                        ) {
-                            Text("Launch Campaign", fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (name.isNotBlank() && headline.isNotBlank()) {
+                                        if (hasEnoughBalance) {
+                                            onCreate(name, selectedObjective, dailyBudget.toDouble(), headline, primaryText, mediaUrl, ctaText, destinationUrl)
+                                        } else {
+                                            onDismiss()
+                                            onDepositClick()
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (hasEnoughBalance) GoldDeep else Color(0xFFDC2626)
+                                ),
+                                enabled = name.isNotBlank() && headline.isNotBlank()
+                            ) {
+                                Text(
+                                    text = if (hasEnoughBalance) "Launch Campaign" else "Insufficient Balance",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
                         }
                     }
                 }

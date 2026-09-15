@@ -91,7 +91,7 @@ fun TopNavBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Left: Brand Logo & Title + Language Switcher
+                // Left: Brand Logo & Title
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -102,47 +102,9 @@ fun TopNavBar(
                         size = 32.dp,
                         onClick = { onProfileClick() }
                     )
-
-                    // Language toggle [ EN | አማ ] styled with subtle gold outline
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(GoldSurface)
-                            .border(1.dp, GoldBorder, RoundedCornerShape(18.dp))
-                            .clickable { onToggleLanguage() }
-                            .padding(horizontal = 3.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (currentLanguage == AppLanguage.EN) Gold else Color.Transparent)
-                                .padding(horizontal = 6.dp, vertical = 2.5.dp)
-                        ) {
-                            Text(
-                                text = "EN",
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (currentLanguage == AppLanguage.EN) Color.White else GoldDeep
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (currentLanguage == AppLanguage.AM) Gold else Color.Transparent)
-                                .padding(horizontal = 6.dp, vertical = 2.5.dp)
-                        ) {
-                            Text(
-                                text = "አማ",
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (currentLanguage == AppLanguage.AM) Color.White else GoldDeep
-                            )
-                        }
-                    }
                 }
 
-                // Right Action Controls: [+] [🔍] [☰] [Log out]
+                // Right Action Controls: [+] [🔍] [☰]
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -201,29 +163,6 @@ fun TopNavBar(
                             contentDescription = "Menu",
                             tint = GoldDeep,
                             modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    // [Log out] button
-                    Box(
-                        modifier = Modifier
-                            .height(38.dp)
-                            .widthIn(min = 46.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(GoldSurface)
-                            .border(1.dp, GoldBorder, RoundedCornerShape(10.dp))
-                            .clickable { onLogout() }
-                            .padding(horizontal = 6.dp)
-                            .testTag("logout_nav_btn"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (currentLanguage == AppLanguage.AM) "ውጣ" else "Log\nout",
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = CrossRed,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 11.5.sp
                         )
                     }
                 }

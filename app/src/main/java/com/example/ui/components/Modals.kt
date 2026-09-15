@@ -544,16 +544,19 @@ private fun MenuOptionItem(
 fun TipModal(
     post: Post,
     currentLanguage: AppLanguage,
+    userBalance: Double = 0.0,
     userStarBalance: Int = 1250,
     onDismiss: () -> Unit,
-    onConfirmTip: (Double) -> Unit,
-    onSendStars: (starCount: Int, giftName: String) -> Unit = { _, _ -> }
+    onConfirmTip: (amount: Double, payFromBalance: Boolean) -> Unit,
+    onSendStars: (starCount: Int, giftName: String) -> Unit = { _, _ -> },
+    onDepositClick: () -> Unit = {}
 ) {
     var isStarsTab by remember { mutableStateOf(false) }
     var selectedAmount by remember { mutableStateOf(25.0) }
     var customAmountText by remember { mutableStateOf("") }
 
     val presetAmounts = listOf(10.0, 25.0, 50.0, 100.0)
+    val hasEnoughBalance = userBalance >= selectedAmount
 
     val virtualGifts = listOf(
         Triple("☕ Coffee Cheer", 50, "☕"),
@@ -679,24 +682,91 @@ fun TipModal(
                         shape = RoundedCornerShape(10.dp)
                     )
 
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Real Account Balance Audit Status Card
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (hasEnoughBalance) Color(0xFFF0FDF4) else Color(0xFFFEF2F2)
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (hasEnoughBalance) Color(0xFF86EFAC) else Color(0xFFFCA5A5)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = if (hasEnoughBalance) "💳 " else "⚠️ ", fontSize = 16.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Column {
+                                Text(
+                                    text = "Your Balance: ${String.format(java.util.Locale.US, "%,.2f", userBalance)} ETB",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.5.sp,
+                                    color = if (hasEnoughBalance) Color(0xFF166534) else Color(0xFF991B1B)
+                                )
+                                Text(
+                                    text = if (hasEnoughBalance)
+                                        "${selectedAmount.toInt()} ETB will decrease from your balance."
+                                    else
+                                        "Insufficient balance! Required: ${selectedAmount.toInt()} ETB. Please deposit funds.",
+                                    fontSize = 11.sp,
+                                    color = if (hasEnoughBalance) Color(0xFF15803D) else Color(0xFFB91C1C),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(onClick = onDismiss) {
                             Text(text = MeskotStrings.get("cancel", currentLanguage), color = MutedText)
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (!hasEnoughBalance) {
+                                Button(
+                                    onClick = { onDepositClick() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32), contentColor = Color.White),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text(text = "+ Deposit ETB", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                }
+                            }
 
-                        Button(
-                            onClick = { onConfirmTip(selectedAmount) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.White),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text(text = MeskotStrings.get("continueToPay", currentLanguage), fontWeight = FontWeight.Bold)
+                            Button(
+                                onClick = {
+                                    if (hasEnoughBalance) {
+                                        onConfirmTip(selectedAmount, true)
+                                    } else {
+                                        onDepositClick()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (hasEnoughBalance) Gold else Color(0xFFDC2626),
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    text = if (hasEnoughBalance)
+                                        "Support (${selectedAmount.toInt()} ETB)"
+                                    else
+                                        "Insufficient Balance",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                            }
                         }
                     }
                 } else {
@@ -791,6 +861,7 @@ fun TipModal(
 fun BoostPostModal(
     post: Post,
     currentLanguage: AppLanguage,
+    userBalance: Double = 0.0,
     onDismiss: () -> Unit,
     onConfirmBoost: (
         dailyBudgetEtb: Double,
@@ -799,7 +870,8 @@ fun BoostPostModal(
         minAge: Int,
         maxAge: Int,
         interests: List<String>
-    ) -> Unit
+    ) -> Unit,
+    onDepositClick: () -> Unit = {}
 ) {
     var dailyBudget by remember { mutableStateOf(200.0) }
     var selectedDuration by remember { mutableStateOf(7) }
@@ -809,6 +881,7 @@ fun BoostPostModal(
     val locations = listOf("Addis Ababa + Hawassa", "All Ethiopia", "Global Diaspora (USA/Europe)")
 
     val totalBudget = dailyBudget * selectedDuration
+    val hasEnoughBalance = userBalance >= totalBudget
     val estimatedReach = (dailyBudget * 120).toInt()
     val multiplier = String.format(java.util.Locale.US, "%.1f", 1.0 + (dailyBudget / 50.0).coerceAtMost(5.0))
 
@@ -959,33 +1032,98 @@ fun BoostPostModal(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Real Account Balance Audit Status Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (hasEnoughBalance) Color(0xFFF0FDF4) else Color(0xFFFEF2F2)
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (hasEnoughBalance) Color(0xFF86EFAC) else Color(0xFFFCA5A5)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(text = if (hasEnoughBalance) "💳 " else "⚠️ ", fontSize = 18.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Account Balance: ${String.format(java.util.Locale.US, "%,.2f", userBalance)} ETB",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = if (hasEnoughBalance) Color(0xFF166534) else Color(0xFF991B1B)
+                            )
+                            Text(
+                                text = if (hasEnoughBalance)
+                                    "${totalBudget.toInt()} ETB will decrease from your balance upon confirmation."
+                                else
+                                    "Insufficient balance! Required: ${totalBudget.toInt()} ETB. Need ${(totalBudget - userBalance).toInt()} ETB more.",
+                                fontSize = 11.5.sp,
+                                color = if (hasEnoughBalance) Color(0xFF15803D) else Color(0xFFB91C1C),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss) {
                         Text(text = MeskotStrings.get("cancel", currentLanguage), color = MutedText)
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (!hasEnoughBalance) {
+                            Button(
+                                onClick = { onDepositClick() },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32), contentColor = Color.White),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(text = "+ Deposit ETB", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
 
-                    Button(
-                        onClick = {
-                            onConfirmBoost(
-                                dailyBudget,
-                                selectedDuration,
-                                listOf(selectedLocation),
-                                18,
-                                55,
-                                listOf("General", "Culture", "Tech")
+                        Button(
+                            onClick = {
+                                if (hasEnoughBalance) {
+                                    onConfirmBoost(
+                                        dailyBudget,
+                                        selectedDuration,
+                                        listOf(selectedLocation),
+                                        18,
+                                        55,
+                                        listOf("General", "Culture", "Tech")
+                                    )
+                                } else {
+                                    onDepositClick()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (hasEnoughBalance) GoldDeep else Color(0xFFDC2626),
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(
+                                text = if (hasEnoughBalance)
+                                    "Boost Post Now (${totalBudget.toInt()} ETB) 🚀"
+                                else
+                                    "Insufficient Balance (${userBalance.toInt()} ETB)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
                             )
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = GoldDeep, contentColor = Color.White),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text(text = "Boost Post Now 🚀", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

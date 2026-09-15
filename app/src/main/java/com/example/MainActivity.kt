@@ -34,6 +34,7 @@ import com.example.ui.components.IncomingCallOverlay
 import com.example.ui.components.PostOptionsMenu
 import com.example.ui.components.SubscriptionModal
 import com.example.ui.components.TipModal
+import com.example.ui.components.ChapaDepositModal
 import com.example.ui.components.ChapaPaymentModal
 import com.example.ui.components.TopNavBar
 import com.example.util.CallAudioManager
@@ -122,6 +123,8 @@ fun MeskotApp(viewModel: MeskotViewModel) {
     val incomingMessageAlert by viewModel.incomingMessageAlert.collectAsState()
     val tippingPost by viewModel.tippingPost.collectAsState()
     val activeChapaSession by viewModel.activeChapaSession.collectAsState()
+    val isChapaDepositOpen by viewModel.isChapaDepositOpen.collectAsState()
+    val chapaConfig by viewModel.chapaConfig.collectAsState()
     val boostingPost by viewModel.boostingPost.collectAsState()
     val subscribingToCreator by viewModel.subscribingToCreator.collectAsState()
     val postMenuTarget by viewModel.postMenuTarget.collectAsState()
@@ -423,9 +426,15 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                     TipModal(
                         post = post,
                         currentLanguage = currentLanguage,
+                        userBalance = currentUser?.creatorNetBalance ?: 0.0,
+                        userStarBalance = currentUser?.starBalance ?: 0,
                         onDismiss = { viewModel.closeTipModal() },
-                        onConfirmTip = { amount -> viewModel.confirmTip(amount) },
-                        onSendStars = { count, gift -> viewModel.sendStars(post.id, count, gift) }
+                        onConfirmTip = { amount, payFromBalance -> viewModel.confirmTip(amount, payFromBalance) },
+                        onSendStars = { count, gift -> viewModel.sendStars(post.id, count, gift) },
+                        onDepositClick = {
+                            viewModel.closeTipModal()
+                            viewModel.openChapaDeposit()
+                        }
                     )
                 }
 
@@ -433,9 +442,25 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                     BoostPostModal(
                         post = post,
                         currentLanguage = currentLanguage,
+                        userBalance = currentUser?.creatorNetBalance ?: 0.0,
                         onDismiss = { viewModel.closeBoostModal() },
                         onConfirmBoost = { dailyBudget, duration, locations, minAge, maxAge, interests ->
                             viewModel.confirmBoost(post.id, dailyBudget, duration, locations, minAge, maxAge, interests)
+                        },
+                        onDepositClick = {
+                            viewModel.closeBoostModal()
+                            viewModel.openChapaDeposit()
+                        }
+                    )
+                }
+
+                if (isChapaDepositOpen) {
+                    ChapaDepositModal(
+                        config = chapaConfig,
+                        currentLanguage = currentLanguage,
+                        onDismiss = { viewModel.closeChapaDeposit() },
+                        onProceed = { amount ->
+                            viewModel.depositViaChapa(amount)
                         }
                     )
                 }

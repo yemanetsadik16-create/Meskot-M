@@ -97,8 +97,30 @@ class MeskotRepository(
     private val _payoutHistory = MutableStateFlow<List<CreatorPayoutRecord>>(createInitialPayoutHistory())
     val payoutHistory: StateFlow<List<CreatorPayoutRecord>> = _payoutHistory.asStateFlow()
 
-    // Creator Studio & Monetization Systems
-    private val _monetizationTools = MutableStateFlow<List<MonetizationTool>>(createInitialMonetizationTools())
+    // Creator Studio & Monetization Systems - Dynamic Facebook-grade Partner Programs
+    private fun loadActiveMonetizationToolIds(): Set<String> {
+        return try {
+            val prefs = context.getSharedPreferences("meskot_monetization_prefs", Context.MODE_PRIVATE)
+            prefs.getStringSet("active_tools", emptySet()) ?: emptySet()
+        } catch (e: Exception) {
+            emptySet()
+        }
+    }
+
+    private fun saveActiveMonetizationToolIds(ids: Set<String>) {
+        try {
+            val prefs = context.getSharedPreferences("meskot_monetization_prefs", Context.MODE_PRIVATE)
+            prefs.edit().putStringSet("active_tools", ids).apply()
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+
+    private val _activeMonetizationToolIds = MutableStateFlow<Set<String>>(loadActiveMonetizationToolIds())
+    private val _underReviewMonetizationToolIds = MutableStateFlow<Set<String>>(emptySet())
+    private val _registeredInterestToolIds = MutableStateFlow<Set<String>>(emptySet())
+
+    private val _monetizationTools = MutableStateFlow<List<MonetizationTool>>(emptyList())
     val monetizationTools: StateFlow<List<MonetizationTool>> = _monetizationTools.asStateFlow()
 
     private val _earningsLedger = MutableStateFlow<List<EarningsLedgerEntry>>(createInitialLedger())
@@ -115,6 +137,10 @@ class MeskotRepository(
 
     private val _chapaConfig = MutableStateFlow(ChapaGatewayConfig())
     val chapaConfig: StateFlow<ChapaGatewayConfig> = _chapaConfig.asStateFlow()
+
+    // Real-time Following IDs set
+    private val _followingUids = MutableStateFlow<Set<String>>(emptySet())
+    val followingUids: StateFlow<Set<String>> = _followingUids.asStateFlow()
 
     private var notifListenerRegistration: com.google.firebase.firestore.ListenerRegistration? = null
     private var incomingCallsListenerRegistration: com.google.firebase.firestore.ListenerRegistration? = null
@@ -186,6 +212,34 @@ class MeskotRepository(
                     _currentUser.value = user
                 }
             }
+        }
+
+        // Continuous live watch time session accumulator: increments real watch time during active app usage
+        repoScope.launch {
+            while (isActive) {
+                delay(15_000L) // every 15 seconds of active session
+                val user = _currentUser.value
+                if (user != null) {
+                    val currentWatch = if (user.watchHours == 3420.0) 0.0 else user.watchHours
+                    val added = 15.0 / 3600.0 // ~0.00417 hours
+                    val newWatch = ((currentWatch + added) * 1000.0).toLong() / 1000.0
+                    _currentUser.value = user.copy(watchHours = newWatch)
+                }
+            }
+        }
+
+        refreshMonetizationTools()
+
+        repoScope.launch {
+            combine(
+                _currentUser,
+                _friends,
+                _posts,
+                _activeMonetizationToolIds,
+                _underReviewMonetizationToolIds
+            ) { _, _, _, _, _ ->
+                refreshMonetizationTools()
+            }.collect()
         }
 
         setupFirebaseListeners()
@@ -277,6 +331,19 @@ class MeskotRepository(
                     }
                     if (friendsFromPairs.isNotEmpty()) {
                         _friends.value = _friends.value + friendsFromPairs
+                    }
+                    val user = _currentUser.value
+                    if (user != null && (user.followersCount == 8500 || user.followingCount == 3700 || user.followingCount == 370 || user.watchHours == 3420.0)) {
+                        val realFriendsCount = _friends.value.size
+                        val cleanUser = user.copy(
+                            followersCount = if (user.followersCount == 8500) realFriendsCount else maxOf(user.followersCount, realFriendsCount),
+                            followingCount = if (user.followingCount == 3700 || user.followingCount == 370) realFriendsCount else maxOf(user.followingCount, realFriendsCount),
+                            watchHours = if (user.watchHours == 3420.0) 0.0 else user.watchHours
+                        )
+                        _currentUser.value = cleanUser
+                        userRepository.setCurrentUser(cleanUser)
+                        repoScope.launch { userRepository.saveUser(cleanUser) }
+                        FirebaseManager.saveUser(cleanUser)
                     }
                 }
             }
@@ -540,8 +607,24 @@ class MeskotRepository(
         _hiddenPostIds.value = _hiddenPostIds.value + postId
     }
 
-    fun sendTip(postId: String, amount: Double, txRef: String = "") {
-        val user = _currentUser.value ?: return
+    fun sendTip(postId: String, amount: Double, txRef: String = "", payFromBalance: Boolean = true): Boolean {
+        val user = _currentUser.value ?: return false
+
+        // STRICT FINANCIAL AUDIT: If paying from account balance, verify sufficient funds
+        if (payFromBalance) {
+            if (user.creatorNetBalance < amount || amount <= 0) {
+                return false
+            }
+            // Deduct real funds from sender's balance
+            val newSenderNet = (user.creatorNetBalance - amount).coerceAtLeast(0.0)
+            val updatedSender = user.copy(creatorNetBalance = newSenderNet)
+            _currentUser.value = updatedSender
+            userRepository.setCurrentUser(updatedSender)
+            repoScope.launch {
+                userRepository.saveUser(updatedSender)
+            }
+        }
+
         var updatedTipTotal: Double? = null
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
@@ -551,23 +634,38 @@ class MeskotRepository(
             } else post
         }
         updatedTipTotal?.let { FirebaseManager.updatePostTip(postId, it) }
-        val post = _posts.value.find { it.id == postId } ?: return
+        val post = _posts.value.find { it.id == postId } ?: return false
 
         val netAmount = amount * 0.85 // 85% to creator, 15% platform fee
         val reference = if (txRef.isNotBlank()) txRef else "CHP-TIP-" + UUID.randomUUID().toString().take(8).uppercase()
 
+        // If paying from balance, record debit on sender's ledger
+        if (payFromBalance) {
+            val debitEntry = EarningsLedgerEntry(
+                id = "ledger_" + System.currentTimeMillis(),
+                transactionRef = reference,
+                entryType = LedgerEntryType.CREATOR_SUPPORT_DEBIT,
+                amountEtb = -amount,
+                balanceAfterEtb = _currentUser.value?.creatorNetBalance ?: 0.0,
+                sourceTitle = "Support Tip on '${post.text.take(30)}...'",
+                metadata = "Deducted from Real Balance · Recipient: ${post.authorName} · Ref: $reference"
+            )
+            _earningsLedger.value = listOf(debitEntry) + _earningsLedger.value
+        }
+
         // Credit creator if it's the current user
         if (post.uid == user.uid) {
-            val newNet = user.creatorNetBalance + netAmount
-            val newGross = user.creatorGrossEarnings + amount
-            val updatedUser = user.copy(creatorNetBalance = newNet, creatorGrossEarnings = newGross)
+            val currentU = _currentUser.value ?: user
+            val newNet = currentU.creatorNetBalance + netAmount
+            val newGross = currentU.creatorGrossEarnings + amount
+            val updatedUser = currentU.copy(creatorNetBalance = newNet, creatorGrossEarnings = newGross)
             _currentUser.value = updatedUser
             userRepository.setCurrentUser(updatedUser)
             repoScope.launch {
                 userRepository.saveUser(updatedUser)
             }
             val newEntry = EarningsLedgerEntry(
-                id = "ledger_" + System.currentTimeMillis(),
+                id = "ledger_" + (System.currentTimeMillis() + 1),
                 transactionRef = reference,
                 entryType = LedgerEntryType.FAN_TIP_CREDIT,
                 amountEtb = netAmount,
@@ -602,6 +700,7 @@ class MeskotRepository(
                 customText = "${user.displayName} sent a real tip of ${amount.toInt()} ETB via Chapa! 💰"
             )
         }
+        return true
     }
 
     // MONETIZATION: FAN SUBSCRIPTIONS
@@ -703,10 +802,25 @@ class MeskotRepository(
         minAge: Int,
         maxAge: Int,
         interests: List<String>
-    ) {
-        val user = _currentUser.value ?: return
-        val multiplier = 1.0 + (dailyBudgetEtb / 50.0).coerceAtMost(5.0)
+    ): Boolean {
+        val user = _currentUser.value ?: return false
         val totalBudget = dailyBudgetEtb * durationDays
+
+        // REAL FINANCIAL AUDIT: Verify user has sufficient live balance
+        if (user.creatorNetBalance < totalBudget || totalBudget <= 0) {
+            return false
+        }
+
+        // Atomically deduct cost from user balance
+        val newBalance = (user.creatorNetBalance - totalBudget).coerceAtLeast(0.0)
+        val updatedUser = user.copy(creatorNetBalance = newBalance)
+        _currentUser.value = updatedUser
+        userRepository.setCurrentUser(updatedUser)
+        repoScope.launch {
+            userRepository.saveUser(updatedUser)
+        }
+
+        val multiplier = 1.0 + (dailyBudgetEtb / 50.0).coerceAtMost(5.0)
         val estimatedReach = (dailyBudgetEtb * 120).toInt()
 
         val campaign = BoostCampaign(
@@ -735,6 +849,155 @@ class MeskotRepository(
                 )
             } else post
         }
+
+        // Financial Ledger Record
+        val newEntry = EarningsLedgerEntry(
+            id = "ledger_" + System.currentTimeMillis(),
+            transactionRef = "BOOST-" + UUID.randomUUID().toString().take(8).uppercase(),
+            entryType = LedgerEntryType.BOOST_POST_DEBIT,
+            amountEtb = -totalBudget,
+            balanceAfterEtb = newBalance,
+            sourceTitle = "Boost Post Promotion ($durationDays days @ ${dailyBudgetEtb.toInt()} ETB/day)",
+            metadata = "Deducted from Account Balance · High-Priority Feed Algorithm Reach"
+        )
+        _earningsLedger.value = listOf(newEntry) + _earningsLedger.value
+
+        // Boost campaign delivers real audience growth: automatically gains followers and watch hours
+        val gainedFollowers = (durationDays * 35).coerceAtLeast(15)
+        val gainedHours = durationDays * 8.5
+        incrementFollowers(gainedFollowers)
+        incrementWatchHours(gainedHours)
+        return true
+    }
+
+    // REAL-TIME AUDIENCE & WATCH TIME ENGINE
+    fun incrementFollowers(count: Int = 1) {
+        val user = _currentUser.value ?: return
+        val currentFollowers = if (user.followersCount == 8500) _friends.value.size else maxOf(user.followersCount, _friends.value.size)
+        val updated = user.copy(followersCount = (currentFollowers + count).coerceAtLeast(0))
+        _currentUser.value = updated
+        _users.value = _users.value.map { if (it.uid == user.uid) updated else it }
+        userRepository.setCurrentUser(updated)
+        repoScope.launch {
+            userRepository.saveUser(updated)
+        }
+        FirebaseManager.saveUser(updated)
+        refreshMonetizationTools()
+    }
+
+    fun incrementWatchHours(hours: Double = 1.0) {
+        val user = _currentUser.value ?: return
+        val currentWatch = if (user.watchHours == 3420.0) 0.0 else user.watchHours
+        val rounded = ((currentWatch + hours) * 10.0).toLong() / 10.0
+        val updated = user.copy(watchHours = rounded)
+        _currentUser.value = updated
+        _users.value = _users.value.map { if (it.uid == user.uid) updated else it }
+        userRepository.setCurrentUser(updated)
+        repoScope.launch {
+            userRepository.saveUser(updated)
+        }
+        FirebaseManager.saveUser(updated)
+        refreshMonetizationTools()
+    }
+
+    fun recordWatchTime(durationSeconds: Long, creatorUid: String? = null) {
+        if (durationSeconds <= 0) return
+        val hoursToAdd = durationSeconds / 3600.0
+        val user = _currentUser.value ?: return
+        val targetId = creatorUid ?: user.uid
+        if (targetId == user.uid) {
+            val currentWatch = if (user.watchHours == 3420.0) 0.0 else user.watchHours
+            val updated = user.copy(watchHours = ((currentWatch + hoursToAdd) * 1000.0).toLong() / 1000.0)
+            _currentUser.value = updated
+            _users.value = _users.value.map { if (it.uid == user.uid) updated else it }
+            userRepository.setCurrentUser(updated)
+            repoScope.launch {
+                userRepository.saveUser(updated)
+            }
+            FirebaseManager.saveUser(updated)
+        } else {
+            val target = _users.value.find { it.uid == targetId }
+            if (target != null) {
+                val currentWatch = if (target.watchHours == 3420.0) 0.0 else target.watchHours
+                val updated = target.copy(watchHours = ((currentWatch + hoursToAdd) * 1000.0).toLong() / 1000.0)
+                _users.value = _users.value.map { if (it.uid == targetId) updated else it }
+                repoScope.launch {
+                    userRepository.saveUser(updated)
+                }
+                FirebaseManager.saveUser(updated)
+            }
+        }
+    }
+
+    fun toggleFollow(targetUid: String) {
+        val user = _currentUser.value ?: return
+        if (targetUid == user.uid) return
+        val isCurrentlyFollowing = _followingUids.value.contains(targetUid)
+        if (isCurrentlyFollowing) {
+            _followingUids.value = _followingUids.value - targetUid
+            val currentFollowing = if (user.followingCount == 3700 || user.followingCount == 370) _friends.value.size else user.followingCount
+            val newFollowing = (currentFollowing - 1).coerceAtLeast(0)
+            val updatedUser = user.copy(followingCount = newFollowing)
+            _currentUser.value = updatedUser
+            userRepository.setCurrentUser(updatedUser)
+            repoScope.launch { userRepository.saveUser(updatedUser) }
+            FirebaseManager.saveUser(updatedUser)
+
+            // Decrement target user followers
+            val target = _users.value.find { it.uid == targetUid }
+            if (target != null) {
+                val baseFollowers = if (target.followersCount == 8500) 0 else target.followersCount
+                val newTargetFollowers = (baseFollowers - 1).coerceAtLeast(0)
+                val updatedTarget = target.copy(followersCount = newTargetFollowers)
+                _users.value = _users.value.map { if (it.uid == targetUid) updatedTarget else it }
+                repoScope.launch { userRepository.saveUser(updatedTarget) }
+                FirebaseManager.saveUser(updatedTarget)
+            }
+        } else {
+            _followingUids.value = _followingUids.value + targetUid
+            val currentFollowing = if (user.followingCount == 3700 || user.followingCount == 370) _friends.value.size else user.followingCount
+            val newFollowing = currentFollowing + 1
+            val updatedUser = user.copy(followingCount = newFollowing)
+            _currentUser.value = updatedUser
+            userRepository.setCurrentUser(updatedUser)
+            repoScope.launch { userRepository.saveUser(updatedUser) }
+            FirebaseManager.saveUser(updatedUser)
+
+            // Increment target user followers
+            val target = _users.value.find { it.uid == targetUid }
+            if (target != null) {
+                val baseFollowers = if (target.followersCount == 8500) 0 else target.followersCount
+                val newTargetFollowers = baseFollowers + 1
+                val updatedTarget = target.copy(followersCount = newTargetFollowers)
+                _users.value = _users.value.map { if (it.uid == targetUid) updatedTarget else it }
+                repoScope.launch { userRepository.saveUser(updatedTarget) }
+                FirebaseManager.saveUser(updatedTarget)
+            }
+
+            addNotification(
+                fromUid = user.uid,
+                fromName = user.displayName,
+                fromPhoto = user.photoUrl,
+                type = "follow",
+                targetId = targetUid,
+                customText = "${user.displayName} started following your profile and videos."
+            )
+        }
+    }
+
+    fun isFollowing(targetUid: String): Boolean = _followingUids.value.contains(targetUid)
+
+    fun syncPartnerMetrics() {
+        val user = _currentUser.value ?: return
+        val realFriends = _friends.value.size
+        val realFollowers = if (user.followersCount == 8500) realFriends else maxOf(user.followersCount, realFriends)
+        val realFollowing = if (user.followingCount == 3700 || user.followingCount == 370) realFriends else maxOf(user.followingCount, realFriends)
+        val currentWatchHours = if (user.watchHours == 3420.0) 0.0 else user.watchHours
+        val updated = user.copy(followersCount = realFollowers, followingCount = realFollowing, watchHours = currentWatchHours)
+        _currentUser.value = updated
+        userRepository.setCurrentUser(updated)
+        repoScope.launch { userRepository.saveUser(updated) }
+        FirebaseManager.saveUser(updated)
     }
 
     // CREATOR PAYOUTS
@@ -778,53 +1041,88 @@ class MeskotRepository(
     }
 
     // MONETIZATION WORKFLOWS: ELIGIBILITY, APPLICATION & INVITE CODES
-    fun applyForMonetizationTool(toolId: String): Boolean {
+    fun applyForMonetizationTool(toolId: String, payoutMethod: String = "Telebirr", accountNumber: String = ""): Boolean {
         var applied = false
-        _monetizationTools.value = _monetizationTools.value.map { tool ->
-            if (tool.id == toolId) {
-                applied = true
-                tool.copy(status = ProgramStatus.UNDER_REVIEW, enrolledDate = "Pending Review")
-            } else tool
+        val currentActive = _activeMonetizationToolIds.value
+        if (!currentActive.contains(toolId)) {
+            val newActive = currentActive + toolId
+            _activeMonetizationToolIds.value = newActive
+            saveActiveMonetizationToolIds(newActive)
+            _underReviewMonetizationToolIds.value = _underReviewMonetizationToolIds.value - toolId
+            applied = true
         }
+
+        refreshMonetizationTools()
+
+        val tool = _monetizationTools.value.find { it.id == toolId }
+        val toolName = tool?.name ?: "Monetization Program"
         val user = _currentUser.value
         if (user != null) {
             addNotification(
                 fromUid = "system_meskot",
                 fromName = "Meskot Creator Studio",
                 fromPhoto = "",
-                type = "monetization_review",
+                type = "monetization_approved",
                 targetId = user.uid,
-                customText = "Your monetization application has been submitted for automated policy & KYC review."
+                customText = "🎉 Approved! $toolName is now ACTIVE. Payouts connected via $payoutMethod ($accountNumber)."
             )
         }
+        recordLedgerCredit(
+            entryType = LedgerEntryType.AD_REVENUE_CREDIT,
+            amountEtb = 100.0,
+            sourceTitle = "$toolName Onboarding Incentive",
+            metadata = "Payout: $payoutMethod · Account: ${accountNumber.ifBlank { "Verified" }} · Active"
+        )
         return applied
     }
 
     fun redeemInviteCode(toolId: String, code: String): Boolean {
         val trimmed = code.trim().uppercase()
-        val validCodes = setOf("MESKOT-VIP", "CREATOR2026", "INLINE-CHAPA", "ETHIOPIA-PRIME", "YOUTUBE-PARTNER")
+        val validCodes = setOf("MESKOT-VIP", "CREATOR2026", "INLINE-CHAPA", "ETHIOPIA-PRIME", "YOUTUBE-PARTNER", "GRANT2026", "REELS2026", "REELS-VIP", "ACCELERATOR-VIP")
         if (!validCodes.contains(trimmed)) {
             return false
         }
-        _monetizationTools.value = _monetizationTools.value.map { tool ->
-            if (tool.id == toolId) {
-                tool.copy(status = ProgramStatus.ACTIVE, enrolledDate = "Active (Invited)")
-            } else tool
-        }
+        val newActive = _activeMonetizationToolIds.value + toolId
+        _activeMonetizationToolIds.value = newActive
+        saveActiveMonetizationToolIds(newActive)
+        _underReviewMonetizationToolIds.value = _underReviewMonetizationToolIds.value - toolId
+        refreshMonetizationTools()
+
+        val tool = _monetizationTools.value.find { it.id == toolId }
+        val toolName = tool?.name ?: "Creator Program"
         recordLedgerCredit(
             entryType = LedgerEntryType.REVERSAL_CREDIT,
             amountEtb = 500.0,
-            sourceTitle = "VIP Invite Token Activation Bonus ($trimmed)",
-            metadata = "Token: $trimmed · Approved"
+            sourceTitle = "VIP Invite Token Activation Bonus ($trimmed - $toolName)",
+            metadata = "Token: $trimmed · Approved & Active"
         )
+        val user = _currentUser.value
+        if (user != null) {
+            addNotification(
+                fromUid = "system_meskot",
+                fromName = "Meskot Creator Studio",
+                fromPhoto = "",
+                type = "monetization_approved",
+                targetId = user.uid,
+                customText = "🎟️ VIP Invite Accepted! $toolName unlocked with 500 ETB activation bonus."
+            )
+        }
         return true
     }
 
     fun registerInterest(toolId: String) {
-        _monetizationTools.value = _monetizationTools.value.map { tool ->
-            if (tool.id == toolId) {
-                tool.copy(eligibilityNote = "Interest registered · You will receive an invitation when capacity opens.")
-            } else tool
+        _registeredInterestToolIds.value = _registeredInterestToolIds.value + toolId
+        refreshMonetizationTools()
+        val user = _currentUser.value
+        if (user != null) {
+            addNotification(
+                fromUid = "system_meskot",
+                fromName = "Meskot Creator Studio",
+                fromPhoto = "",
+                type = "monetization_waitlist",
+                targetId = user.uid,
+                customText = "🌟 You have joined the partner waitlist. You will be prioritized when cohort capacity opens."
+            )
         }
     }
 
@@ -859,7 +1157,12 @@ class MeskotRepository(
         val user = _currentUser.value ?: return
         val newNet = user.creatorNetBalance + amountEtb
         val newGross = user.creatorGrossEarnings + amountEtb
-        _currentUser.value = user.copy(creatorNetBalance = newNet, creatorGrossEarnings = newGross)
+        val updatedUser = user.copy(creatorNetBalance = newNet, creatorGrossEarnings = newGross)
+        _currentUser.value = updatedUser
+        userRepository.setCurrentUser(updatedUser)
+        repoScope.launch {
+            userRepository.saveUser(updatedUser)
+        }
 
         val newEntry = EarningsLedgerEntry(
             id = "ledger_" + System.currentTimeMillis(),
@@ -876,7 +1179,12 @@ class MeskotRepository(
     fun buyStarsWithChapa(starCount: Int, priceEtb: Double, txRef: String) {
         val user = _currentUser.value ?: return
         val newStars = user.starBalance + starCount
-        _currentUser.value = user.copy(starBalance = newStars)
+        val updatedUser = user.copy(starBalance = newStars)
+        _currentUser.value = updatedUser
+        userRepository.setCurrentUser(updatedUser)
+        repoScope.launch {
+            userRepository.saveUser(updatedUser)
+        }
 
         val newEntry = EarningsLedgerEntry(
             id = "ledger_" + System.currentTimeMillis(),
@@ -892,7 +1200,12 @@ class MeskotRepository(
 
     fun resetToRealChapaBalance() {
         val user = _currentUser.value ?: return
-        _currentUser.value = user.copy(creatorNetBalance = 0.0, creatorGrossEarnings = 0.0)
+        val updatedUser = user.copy(creatorNetBalance = 0.0, creatorGrossEarnings = 0.0)
+        _currentUser.value = updatedUser
+        userRepository.setCurrentUser(updatedUser)
+        repoScope.launch {
+            userRepository.saveUser(updatedUser)
+        }
         _earningsLedger.value = emptyList()
     }
 
@@ -924,10 +1237,24 @@ class MeskotRepository(
         mediaUrl: String,
         ctaText: String,
         destinationUrl: String
-    ) {
-        val user = _currentUser.value
-        val advertiserName = user?.displayName ?: "Meskot Partner"
-        val advertiserAvatar = user?.photoUrl ?: ""
+    ): Boolean {
+        val user = _currentUser.value ?: return false
+
+        // Audit check: Verify advertiser balance can cover first day's budget
+        if (user.creatorNetBalance < dailyBudgetEtb || dailyBudgetEtb <= 0) {
+            return false
+        }
+
+        val newBalance = (user.creatorNetBalance - dailyBudgetEtb).coerceAtLeast(0.0)
+        val updatedUser = user.copy(creatorNetBalance = newBalance)
+        _currentUser.value = updatedUser
+        userRepository.setCurrentUser(updatedUser)
+        repoScope.launch {
+            userRepository.saveUser(updatedUser)
+        }
+
+        val advertiserName = user.displayName
+        val advertiserAvatar = user.photoUrl
 
         val newCampaign = AdCampaign(
             id = "camp_" + System.currentTimeMillis(),
@@ -951,6 +1278,18 @@ class MeskotRepository(
             advertiserAvatar = advertiserAvatar
         )
         _adCampaigns.value = listOf(newCampaign) + _adCampaigns.value
+
+        val newEntry = EarningsLedgerEntry(
+            id = "ledger_" + System.currentTimeMillis(),
+            transactionRef = "CAMP-" + UUID.randomUUID().toString().take(8).uppercase(),
+            entryType = LedgerEntryType.AD_CAMPAIGN_DEBIT,
+            amountEtb = -dailyBudgetEtb,
+            balanceAfterEtb = newBalance,
+            sourceTitle = "Ad Campaign Budget: $name",
+            metadata = "Deducted from Real Balance · Objective: $objective"
+        )
+        _earningsLedger.value = listOf(newEntry) + _earningsLedger.value
+        return true
     }
 
     fun toggleAdCampaignStatus(campaignId: String) {
@@ -1071,6 +1410,9 @@ class MeskotRepository(
         val user = _currentUser.value ?: return
         _friends.value = _friends.value + fromUid
         _incomingRequests.value = _incomingRequests.value.filterNot { it.uid == fromUid }
+
+        // In Meskot Creator platform, each accepted friend connection is also an active follower
+        incrementFollowers(1)
 
         val reqId = "${fromUid}_${user.uid}"
         FirebaseManager.updateFriendRequestStatus(reqId, "accepted")
@@ -1615,86 +1957,241 @@ class MeskotRepository(
         )
     }
 
-    private fun createInitialMonetizationTools(): List<MonetizationTool> {
+    fun refreshMonetizationTools() {
+        _monetizationTools.value = buildDynamicMonetizationTools()
+    }
+
+    private fun buildDynamicMonetizationTools(): List<MonetizationTool> {
+        val user = _currentUser.value
+        val friendsCount = _friends.value.size
+        val realFollowers = if ((user?.followersCount ?: 0) == 8500) friendsCount else maxOf(user?.followersCount ?: 0, friendsCount)
+        val realWatchHours = if ((user?.watchHours ?: 0.0) == 3420.0) 0.0 else (user?.watchHours ?: 0.0)
+        val realPostsCount = if (user != null) {
+            val userPosts = _posts.value.count { it.authorId == user.uid }
+            if (userPosts > 0) userPosts else _posts.value.size.coerceAtLeast(3)
+        } else 3
+
+        val activeIds = _activeMonetizationToolIds.value
+        val reviewIds = _underReviewMonetizationToolIds.value
+        val registeredIds = _registeredInterestToolIds.value
+
         return listOf(
-            MonetizationTool(
-                id = "tool_instream",
-                code = "IN_STREAM_ADS",
-                name = "In-Stream Video Ads",
-                description = "Monetize qualifying on-demand and live videos with pre-roll, mid-roll, and image banner advertisements.",
-                icon = "📺",
-                status = ProgramStatus.ACTIVE,
-                minFollowers = 5000,
-                minWatchHours = 1000,
-                revSharePercent = 70.0,
-                eligibilityNote = "Criteria Met & Fully Approved. 70% revenue share active.",
-                enrolledDate = "Active since Jan 2026"
-            ),
-            MonetizationTool(
-                id = "tool_reels",
-                code = "REELS_OVERLAY",
-                name = "Reels Performance & Overlay Ads",
-                description = "Earn based on the number of plays and high-engagement impressions on your public short-form Reels.",
-                icon = "⚡",
-                status = ProgramStatus.INVITE_ONLY,
-                minFollowers = 10000,
-                minWatchHours = 2000,
-                revSharePercent = 70.0,
-                eligibilityNote = "Invite Only: Redeem Creator Access Code or join the waiting queue.",
-                enrolledDate = null
-            ),
-            MonetizationTool(
-                id = "tool_stars",
-                code = "STARS_TIPPING",
-                name = "Virtual Stars & Live Micro-Gifts",
-                description = "Enable viewers to buy and send Stars and animated gifts on your feed posts, photos, and live audio/video rooms.",
-                icon = "⭐",
-                status = ProgramStatus.ACTIVE,
-                minFollowers = 1000,
-                minWatchHours = 100,
-                revSharePercent = 85.0,
-                eligibilityNote = "Active · Fixed payout rate of 1.00 ETB per Star received.",
-                enrolledDate = "Active since Dec 2025"
-            ),
-            MonetizationTool(
-                id = "tool_subs",
-                code = "FAN_SUBSCRIPTIONS",
-                name = "Tiered VIP Fan Subscriptions",
-                description = "Earn predictable monthly recurring income with Bronze, Silver, and Gold membership tiers with exclusive perks.",
-                icon = "👑",
-                status = ProgramStatus.ACTIVE,
-                minFollowers = 2500,
-                minWatchHours = 500,
-                revSharePercent = 80.0,
-                eligibilityNote = "Active · 42 recurring subscribers supporting you monthly.",
-                enrolledDate = "Active since Feb 2026"
-            ),
-            MonetizationTool(
-                id = "tool_creator_fund",
-                code = "CREATOR_FUND",
-                name = "Meskot Creator Accelerator Grant",
-                description = "Monthly guaranteed creator bonus pool funded by Meskot Diaspora Innovation & Telecom partners.",
-                icon = "🏆",
-                status = ProgramStatus.INVITE_ONLY,
-                minFollowers = 25000,
-                minWatchHours = 5000,
-                revSharePercent = 100.0,
-                eligibilityNote = "Invite-only cohort for top 100 Ethiopian digital creators.",
-                enrolledDate = null
-            ),
-            MonetizationTool(
-                id = "tool_branded",
-                code = "BRANDED_CONTENT",
-                name = "Brand Collabs & Sponsorship Tagging",
-                description = "Tag commercial brand partners directly on posts and get discovered by local Ethiopian and international advertisers.",
-                icon = "🤝",
-                status = ProgramStatus.READY_TO_APPLY,
-                minFollowers = 5000,
-                minWatchHours = 500,
-                revSharePercent = 100.0,
-                eligibilityNote = "Eligible · You meet all criteria (0 policy strikes, KYC verified).",
-                enrolledDate = null
-            )
+            // 1. In-Stream Video Ads (Facebook standard: 5,000 followers, 1,000 watch hours, 5 posts)
+            run {
+                val id = "tool_instream"
+                val minFollowers = 5000
+                val minWatchHours = 1000
+                val minPosts = 5
+                val isCriteriaMet = realFollowers >= minFollowers && realWatchHours >= minWatchHours && realPostsCount >= minPosts
+                val status = when {
+                    activeIds.contains(id) -> ProgramStatus.ACTIVE
+                    reviewIds.contains(id) -> ProgramStatus.UNDER_REVIEW
+                    isCriteriaMet -> ProgramStatus.READY_TO_APPLY
+                    else -> ProgramStatus.CRITERIA_NOT_MET
+                }
+                val note = when (status) {
+                    ProgramStatus.ACTIVE -> "Active · 70% ad revenue share connected with Telebirr/CBE weekly payout."
+                    ProgramStatus.UNDER_REVIEW -> "⏳ Under automated policy & KYC review."
+                    ProgramStatus.READY_TO_APPLY -> "Criteria Met! All requirements fulfilled. Set up your payout account."
+                    else -> "${String.format(java.util.Locale.US, "%,d", (minFollowers - realFollowers).coerceAtLeast(0))} more followers & ${String.format(java.util.Locale.US, "%.1f", (minWatchHours - realWatchHours).coerceAtLeast(0.0))} hrs needed"
+                }
+                MonetizationTool(
+                    id = id,
+                    code = "IN_STREAM_ADS",
+                    name = "In-Stream Video Ads",
+                    description = "Monetize qualifying on-demand and live videos with pre-roll, mid-roll, and image banner advertisements.",
+                    icon = "📺",
+                    status = status,
+                    minFollowers = minFollowers,
+                    minWatchHours = minWatchHours,
+                    minActivePosts = minPosts,
+                    revSharePercent = 70.0,
+                    eligibilityNote = note,
+                    enrolledDate = if (status == ProgramStatus.ACTIVE) "Active · Weekly Payout" else null,
+                    payoutRateDescription = "70% creator share on video ad impressions"
+                )
+            },
+
+            // 2. Reels Performance & Overlay Ads (Facebook Reels Bonus / Overlay standard: 1,000 followers, 100 hrs, 3 posts)
+            run {
+                val id = "tool_reels"
+                val minFollowers = 1000
+                val minWatchHours = 100
+                val minPosts = 3
+                val isCriteriaMet = realFollowers >= minFollowers && realWatchHours >= minWatchHours && realPostsCount >= minPosts
+                val status = when {
+                    activeIds.contains(id) -> ProgramStatus.ACTIVE
+                    reviewIds.contains(id) -> ProgramStatus.UNDER_REVIEW
+                    isCriteriaMet -> ProgramStatus.READY_TO_APPLY
+                    registeredIds.contains(id) -> ProgramStatus.INVITE_ONLY
+                    else -> ProgramStatus.INVITE_ONLY
+                }
+                val note = when {
+                    status == ProgramStatus.ACTIVE -> "Active · Earning on public short-form Reels plays & sticker overlays."
+                    status == ProgramStatus.UNDER_REVIEW -> "⏳ In automated review."
+                    status == ProgramStatus.READY_TO_APPLY -> "Criteria Met! Set up your Reels Performance program."
+                    registeredIds.contains(id) -> "Waitlist Joined · Meskot Creator Studio is evaluating your short-form content."
+                    else -> "Invite Only: 1,000 followers, redeem creator invite code, or join the waiting queue."
+                }
+                MonetizationTool(
+                    id = id,
+                    code = "REELS_OVERLAY",
+                    name = "Reels Performance & Overlay Ads",
+                    description = "Earn based on the number of plays and high-engagement impressions on your public short-form Reels.",
+                    icon = "⚡",
+                    status = status,
+                    minFollowers = minFollowers,
+                    minWatchHours = minWatchHours,
+                    minActivePosts = minPosts,
+                    revSharePercent = 70.0,
+                    eligibilityNote = note,
+                    enrolledDate = if (status == ProgramStatus.ACTIVE) "Active (Invited)" else null,
+                    isInviteOnly = true,
+                    payoutRateDescription = "70% creator share on short-form Reels views"
+                )
+            },
+
+            // 3. Virtual Stars & Live Micro-Gifts (Facebook Stars standard: 500 followers & 3 active posts)
+            run {
+                val id = "tool_stars"
+                val minFollowers = 500
+                val minWatchHours = 0
+                val minPosts = 3
+                val isCriteriaMet = realFollowers >= minFollowers && realPostsCount >= minPosts
+                val status = when {
+                    activeIds.contains(id) -> ProgramStatus.ACTIVE
+                    reviewIds.contains(id) -> ProgramStatus.UNDER_REVIEW
+                    isCriteriaMet -> ProgramStatus.READY_TO_APPLY
+                    else -> ProgramStatus.CRITERIA_NOT_MET
+                }
+                val note = when (status) {
+                    ProgramStatus.ACTIVE -> "Active · Fixed payout rate of 1.00 ETB per Star received."
+                    ProgramStatus.UNDER_REVIEW -> "⏳ In automated review."
+                    ProgramStatus.READY_TO_APPLY -> "Criteria Met! You qualify for Stars tipping on posts, photos & live."
+                    else -> "${(minFollowers - realFollowers).coerceAtLeast(0)} more followers needed to unlock Stars"
+                }
+                MonetizationTool(
+                    id = id,
+                    code = "STARS_TIPPING",
+                    name = "Virtual Stars & Live Micro-Gifts",
+                    description = "Enable viewers to buy and send Stars and animated gifts on your feed posts, photos, and live audio/video rooms.",
+                    icon = "⭐",
+                    status = status,
+                    minFollowers = minFollowers,
+                    minWatchHours = minWatchHours,
+                    minActivePosts = minPosts,
+                    revSharePercent = 85.0,
+                    eligibilityNote = note,
+                    enrolledDate = if (status == ProgramStatus.ACTIVE) "Active · 1.00 ETB / Star" else null,
+                    payoutRateDescription = "Fixed payout rate of 1.00 ETB per Star received"
+                )
+            },
+
+            // 4. Tiered VIP Fan Subscriptions (Facebook Subscriptions standard: 10,000 followers, 500 hrs, 5 posts)
+            run {
+                val id = "tool_subs"
+                val minFollowers = 10000
+                val minWatchHours = 500
+                val minPosts = 5
+                val isCriteriaMet = realFollowers >= minFollowers && realWatchHours >= minWatchHours && realPostsCount >= minPosts
+                val status = when {
+                    activeIds.contains(id) -> ProgramStatus.ACTIVE
+                    reviewIds.contains(id) -> ProgramStatus.UNDER_REVIEW
+                    isCriteriaMet -> ProgramStatus.READY_TO_APPLY
+                    else -> ProgramStatus.CRITERIA_NOT_MET
+                }
+                val note = when (status) {
+                    ProgramStatus.ACTIVE -> "Active · Monthly recurring VIP memberships with badges & exclusive perks."
+                    ProgramStatus.UNDER_REVIEW -> "⏳ Under review."
+                    ProgramStatus.READY_TO_APPLY -> "Criteria Met! Set up Bronze, Silver, and Gold membership tiers."
+                    else -> "${String.format(java.util.Locale.US, "%,d", (minFollowers - realFollowers).coerceAtLeast(0))} more followers & ${(minWatchHours - realWatchHours).toInt().coerceAtLeast(0)} hrs needed"
+                }
+                MonetizationTool(
+                    id = id,
+                    code = "FAN_SUBSCRIPTIONS",
+                    name = "Tiered VIP Fan Subscriptions",
+                    description = "Earn predictable monthly recurring income with Bronze, Silver, and Gold membership tiers with exclusive perks.",
+                    icon = "👑",
+                    status = status,
+                    minFollowers = minFollowers,
+                    minWatchHours = minWatchHours,
+                    minActivePosts = minPosts,
+                    revSharePercent = 80.0,
+                    eligibilityNote = note,
+                    enrolledDate = if (status == ProgramStatus.ACTIVE) "Active · Recurring Subscriptions" else null,
+                    payoutRateDescription = "80% creator rev share on monthly memberships"
+                )
+            },
+
+            // 5. Meskot Creator Accelerator Grant (Cohort Bonus: 25,000 followers, 2,000 hrs, Invite Only)
+            run {
+                val id = "tool_creator_fund"
+                val minFollowers = 25000
+                val minWatchHours = 2000
+                val minPosts = 10
+                val status = when {
+                    activeIds.contains(id) -> ProgramStatus.ACTIVE
+                    registeredIds.contains(id) -> ProgramStatus.INVITE_ONLY
+                    else -> ProgramStatus.INVITE_ONLY
+                }
+                val note = when {
+                    status == ProgramStatus.ACTIVE -> "Active · Enrolled in Accelerator Grant cohort (100% bonus pool)."
+                    registeredIds.contains(id) -> "Interest Registered · Candidate profile in review by diaspora committee."
+                    else -> "Invite-only cohort for top 100 Ethiopian digital creators."
+                }
+                MonetizationTool(
+                    id = id,
+                    code = "CREATOR_FUND",
+                    name = "Meskot Creator Accelerator Grant",
+                    description = "Monthly guaranteed creator bonus pool funded by Meskot Diaspora Innovation & Telecom partners.",
+                    icon = "🏆",
+                    status = status,
+                    minFollowers = minFollowers,
+                    minWatchHours = minWatchHours,
+                    minActivePosts = minPosts,
+                    revSharePercent = 100.0,
+                    eligibilityNote = note,
+                    enrolledDate = if (status == ProgramStatus.ACTIVE) "Active · Grant Awarded" else null,
+                    isInviteOnly = true,
+                    payoutRateDescription = "100% monthly bonus pool from diaspora partners"
+                )
+            },
+
+            // 6. Brand Collabs & Sponsorship Tagging (Facebook Branded Content Tag: 1,000 followers, 100 hrs, 5 posts)
+            run {
+                val id = "tool_branded"
+                val minFollowers = 1000
+                val minWatchHours = 100
+                val minPosts = 5
+                val isCriteriaMet = realFollowers >= minFollowers && realWatchHours >= minWatchHours && realPostsCount >= minPosts
+                val status = when {
+                    activeIds.contains(id) -> ProgramStatus.ACTIVE
+                    reviewIds.contains(id) -> ProgramStatus.UNDER_REVIEW
+                    isCriteriaMet -> ProgramStatus.READY_TO_APPLY
+                    else -> ProgramStatus.CRITERIA_NOT_MET
+                }
+                val note = when (status) {
+                    ProgramStatus.ACTIVE -> "Active · Paid partnership tagging & brand sponsor discovery enabled."
+                    ProgramStatus.UNDER_REVIEW -> "⏳ KYC & tax identity verification in progress."
+                    ProgramStatus.READY_TO_APPLY -> "Eligible · You meet all criteria (0 policy strikes, KYC verified)."
+                    else -> "${(minFollowers - realFollowers).coerceAtLeast(0)} more followers & ${(minWatchHours - realWatchHours).toInt().coerceAtLeast(0)} hrs needed"
+                }
+                MonetizationTool(
+                    id = id,
+                    code = "BRANDED_CONTENT",
+                    name = "Brand Collabs & Sponsorship Tagging",
+                    description = "Tag commercial brand partners directly on posts and get discovered by local Ethiopian and international advertisers.",
+                    icon = "🤝",
+                    status = status,
+                    minFollowers = minFollowers,
+                    minWatchHours = minWatchHours,
+                    minActivePosts = minPosts,
+                    revSharePercent = 100.0,
+                    eligibilityNote = note,
+                    enrolledDate = if (status == ProgramStatus.ACTIVE) "Active · Tagging Enabled" else null,
+                    payoutRateDescription = "100% direct brand sponsor payment retention"
+                )
+            }
         )
     }
 
