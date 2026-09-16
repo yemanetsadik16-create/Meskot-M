@@ -266,6 +266,9 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _userMessage.value = msg
     }
 
+    // All unfiltered posts
+    val posts: StateFlow<List<Post>> = repository.posts
+
     // Filtered Feed posts with Algorithmic Boost Weighting
     val feedPosts: StateFlow<List<Post>> = combine(
         repository.posts,
@@ -499,6 +502,29 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         repository.sendStars(postId, count, giftName)
         closeTipModal()
         showMessage("⭐ Sent $count Stars ($giftName) to creator!")
+    }
+
+    // Meta Verified Subscription
+    fun subscribeMetaVerified(paymentMethod: String = "GOOGLE_PLAY", planId: String = "meta_verified_monthly") {
+        val success = repository.subscribeMetaVerified(paymentMethod, planId)
+        if (success) {
+            val providerName = when (paymentMethod) {
+                "GOOGLE_PLAY" -> "Google Play Billing"
+                "APPLE_IAP" -> "Apple App Store"
+                "CHAPA" -> "Chapa Gateway"
+                else -> paymentMethod
+            }
+            showMessage("🎉 Welcome to Meta Verified! Blue badge activated via $providerName.")
+        } else {
+            showMessage("Failed to activate Meta Verified.")
+        }
+    }
+
+    fun cancelMetaVerified() {
+        val success = repository.cancelMetaVerified()
+        if (success) {
+            showMessage("Meta Verified subscription cancelled.")
+        }
     }
 
     // Content Boosting (Post Promotion)

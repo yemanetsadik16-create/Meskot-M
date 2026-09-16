@@ -50,7 +50,35 @@ data class User(
     val watchHours: Double = 0.0,
     val kycVerified: Boolean = false,
     val policyStrikes: Int = 0,
-    val payoutDestinationAccount: String = ""
+    val payoutDestinationAccount: String = "",
+    val isVerified: Boolean = false,
+    val verificationStatus: VerificationStatus = VerificationStatus.NONE,
+    val verificationSubscribedAt: Long? = null,
+    val verificationExpiresAt: Long? = null,
+    val verificationPlan: String = "MONTHLY_STANDARD",
+    val verificationPaymentMethod: String = ""
+)
+
+enum class VerificationStatus {
+    NONE,
+    PENDING,
+    VERIFIED,
+    EXPIRED
+}
+
+data class MetaVerifiedSubscription(
+    val id: String,
+    val userId: String,
+    val status: VerificationStatus,
+    val planId: String = "meta_verified_monthly",
+    val priceUsd: Double = 14.99,
+    val priceEtb: Double = 499.0,
+    val paymentProvider: String = "GOOGLE_PLAY",
+    val purchaseToken: String = "",
+    val orderId: String = "",
+    val subscribedAt: Long = System.currentTimeMillis(),
+    val expiresAt: Long = System.currentTimeMillis() + 30L * 24 * 3600 * 1000,
+    val autoRenew: Boolean = true
 )
 
 data class SharedPostPreview(
@@ -83,7 +111,8 @@ data class Post(
     val sharedPost: SharedPostPreview? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val editedAt: Long? = null,
-    val isSaved: Boolean = false
+    val isSaved: Boolean = false,
+    val isAuthorVerified: Boolean = false
 )
 
 data class Comment(
@@ -96,7 +125,8 @@ data class Comment(
     val parentId: String? = null,
     val likes: Map<String, Boolean> = emptyMap(),
     val createdAt: Long = System.currentTimeMillis(),
-    val editedAt: Long? = null
+    val editedAt: Long? = null,
+    val isAuthorVerified: Boolean = false
 )
 
 data class GroupItem(

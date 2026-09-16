@@ -266,9 +266,11 @@ class FirestoreUserRepository(
         currentUserListenerRegistration?.remove()
 
         if (user != null) {
-            // Check if present in users list; if not, add locally
+            // Check if present in users list; if not, add locally, otherwise update in-place
             if (_users.value.none { it.uid == user.uid }) {
                 _users.value = _users.value + user
+            } else {
+                _users.value = _users.value.map { if (it.uid == user.uid) user else it }
             }
 
             // Listen for changes to current user document in Firestore

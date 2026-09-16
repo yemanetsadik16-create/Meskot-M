@@ -88,10 +88,12 @@ import com.example.data.MembershipTier
 import com.example.data.MeskotStrings
 import com.example.data.MonetizationTool
 import com.example.data.ProgramStatus
+import com.example.data.User
 import com.example.ui.MeskotViewModel
 import com.example.ui.components.CreatorPayoutModal
 import com.example.ui.components.ChapaDepositModal
 import com.example.ui.components.ChapaConfigModal
+import com.example.ui.components.MetaVerifiedBottomSheetModal
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Bolt
 import com.example.ui.theme.CardBg
@@ -123,6 +125,7 @@ fun CreatorDashboardScreen(
     val grossEarnings by viewModel.creatorGrossEarnings.collectAsState()
     val netBalance by viewModel.creatorNetBalance.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
+    val posts by viewModel.posts.collectAsState()
 
     val monetizationTools by viewModel.monetizationTools.collectAsState()
     val earningsLedger by viewModel.earningsLedger.collectAsState()
@@ -138,6 +141,7 @@ fun CreatorDashboardScreen(
     var showInviteModalTool by remember { mutableStateOf<MonetizationTool?>(null) }
     var showApplyModalTool by remember { mutableStateOf<MonetizationTool?>(null) }
     var showCriteriaModalTool by remember { mutableStateOf<MonetizationTool?>(null) }
+    var showMetaVerifiedModal by remember { mutableStateOf(false) }
 
     if (showPayoutModal) {
         CreatorPayoutModal(
@@ -183,7 +187,7 @@ fun CreatorDashboardScreen(
         FacebookMonetizationCriteriaModal(
             tool = tool,
             currentUser = currentUser,
-            postsCount = posts.count { it.authorId == currentUser?.uid }.let { if (it > 0) it else posts.size.coerceAtLeast(3) },
+            postsCount = posts.count { it.uid == currentUser?.uid }.let { if (it > 0) it else posts.size.coerceAtLeast(3) },
             onDismiss = { showCriteriaModalTool = null },
             onApply = {
                 showCriteriaModalTool = null
@@ -223,6 +227,19 @@ fun CreatorDashboardScreen(
             onConfirmApply = { payoutMethod, accountNumber ->
                 viewModel.applyForMonetizationTool(tool.id, payoutMethod, accountNumber)
                 showApplyModalTool = null
+            }
+        )
+    }
+
+    if (showMetaVerifiedModal) {
+        MetaVerifiedBottomSheetModal(
+            currentUser = currentUser,
+            onDismiss = { showMetaVerifiedModal = false },
+            onSubscribeConfirmed = { paymentMethod, planId ->
+                viewModel.subscribeMetaVerified(paymentMethod, planId)
+            },
+            onCancelSubscription = {
+                viewModel.cancelMetaVerified()
             }
         )
     }
@@ -684,11 +701,87 @@ fun CreatorDashboardScreen(
                         }
                     }
 
+                    // Meta Verified Creator Badge Feature Card
+                    item {
+                        Card(
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (currentUser?.isVerified == true) Color(0xFFE7F3FF) else Color(0xFF1C1C1E)
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (currentUser?.isVerified == true) Color(0xFF0866FF).copy(alpha = 0.3f) else Color(0xFF2C2C2E)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clickable { showMetaVerifiedModal = true }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF0866FF)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Verified,
+                                        contentDescription = "Meta Verified",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Meta Verified",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            color = if (currentUser?.isVerified == true) Color(0xFF0866FF) else Color.White
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(if (currentUser?.isVerified == true) Color(0xFF10B981) else Color(0xFF0866FF))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = if (currentUser?.isVerified == true) "VERIFIED" else "$14.99/MO",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = if (currentUser?.isVerified == true) "Verified badge active · Priority algorithm reach & protection" else "Blue checkmark badge, impersonation protection & direct support",
+                                        fontSize = 11.5.sp,
+                                        color = if (currentUser?.isVerified == true) Color(0xFF334155) else Color(0xFF94A3B8)
+                                    )
+                                }
+                                Text(
+                                    text = if (currentUser?.isVerified == true) "Manage →" else "Get →",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (currentUser?.isVerified == true) Color(0xFF0866FF) else Color(0xFF38BDF8)
+                                )
+                            }
+                        }
+                    }
+
                     items(monetizationTools) { tool ->
                         MonetizationToolCard(
                             tool = tool,
                             currentUser = currentUser,
-                            postsCount = posts.count { it.authorId == currentUser?.uid }.let { if (it > 0) it else posts.size.coerceAtLeast(3) },
+                            postsCount = posts.count { it.uid == currentUser?.uid }.let { if (it > 0) it else posts.size.coerceAtLeast(3) },
                             onViewCriteria = { showCriteriaModalTool = tool },
                             onApply = { showApplyModalTool = tool },
                             onRedeemInvite = { showInviteModalTool = tool },
@@ -1129,6 +1222,9 @@ fun RequirementProgressRow(
 @Composable
 fun MonetizationToolCard(
     tool: MonetizationTool,
+    currentUser: com.example.data.User? = null,
+    postsCount: Int = 0,
+    onViewCriteria: (() -> Unit)? = null,
     onApply: () -> Unit,
     onRedeemInvite: () -> Unit,
     onRegisterInterest: () -> Unit
@@ -1189,20 +1285,31 @@ fun MonetizationToolCard(
 
             when (tool.status) {
                 ProgramStatus.ACTIVE -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Active",
-                            tint = Color(0xFF059669),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = tool.enrolledDate ?: "Active and earning",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF059669)
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Active",
+                                tint = Color(0xFF059669),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = tool.enrolledDate ?: "Active and earning",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF059669)
+                            )
+                        }
+                        if (onViewCriteria != null) {
+                            TextButton(onClick = onViewCriteria, modifier = Modifier.height(28.dp)) {
+                                Text(text = "Standards", fontSize = 10.sp, color = MutedText)
+                            }
+                        }
                     }
                 }
                 ProgramStatus.INVITE_ONLY -> {
@@ -1211,6 +1318,15 @@ fun MonetizationToolCard(
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (onViewCriteria != null) {
+                            TextButton(
+                                onClick = onViewCriteria,
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text(text = "Criteria", fontSize = 11.sp, color = MutedText)
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
                         OutlinedButton(
                             onClick = onRegisterInterest,
                             modifier = Modifier.height(32.dp),
@@ -1230,7 +1346,16 @@ fun MonetizationToolCard(
                     }
                 }
                 ProgramStatus.READY_TO_APPLY -> {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                        if (onViewCriteria != null) {
+                            TextButton(
+                                onClick = onViewCriteria,
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text(text = "View Criteria", fontSize = 11.sp, color = MutedText)
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
                         Button(
                             onClick = onApply,
                             colors = ButtonDefaults.buttonColors(containerColor = GoldDeep),
@@ -1247,7 +1372,28 @@ fun MonetizationToolCard(
                     }
                 }
                 ProgramStatus.CRITERIA_NOT_MET -> {
-                    Text(text = "Requires ${tool.minFollowers} followers and ${tool.minWatchHours} hrs watch time", fontSize = 11.sp, color = MutedText)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Requires ${tool.minFollowers} followers, ${tool.minWatchHours} hrs",
+                            fontSize = 11.sp,
+                            color = MutedText,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (onViewCriteria != null) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            OutlinedButton(
+                                onClick = onViewCriteria,
+                                modifier = Modifier.height(30.dp),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(text = "View Criteria", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
                 }
                 ProgramStatus.SUSPENDED -> {
                     Text(text = "Monetization suspended due to community guidelines violation", fontSize = 11.sp, color = Color(0xFFDC2626))
@@ -1697,8 +1843,11 @@ fun RedeemInviteCodeModal(
 fun ApplyMonetizationProgramModal(
     tool: MonetizationTool,
     onDismiss: () -> Unit,
-    onConfirmApply: () -> Unit
+    onConfirmApply: (payoutMethod: String, accountNumber: String) -> Unit
 ) {
+    var payoutMethod by remember { mutableStateOf("Telebirr") }
+    var accountNumber by remember { mutableStateOf("") }
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(18.dp),
@@ -1742,6 +1891,54 @@ fun ApplyMonetizationProgramModal(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = "Payout Gateway / Settlement Account",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Ink
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Telebirr", "CBE Birr").forEach { method ->
+                        val isSelected = payoutMethod == method
+                        OutlinedButton(
+                            onClick = { payoutMethod = method },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (isSelected) GoldSurface else Color.Transparent
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSelected) GoldDeep else LineBorder
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = method,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) Ink else MutedText
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = accountNumber,
+                    onValueChange = { accountNumber = it },
+                    label = { Text("$payoutMethod Phone / Account #") },
+                    singleLine = true,
+                    placeholder = { Text("e.g. 0911XXXXXX") },
+                    colors = com.example.ui.theme.meskotTextFieldColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Row(
@@ -1753,7 +1950,7 @@ fun ApplyMonetizationProgramModal(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
-                        onClick = onConfirmApply,
+                        onClick = { onConfirmApply(payoutMethod, accountNumber.ifBlank { "0911000000" }) },
                         colors = ButtonDefaults.buttonColors(containerColor = GoldDeep),
                         shape = RoundedCornerShape(10.dp)
                     ) {
@@ -1762,6 +1959,301 @@ fun ApplyMonetizationProgramModal(
                 }
             }
         }
+    }
+}
+
+// -------------------------------------------------------------
+// MODAL: Facebook-Grade Monetization Criteria Modal
+// -------------------------------------------------------------
+@Composable
+fun FacebookMonetizationCriteriaModal(
+    tool: MonetizationTool,
+    currentUser: User?,
+    postsCount: Int,
+    onDismiss: () -> Unit,
+    onApply: () -> Unit,
+    onRedeemInvite: () -> Unit,
+    onRegisterInterest: () -> Unit,
+    onAddFollowers: (Int) -> Unit,
+    onAddWatchHours: (Double) -> Unit
+) {
+    val followers = currentUser?.followersCount ?: 0
+    val watchHours = currentUser?.watchHours ?: 0.0
+    val isFollowersMet = tool.isFollowersMet(followers)
+    val isWatchHoursMet = tool.isWatchHoursMet(watchHours)
+    val isPostsMet = tool.isPostsMet(postsCount)
+    val isEligible = isFollowersMet && isWatchHoursMet && isPostsMet && tool.policyCheckPassed
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(text = tool.icon, fontSize = 28.sp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = tool.name,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Serif,
+                                color = Ink
+                            )
+                            Text(
+                                text = "Meta Partner Monetization Standard",
+                                fontSize = 11.sp,
+                                color = MutedText
+                            )
+                        }
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = MutedText)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Short Description & Revenue Share
+                Text(
+                    text = tool.description,
+                    fontSize = 12.sp,
+                    color = MutedText,
+                    lineHeight = 16.sp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFFFEF3C7))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "${tool.revSharePercent.toInt()}% Creator Rev Share",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF92400E)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    StatusBadge(status = tool.status)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = LineBorder)
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = "Eligibility Criteria Checklist",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Ink
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // 1. Followers Criterion
+                CriteriaItemRow(
+                    title = "Minimum Followers",
+                    currentText = "$followers followers",
+                    targetText = "Goal: ${tool.minFollowers}",
+                    progress = if (tool.minFollowers > 0) (followers.toFloat() / tool.minFollowers.toFloat()).coerceIn(0f, 1f) else 1f,
+                    isMet = isFollowersMet,
+                    onSimulateAdd = { onAddFollowers(500) },
+                    simulateLabel = "+500"
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 2. Watch Hours Criterion
+                if (tool.minWatchHours > 0) {
+                    CriteriaItemRow(
+                        title = "Eligible Watch Hours",
+                        currentText = "${watchHours.toInt()} hours",
+                        targetText = "Goal: ${tool.minWatchHours} hrs in last 60 days",
+                        progress = (watchHours.toFloat() / tool.minWatchHours.toFloat()).coerceIn(0f, 1f),
+                        isMet = isWatchHoursMet,
+                        onSimulateAdd = { onAddWatchHours(100.0) },
+                        simulateLabel = "+100h"
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                // 3. Active Eligible Posts
+                CriteriaItemRow(
+                    title = "Active Public Content",
+                    currentText = "$postsCount posts",
+                    targetText = "Min. ${tool.minActivePosts} eligible posts in last 30 days",
+                    progress = (postsCount.toFloat() / tool.minActivePosts.toFloat()).coerceIn(0f, 1f),
+                    isMet = isPostsMet,
+                    onSimulateAdd = null,
+                    simulateLabel = ""
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 4. Partner Monetization Policies
+                Card(
+                    shape = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(containerColor = Paper2),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Passed",
+                            tint = Color(0xFF059669),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Policy & Integrity Standing: Passed",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF065F46)
+                            )
+                            Text(
+                                text = "No recent community guideline or copyright flags.",
+                                fontSize = 10.sp,
+                                color = MutedText
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Action Footer
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(text = "Close", color = MutedText)
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    if (tool.status == ProgramStatus.READY_TO_APPLY || isEligible) {
+                        Button(
+                            onClick = onApply,
+                            colors = ButtonDefaults.buttonColors(containerColor = GoldDeep),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(text = "Apply Now", fontWeight = FontWeight.Bold)
+                        }
+                    } else if (tool.status == ProgramStatus.INVITE_ONLY || tool.isInviteOnly) {
+                        Button(
+                            onClick = onRedeemInvite,
+                            colors = ButtonDefaults.buttonColors(containerColor = GoldDeep),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(text = "Redeem Invite Code", fontWeight = FontWeight.Bold)
+                        }
+                    } else if (tool.status == ProgramStatus.ACTIVE) {
+                        Button(
+                            onClick = onDismiss,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(text = "Enrolled & Active ✓", fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = onRegisterInterest,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(text = "Register Interest", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CriteriaItemRow(
+    title: String,
+    currentText: String,
+    targetText: String,
+    progress: Float,
+    isMet: Boolean,
+    onSimulateAdd: (() -> Unit)?,
+    simulateLabel: String
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (isMet) Icons.Default.CheckCircle else Icons.Default.Info,
+                    contentDescription = null,
+                    tint = if (isMet) Color(0xFF059669) else Color(0xFF94A3B8),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(text = title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+            }
+
+            if (onSimulateAdd != null && !isMet) {
+                OutlinedButton(
+                    onClick = onSimulateAdd,
+                    modifier = Modifier.height(24.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                ) {
+                    Text(text = "Simulate $simulateLabel", fontSize = 9.sp)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(text = currentText, fontSize = 11.sp, color = if (isMet) Color(0xFF059669) else Ink, fontWeight = FontWeight.Medium)
+            Text(text = targetText, fontSize = 10.sp, color = MutedText)
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = if (isMet) Color(0xFF059669) else GoldDeep,
+            trackColor = Color(0xFFE2E8F0)
+        )
     }
 }
 

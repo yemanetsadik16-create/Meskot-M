@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -38,6 +39,10 @@ import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Verified
+import com.example.ui.components.MetaVerifiedBottomSheetModal
+import com.example.ui.components.ProfileName
+import com.example.ui.components.VerifiedBadge
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
@@ -142,6 +147,7 @@ fun ProfileScreen(
     var isSeeMoreDetailsOpen by remember { mutableStateOf(false) }
     var isSeeMoreWorkOpen by remember { mutableStateOf(false) }
     var isAccountMenuOpen by remember { mutableStateOf(false) }
+    var showMetaVerifiedModal by remember { mutableStateOf(false) }
 
     // Dynamic friends list populated from real Firestore users
     val displayFriends = remember(allUsers, user.uid) {
@@ -437,17 +443,15 @@ fun ProfileScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Text(
-                            text = user.displayName,
+                        ProfileName(
+                            name = user.displayName,
+                            isVerified = user.isVerified,
+                            isAdmin = user.isAdmin,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             color = fbDark,
-                            textAlign = TextAlign.Center
+                            badgeSize = 20.dp
                         )
-                        if (user.isAdmin) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "🛡️", fontSize = 16.sp)
-                        }
                     }
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -737,6 +741,86 @@ fun ProfileScreen(
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFFBBF24)
+                            )
+                        }
+                    }
+                }
+
+                // Meta Verified Subscription Card
+                item {
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (user.isVerified) Color(0xFFE7F3FF) else Color(0xFF1C1C1E)
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (user.isVerified) Color(0xFF0866FF).copy(alpha = 0.3f) else Color(0xFF2C2C2E)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .clickable { showMetaVerifiedModal = true }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF0866FF)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Verified,
+                                        contentDescription = "Meta Verified",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = if (user.isVerified) "Meta Verified · Active Subscriber" else "Meta Verified",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = if (user.isVerified) Color(0xFF0866FF) else Color.White
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(if (user.isVerified) Color(0xFF10B981) else Color(0xFF0866FF))
+                                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                                        ) {
+                                            Text(
+                                                text = if (user.isVerified) "VERIFIED" else "GET BADGE",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = if (user.isVerified) "Identity protected · Tap to view benefits or manage" else "Verified badge, impersonation protection & direct support",
+                                        fontSize = 11.sp,
+                                        color = if (user.isVerified) Color(0xFF475569) else Color(0xFF8E8E93)
+                                    )
+                                }
+                            }
+
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                contentDescription = null,
+                                tint = if (user.isVerified) Color(0xFF0866FF) else Color.White,
+                                modifier = Modifier.size(12.dp)
                             )
                         }
                     }
@@ -1757,6 +1841,19 @@ fun ProfileScreen(
             }
         }
     }
+
+    if (showMetaVerifiedModal) {
+        MetaVerifiedBottomSheetModal(
+            currentUser = currentUser,
+            onDismiss = { showMetaVerifiedModal = false },
+            onSubscribeConfirmed = { paymentMethod, planId ->
+                viewModel.subscribeMetaVerified(paymentMethod, planId)
+            },
+            onCancelSubscription = {
+                viewModel.cancelMetaVerified()
+            }
+        )
+    }
 }
 
 @Composable
@@ -1766,6 +1863,8 @@ fun MenuScreen(
     allUsers: List<User>,
     currentLanguage: AppLanguage
 ) {
+    var showMetaVerifiedModal by remember { mutableStateOf(false) }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -1792,9 +1891,93 @@ fun MenuScreen(
                         UserAvatar(photoUrl = currentUser.photoUrl, name = currentUser.displayName, size = 52)
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(text = currentUser.displayName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ink)
+                            ProfileName(
+                                name = currentUser.displayName,
+                                isVerified = currentUser.isVerified,
+                                isAdmin = currentUser.isAdmin,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Ink
+                            )
                             Text(text = MeskotStrings.get("viewProfile", currentLanguage), fontSize = 12.sp, color = GoldDeep, fontWeight = FontWeight.SemiBold)
                         }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
+            // Dedicated Meta Verified Shortcut in Menu
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showMetaVerifiedModal = true },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (currentUser.isVerified) Color(0xFFE7F3FF) else Color(0xFF1C1C1E)
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (currentUser.isVerified) Color(0xFF0866FF).copy(alpha = 0.3f) else Color(0xFF2C2C2E)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF0866FF)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = "Meta Verified",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Meta Verified",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (currentUser.isVerified) Color(0xFF0866FF) else Color.White
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(if (currentUser.isVerified) Color(0xFF10B981) else Color(0xFF0866FF))
+                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = if (currentUser.isVerified) "SUBSCRIBED" else "NEW",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                            Text(
+                                text = if (currentUser.isVerified) "Active blue badge & account protection" else "Subscribe for a verified badge, protection & support",
+                                fontSize = 12.sp,
+                                color = if (currentUser.isVerified) Color(0xFF475569) else Color(0xFF8E8E93)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                            contentDescription = null,
+                            tint = if (currentUser.isVerified) Color(0xFF0866FF) else Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
                     }
                 }
 
@@ -2002,6 +2185,19 @@ fun MenuScreen(
 
             Spacer(modifier = Modifier.height(80.dp))
         }
+    }
+
+    if (showMetaVerifiedModal) {
+        MetaVerifiedBottomSheetModal(
+            currentUser = currentUser,
+            onDismiss = { showMetaVerifiedModal = false },
+            onSubscribeConfirmed = { paymentMethod, planId ->
+                viewModel.subscribeMetaVerified(paymentMethod, planId)
+            },
+            onCancelSubscription = {
+                viewModel.cancelMetaVerified()
+            }
+        )
     }
 }
 

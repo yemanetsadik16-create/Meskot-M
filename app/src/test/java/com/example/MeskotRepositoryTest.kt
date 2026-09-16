@@ -32,7 +32,8 @@ class MeskotRepositoryTest {
         val testUser = com.example.data.User(
             uid = "test_user_1",
             displayName = "Test User",
-            email = "test@meskot.et"
+            email = "test@meskot.et",
+            creatorNetBalance = 500.0
         )
         repo.switchUser(testUser)
 
@@ -59,6 +60,42 @@ class MeskotRepositoryTest {
         repo.sendTip(created.id, 50.0)
         val tippedPost = repo.posts.value.find { it.id == created.id }
         assertEquals(50.0, tippedPost!!.tipTotal, 0.01)
+    }
+
+    @Test
+    fun testMetaVerifiedSubscription() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = MeskotRepository(context)
+        val testUser = com.example.data.User(
+            uid = "test_meta_user",
+            displayName = "Abebe Meta",
+            email = "abebe@meskot.et",
+            isVerified = false
+        )
+        repo.switchUser(testUser)
+        repo.createPost(text = "Testing verification before subscribe")
+        val postBefore = repo.posts.value.first { it.uid == "test_meta_user" }
+        assertEquals(false, postBefore.isAuthorVerified)
+
+        // Subscribe to Meta Verified
+        val success = repo.subscribeMetaVerified(
+            paymentMethod = "GOOGLE_PLAY",
+            planId = "meta_verified_monthly"
+        )
+        assertTrue(success)
+        assertEquals(true, repo.currentUser.value?.isVerified)
+        assertEquals(com.example.data.VerificationStatus.VERIFIED, repo.currentUser.value?.verificationStatus)
+
+        // Verify that author verification status propagated to post
+        val postAfter = repo.posts.value.first { it.uid == "test_meta_user" }
+        assertEquals(true, postAfter.isAuthorVerified)
+
+        // Cancel subscription
+        repo.cancelMetaVerified()
+        assertEquals(false, repo.currentUser.value?.isVerified)
+        assertEquals(com.example.data.VerificationStatus.NONE, repo.currentUser.value?.verificationStatus)
+        val postCancelled = repo.posts.value.first { it.uid == "test_meta_user" }
+        assertEquals(false, postCancelled.isAuthorVerified)
     }
 
     @Test

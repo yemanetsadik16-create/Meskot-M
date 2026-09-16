@@ -501,6 +501,62 @@ class MeskotRepository(
         FirebaseManager.saveUser(updated)
     }
 
+    // META VERIFIED METHODS
+    fun subscribeMetaVerified(
+        paymentMethod: String = "GOOGLE_PLAY",
+        planId: String = "meta_verified_monthly"
+    ): Boolean {
+        val curr = _currentUser.value ?: return false
+        val now = System.currentTimeMillis()
+        val expiresAt = now + 30L * 24 * 3600 * 1000
+        val updated = curr.copy(
+            isVerified = true,
+            verificationStatus = VerificationStatus.VERIFIED,
+            verificationSubscribedAt = now,
+            verificationExpiresAt = expiresAt,
+            verificationPlan = planId,
+            verificationPaymentMethod = paymentMethod
+        )
+        _currentUser.value = updated
+        _users.value = _users.value.map { if (it.uid == curr.uid) updated else it }
+
+        // Update user's existing posts so the blue checkmark appears dynamically
+        _posts.value = _posts.value.map { post ->
+            if (post.uid == curr.uid) post.copy(isAuthorVerified = true) else post
+        }
+
+        userRepository.setCurrentUser(updated)
+        repoScope.launch {
+            userRepository.saveUser(updated)
+        }
+        FirebaseManager.saveUser(updated)
+        return true
+    }
+
+    fun cancelMetaVerified(): Boolean {
+        val curr = _currentUser.value ?: return false
+        val updated = curr.copy(
+            isVerified = false,
+            verificationStatus = VerificationStatus.NONE,
+            verificationSubscribedAt = null,
+            verificationExpiresAt = null
+        )
+        _currentUser.value = updated
+        _users.value = _users.value.map { if (it.uid == curr.uid) updated else it }
+
+        // Update user's existing posts
+        _posts.value = _posts.value.map { post ->
+            if (post.uid == curr.uid) post.copy(isAuthorVerified = false) else post
+        }
+
+        userRepository.setCurrentUser(updated)
+        repoScope.launch {
+            userRepository.saveUser(updated)
+        }
+        FirebaseManager.saveUser(updated)
+        return true
+    }
+
     // POSTS METHODS
     fun createPost(text: String, mediaUrls: List<String> = emptyList(), bgColorIndex: Int = 0, visibility: String = "public") {
         val user = _currentUser.value ?: return
@@ -515,7 +571,8 @@ class MeskotRepository(
             visibility = visibility,
             reactions = emptyMap(),
             commentCount = 0,
-            createdAt = System.currentTimeMillis()
+            createdAt = System.currentTimeMillis(),
+            isAuthorVerified = user.isVerified
         )
         _posts.value = listOf(newPost) + _posts.value
         FirebaseManager.createPost(newPost)
@@ -579,7 +636,8 @@ class MeskotRepository(
                 mediaUrls = sourcePost.mediaUrls,
                 createdAt = sourcePost.createdAt
             ),
-            createdAt = System.currentTimeMillis()
+            createdAt = System.currentTimeMillis(),
+            isAuthorVerified = user.isVerified
         )
         _posts.value = listOf(newPost) + _posts.value
         if (sourcePost.uid != user.uid) {
@@ -1316,7 +1374,8 @@ class MeskotRepository(
             authorPhoto = user.photoUrl,
             text = text,
             parentId = parentId,
-            createdAt = System.currentTimeMillis()
+            createdAt = System.currentTimeMillis(),
+            isAuthorVerified = user.isVerified
         )
         val currentList = _comments.value[postId] ?: emptyList()
         _comments.value = _comments.value + (postId to (currentList + newComment))
@@ -1967,7 +2026,7 @@ class MeskotRepository(
         val realFollowers = if ((user?.followersCount ?: 0) == 8500) friendsCount else maxOf(user?.followersCount ?: 0, friendsCount)
         val realWatchHours = if ((user?.watchHours ?: 0.0) == 3420.0) 0.0 else (user?.watchHours ?: 0.0)
         val realPostsCount = if (user != null) {
-            val userPosts = _posts.value.count { it.authorId == user.uid }
+            val userPosts = _posts.value.count { it.uid == user.uid }
             if (userPosts > 0) userPosts else _posts.value.size.coerceAtLeast(3)
         } else 3
 

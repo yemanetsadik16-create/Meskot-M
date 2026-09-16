@@ -151,8 +151,9 @@ fun PostCard(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = post.authorName,
+                            ProfileName(
+                                name = post.authorName,
+                                isVerified = post.isAuthorVerified,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Ink
@@ -705,11 +706,13 @@ fun CommentItemRow(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = comment.authorName,
+                        ProfileName(
+                            name = comment.authorName,
+                            isVerified = comment.isAuthorVerified,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = Ink,
+                            badgeSize = 13.dp,
                             modifier = Modifier.clickable { onAuthorClick(comment.uid) }
                         )
 
