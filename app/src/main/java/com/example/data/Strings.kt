@@ -1,5 +1,10 @@
 package com.example.data
 
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+
 enum class AppLanguage(val code: String, val label: String) {
     EN("en", "EN"),
     AM("am", "አማ")
@@ -469,22 +474,124 @@ object MeskotStrings {
         }
     }
 
-    fun timeAgo(timestampMs: Long, lang: AppLanguage): String {
-        val diffSec = (System.currentTimeMillis() - timestampMs) / 1000
+    fun isOnline(lastSeenMs: Long, nowMs: Long = System.currentTimeMillis()): Boolean {
+        if (lastSeenMs <= 0L) return false
+        val diffMs = (nowMs - lastSeenMs).coerceAtLeast(0L)
+        return diffMs < 3 * 60 * 1000L
+    }
+
+    fun formatActiveStatus(lastSeenMs: Long, lang: AppLanguage, nowMs: Long = System.currentTimeMillis()): String {
+        if (lastSeenMs <= 0L) return if (lang == AppLanguage.AM) "ከመስመር ውጭ" else "Offline"
+        val diffMs = (nowMs - lastSeenMs).coerceAtLeast(0L)
+        val diffSec = diffMs / 1000
+        val diffMins = diffSec / 60
+        val diffHours = diffSec / 3600
+        val diffDays = diffSec / 86400
+
+        val calNow = Calendar.getInstance().apply { timeInMillis = nowMs }
+        val calThen = Calendar.getInstance().apply { timeInMillis = lastSeenMs }
+        val isToday = calNow.get(Calendar.YEAR) == calThen.get(Calendar.YEAR) &&
+                calNow.get(Calendar.DAY_OF_YEAR) == calThen.get(Calendar.DAY_OF_YEAR)
+        val isYesterday = calNow.get(Calendar.YEAR) == calThen.get(Calendar.YEAR) &&
+                calNow.get(Calendar.DAY_OF_YEAR) - calThen.get(Calendar.DAY_OF_YEAR) == 1
+
+        val timeFormatted = SimpleDateFormat("h:mm a", Locale.US).format(Date(lastSeenMs))
+
+        return when {
+            diffSec < 120 -> {
+                if (lang == AppLanguage.AM) "አሁን በመስመር ላይ" else "Active now"
+            }
+            diffMins < 60 -> {
+                val m = diffMins.coerceAtLeast(1)
+                if (lang == AppLanguage.AM) "ከ $m ደቂቃ በፊት ንቁ ነበር" else "Active ${m}m ago"
+            }
+            diffHours < 24 && isToday -> {
+                val h = diffHours.coerceAtLeast(1)
+                if (lang == AppLanguage.AM) "ከ $h ሰዓት በፊት ($timeFormatted) ንቁ ነበር" else "Active ${h}h ago ($timeFormatted)"
+            }
+            isYesterday -> {
+                if (lang == AppLanguage.AM) "ትናንት በ $timeFormatted ንቁ ነበር" else "Active yesterday at $timeFormatted"
+            }
+            diffDays < 7 -> {
+                val dayOfWeek = SimpleDateFormat("EEE", Locale.US).format(Date(lastSeenMs))
+                if (lang == AppLanguage.AM) "በ $dayOfWeek $timeFormatted ንቁ ነበር" else "Active $dayOfWeek at $timeFormatted"
+            }
+            else -> {
+                val dateStr = SimpleDateFormat("MMM d, yyyy", Locale.US).format(Date(lastSeenMs))
+                if (lang == AppLanguage.AM) "በ $dateStr ንቁ ነበር" else "Active $dateStr"
+            }
+        }
+    }
+
+    fun timeAgo(timestampMs: Long, lang: AppLanguage, nowMs: Long = System.currentTimeMillis()): String {
+        val diffMs = (nowMs - timestampMs).coerceAtLeast(0L)
+        val diffSec = diffMs / 1000
         return when {
             diffSec < 60 -> get("justNow", lang)
             diffSec < 3600 -> {
-                val mins = diffSec / 60
+                val mins = (diffSec / 60).coerceAtLeast(1)
                 if (lang == AppLanguage.AM) "$mins ደቂቃ በፊት" else "${mins}m ago"
             }
             diffSec < 86400 -> {
-                val hrs = diffSec / 3600
+                val hrs = (diffSec / 3600).coerceAtLeast(1)
                 if (lang == AppLanguage.AM) "$hrs ሰዓት በፊት" else "${hrs}h ago"
             }
             else -> {
-                val days = diffSec / 86400
+                val days = (diffSec / 86400).coerceAtLeast(1)
                 if (lang == AppLanguage.AM) "$days ቀን በፊት" else "${days}d ago"
             }
         }
+    }
+
+    fun formatPostTime(timestampMs: Long, lang: AppLanguage, nowMs: Long = System.currentTimeMillis()): String {
+        if (timestampMs <= 0L) return if (lang == AppLanguage.AM) "አሁን" else "Just now"
+        val diffMs = (nowMs - timestampMs).coerceAtLeast(0L)
+        val diffSec = diffMs / 1000
+        val diffMins = diffSec / 60
+        val diffHours = diffSec / 3600
+
+        val calNow = Calendar.getInstance().apply { timeInMillis = nowMs }
+        val calThen = Calendar.getInstance().apply { timeInMillis = timestampMs }
+        val isToday = calNow.get(Calendar.YEAR) == calThen.get(Calendar.YEAR) &&
+                calNow.get(Calendar.DAY_OF_YEAR) == calThen.get(Calendar.DAY_OF_YEAR)
+        val isYesterday = calNow.get(Calendar.YEAR) == calThen.get(Calendar.YEAR) &&
+                calNow.get(Calendar.DAY_OF_YEAR) - calThen.get(Calendar.DAY_OF_YEAR) == 1
+
+        val timeStr = SimpleDateFormat("h:mm a", Locale.US).format(Date(timestampMs))
+
+        return when {
+            diffSec < 60 -> if (lang == AppLanguage.AM) "አሁን · Just now" else "Just now"
+            diffMins < 60 -> {
+                val rel = if (lang == AppLanguage.AM) "${diffMins} ደቂቃ በፊት" else "${diffMins}m ago"
+                "$rel · $timeStr"
+            }
+            diffHours < 24 && isToday -> {
+                val rel = if (lang == AppLanguage.AM) "${diffHours} ሰዓት በፊት" else "${diffHours}h ago"
+                "$rel · $timeStr"
+            }
+            isYesterday -> {
+                if (lang == AppLanguage.AM) "ትናንት በ $timeStr" else "Yesterday at $timeStr"
+            }
+            calNow.get(Calendar.YEAR) == calThen.get(Calendar.YEAR) -> {
+                val dateStr = SimpleDateFormat("MMM d", Locale.US).format(Date(timestampMs))
+                "$dateStr at $timeStr"
+            }
+            else -> {
+                val dateStr = SimpleDateFormat("MMM d, yyyy", Locale.US).format(Date(timestampMs))
+                "$dateStr at $timeStr"
+            }
+        }
+    }
+
+    fun formatNotificationTime(timestampMs: Long, lang: AppLanguage, nowMs: Long = System.currentTimeMillis()): String {
+        return formatPostTime(timestampMs, lang, nowMs)
+    }
+
+    fun formatClockTime(timestampMs: Long): String {
+        return SimpleDateFormat("h:mm a", Locale.US).format(Date(timestampMs))
+    }
+
+    fun formatFullDateTime(timestampMs: Long): String {
+        return SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.US).format(Date(timestampMs))
     }
 }

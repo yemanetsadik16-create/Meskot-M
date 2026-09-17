@@ -23,6 +23,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,6 +58,8 @@ fun NotificationsScreen(
     notifications: List<NotificationItem>,
     currentLanguage: AppLanguage
 ) {
+    val nowMs by viewModel.tickerTimeMs.collectAsStateWithLifecycle()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -100,6 +104,7 @@ fun NotificationsScreen(
                     NotificationRow(
                         notif = notif,
                         currentLanguage = currentLanguage,
+                        nowMs = nowMs,
                         onClick = {
                             when (notif.type) {
                                 "friend_req" -> viewModel.navigateTo(ScreenTab.FRIENDS)
@@ -122,6 +127,7 @@ fun NotificationsScreen(
 fun NotificationRow(
     notif: NotificationItem,
     currentLanguage: AppLanguage,
+    nowMs: Long = System.currentTimeMillis(),
     onClick: () -> Unit
 ) {
     Card(
@@ -178,7 +184,7 @@ fun NotificationRow(
                     fontWeight = if (notif.isRead) FontWeight.Normal else FontWeight.SemiBold
                 )
                 Text(
-                    text = MeskotStrings.timeAgo(notif.createdAt, currentLanguage),
+                    text = MeskotStrings.formatNotificationTime(notif.createdAt, currentLanguage, nowMs),
                     fontSize = 11.sp,
                     color = MutedText,
                     modifier = Modifier.padding(top = 2.dp)

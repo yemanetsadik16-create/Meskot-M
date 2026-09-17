@@ -107,6 +107,7 @@ fun MeskotApp(viewModel: MeskotViewModel) {
     val albums by viewModel.albums.collectAsState()
     val notifications by viewModel.notifications.collectAsState()
     val savedPostIds by viewModel.savedPostIds.collectAsState()
+    val subscribedPostIds by viewModel.subscribedPostIds.collectAsState()
     val feedPosts by viewModel.feedPosts.collectAsState()
 
     val unreadNotifsCount by viewModel.unreadNotifsCount.collectAsState()
@@ -399,6 +400,7 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         isAuthor = post.uid == currentUser?.uid,
                         isAdmin = currentUser?.isAdmin == true,
                         isSaved = savedPostIds.contains(post.id),
+                        isNotifSubscribed = subscribedPostIds.contains(post.id),
                         currentLanguage = currentLanguage,
                         onDismiss = { viewModel.closePostMenu() },
                         onBoostPost = { viewModel.openBoostModal(post) },
@@ -410,7 +412,7 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         onReport = { viewModel.reportPost(post.id) },
                         onInterested = { viewModel.showMessage("We'll tune your feed for more posts like this.") },
                         onNotInterested = { viewModel.showMessage("We'll show fewer posts like this.") },
-                        onToggleNotifs = { viewModel.showMessage("Notifications updated for this post.") },
+                        onToggleNotifs = { viewModel.togglePostNotifications(post.id) },
                         onCopyText = {
                             clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(post.text))
                             viewModel.showMessage(com.example.data.MeskotStrings.get("textCopied", currentLanguage))

@@ -7,6 +7,7 @@ import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.UserProfileChangeRequest
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.ListenerRegistration
@@ -260,6 +261,74 @@ object FirebaseManager {
         val db = firestore ?: return
         db.collection(COL_POSTS).document(postId).delete()
             .addOnFailureListener { Log.e(TAG, "Failed to delete post: ${it.message}") }
+    }
+
+    fun updatePostBoost(
+        postId: String,
+        isBoosted: Boolean,
+        boostMultiplier: Double,
+        boostDailyBudget: Double,
+        boostDaysRemaining: Int,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        val db = firestore ?: run { onComplete(false); return }
+        db.collection(COL_POSTS).document(postId).update(
+            mapOf(
+                "isBoosted" to isBoosted,
+                "boostMultiplier" to boostMultiplier,
+                "boostDailyBudget" to boostDailyBudget,
+                "boostDaysRemaining" to boostDaysRemaining
+            )
+        ).addOnSuccessListener { onComplete(true) }
+         .addOnFailureListener { Log.e(TAG, "Failed to update boost on post: ${it.message}"); onComplete(false) }
+    }
+
+    fun incrementPostShareCount(postId: String) {
+        val db = firestore ?: return
+        db.collection(COL_POSTS).document(postId).update("sharesCount", FieldValue.increment(1))
+            .addOnFailureListener { Log.e(TAG, "Failed to increment sharesCount: ${it.message}") }
+    }
+
+    fun toggleSavePost(userId: String, postId: String, isSaved: Boolean, onComplete: (Boolean) -> Unit = {}) {
+        val db = firestore ?: run { onComplete(false); return }
+        val updateOp = if (isSaved) FieldValue.arrayUnion(postId) else FieldValue.arrayRemove(postId)
+        db.collection(COL_USERS).document(userId).set(
+            mapOf("savedPostIds" to updateOp),
+            SetOptions.merge()
+        ).addOnSuccessListener { onComplete(true) }
+         .addOnFailureListener { Log.e(TAG, "Failed to update savedPostIds: ${it.message}"); onComplete(false) }
+    }
+
+    fun togglePostNotifications(userId: String, postId: String, isSubscribed: Boolean, onComplete: (Boolean) -> Unit = {}) {
+        val db = firestore ?: run { onComplete(false); return }
+        val updateOp = if (isSubscribed) FieldValue.arrayUnion(postId) else FieldValue.arrayRemove(postId)
+        db.collection(COL_USERS).document(userId).set(
+            mapOf("subscribedPostIds" to updateOp),
+            SetOptions.merge()
+        ).addOnSuccessListener { onComplete(true) }
+         .addOnFailureListener { Log.e(TAG, "Failed to update subscribedPostIds: ${it.message}"); onComplete(false) }
+    }
+
+    fun saveBoostCampaign(campaign: BoostCampaign, onComplete: (Boolean) -> Unit = {}) {
+        val db = firestore ?: run { onComplete(false); return }
+        val map = mapOf(
+            "id" to campaign.id,
+            "postId" to campaign.postId,
+            "creatorUid" to campaign.creatorUid,
+            "dailyBudgetEtb" to campaign.dailyBudgetEtb,
+            "durationDays" to campaign.durationDays,
+            "targetLocations" to campaign.targetLocations,
+            "minAge" to campaign.minAge,
+            "maxAge" to campaign.maxAge,
+            "interests" to campaign.interests,
+            "totalBudgetEtb" to campaign.totalBudgetEtb,
+            "estimatedReachPerDay" to campaign.estimatedReachPerDay,
+            "boostMultiplier" to campaign.boostMultiplier,
+            "createdAt" to campaign.createdAt
+        )
+        db.collection("boost_campaigns").document(campaign.id).set(map, SetOptions.merge())
+            .addOnSuccessListener { onComplete(true) }
+            .addOnFailureListener { Log.e(TAG, "Failed to save boost campaign: ${it.message}"); onComplete(false) }
     }
 
     // FIRESTORE: COMMENTS
@@ -600,6 +669,7 @@ object FirebaseManager {
     private fun postToMap(p: Post): Map<String, Any?> = mapOf(
         "id" to p.id,
         "uid" to p.uid,
+        "authorId" to p.uid,
         "authorName" to p.authorName,
         "authorPhoto" to p.authorPhoto,
         "text" to p.text,
@@ -608,33 +678,85 @@ object FirebaseManager {
         "visibility" to p.visibility,
         "reactions" to p.reactions,
         "commentCount" to p.commentCount,
+        "commentsCount" to p.commentCount,
         "tipTotal" to p.tipTotal,
+        "starsTotal" to p.starsTotal,
+        "isBoosted" to p.isBoosted,
+        "boostMultiplier" to p.boostMultiplier,
+        "boostDailyBudget" to p.boostDailyBudget,
+        "boostDaysRemaining" to p.boostDaysRemaining,
+        "sharesCount" to p.sharesCount,
+        "sharedPost" to p.sharedPost?.let { sp ->
+            mapOf(
+                "postId" to sp.postId,
+                "authorName" to sp.authorName,
+                "authorPhoto" to sp.authorPhoto,
+                "text" to sp.text,
+                "mediaUrls" to sp.mediaUrls,
+                "createdAt" to sp.createdAt
+            )
+        },
         "createdAt" to p.createdAt,
-        "editedAt" to p.editedAt
+        "editedAt" to p.editedAt,
+        "isAuthorVerified" to p.isAuthorVerified
     )
 
-    private fun parsePost(id: String, d: Map<String, Any?>): Post = Post(
-        id = id,
-        uid = d["uid"] as? String ?: "",
-        authorName = d["authorName"] as? String ?: "Anonymous",
-        authorPhoto = d["authorPhoto"] as? String ?: "",
-        text = d["text"] as? String ?: "",
-        mediaUrls = (d["mediaUrls"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
-        bgColorIndex = (d["bgColorIndex"] as? Number)?.toInt() ?: 0,
-        visibility = d["visibility"] as? String ?: "public",
-        reactions = (d["reactions"] as? Map<*, *>)?.mapNotNull { (k, v) ->
-            if (k is String && v is String) k to v else null
-        }?.toMap() ?: emptyMap(),
-        commentCount = (d["commentCount"] as? Number)?.toInt() ?: 0,
-        tipTotal = (d["tipTotal"] as? Number)?.toDouble() ?: 0.0,
-        createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-        editedAt = (d["editedAt"] as? Number)?.toLong()
-    )
+    private fun parsePost(id: String, d: Map<String, Any?>): Post {
+        val sharedPostMap = d["sharedPost"] as? Map<*, *>
+        val parsedSharedPost = sharedPostMap?.let { sm ->
+            SharedPostPreview(
+                postId = sm["postId"] as? String ?: "",
+                authorName = sm["authorName"] as? String ?: "",
+                authorPhoto = sm["authorPhoto"] as? String ?: "",
+                text = sm["text"] as? String ?: "",
+                mediaUrls = (sm["mediaUrls"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+                createdAt = (sm["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
+            )
+        }
+        val createdVal = d["createdAt"]
+        val createdLong = when (createdVal) {
+            is Number -> createdVal.toLong()
+            is com.google.firebase.Timestamp -> createdVal.toDate().time
+            else -> System.currentTimeMillis()
+        }
+        val editedVal = d["editedAt"]
+        val editedLong = when (editedVal) {
+            is Number -> editedVal.toLong()
+            is com.google.firebase.Timestamp -> editedVal.toDate().time
+            else -> null
+        }
+        return Post(
+            id = id,
+            uid = d["authorId"] as? String ?: d["uid"] as? String ?: "",
+            authorName = d["authorName"] as? String ?: "Anonymous",
+            authorPhoto = d["authorPhoto"] as? String ?: "",
+            text = d["text"] as? String ?: "",
+            mediaUrls = (d["mediaUrls"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+            bgColorIndex = (d["bgColorIndex"] as? Number)?.toInt() ?: 0,
+            visibility = d["visibility"] as? String ?: "public",
+            reactions = (d["reactions"] as? Map<*, *>)?.mapNotNull { (k, v) ->
+                if (k is String && v is String) k to v else null
+            }?.toMap() ?: emptyMap(),
+            commentCount = (d["commentCount"] as? Number)?.toInt() ?: (d["commentsCount"] as? Number)?.toInt() ?: 0,
+            tipTotal = (d["tipTotal"] as? Number)?.toDouble() ?: 0.0,
+            starsTotal = (d["starsTotal"] as? Number)?.toInt() ?: 0,
+            isBoosted = d["isBoosted"] as? Boolean ?: false,
+            boostMultiplier = (d["boostMultiplier"] as? Number)?.toDouble() ?: 1.0,
+            boostDailyBudget = (d["boostDailyBudget"] as? Number)?.toDouble() ?: 0.0,
+            boostDaysRemaining = (d["boostDaysRemaining"] as? Number)?.toInt() ?: 0,
+            sharesCount = (d["sharesCount"] as? Number)?.toInt() ?: 0,
+            sharedPost = parsedSharedPost,
+            createdAt = createdLong,
+            editedAt = editedLong,
+            isAuthorVerified = d["isAuthorVerified"] as? Boolean ?: false
+        )
+    }
 
     private fun commentToMap(c: Comment): Map<String, Any?> = mapOf(
         "id" to c.id,
         "postId" to c.postId,
         "uid" to c.uid,
+        "authorId" to c.uid,
         "authorName" to c.authorName,
         "authorPhoto" to c.authorPhoto,
         "text" to c.text,
@@ -647,7 +769,7 @@ object FirebaseManager {
     private fun parseComment(id: String, d: Map<String, Any?>): Comment = Comment(
         id = id,
         postId = d["postId"] as? String ?: "",
-        uid = d["uid"] as? String ?: "",
+        uid = d["authorId"] as? String ?: d["uid"] as? String ?: "",
         authorName = d["authorName"] as? String ?: "Anonymous",
         authorPhoto = d["authorPhoto"] as? String ?: "",
         text = d["text"] as? String ?: "",
@@ -689,28 +811,18 @@ object FirebaseManager {
         "watchHours" to u.watchHours,
         "kycVerified" to u.kycVerified,
         "policyStrikes" to u.policyStrikes,
-        "payoutDestinationAccount" to u.payoutDestinationAccount
+        "payoutDestinationAccount" to u.payoutDestinationAccount,
+        "isVerified" to u.isVerified,
+        "savedPostIds" to u.savedPostIds,
+        "subscribedPostIds" to u.subscribedPostIds
     )
 
-    private fun sanitizeMock(str: String?, mockVal: String): String {
-        val s = str?.trim() ?: ""
-        return if (s.equals(mockVal.trim(), ignoreCase = true)) "" else s
-    }
-
     fun parseUser(uid: String, d: Map<String, Any?>): User {
-        val rawFollowers = (d["followersCount"] as? Number)?.toInt() ?: 0
-        val rawFollowing = (d["followingCount"] as? Number)?.toInt() ?: 0
-        val rawWatchHours = (d["watchHours"] as? Number)?.toDouble() ?: 0.0
-
-        val safeFollowers = if (rawFollowers == 8500) 0 else rawFollowers
-        val safeFollowing = if (rawFollowing == 3700 || rawFollowing == 370) 0 else rawFollowing
-        val safeWatchHours = if (rawWatchHours == 3420.0) 0.0 else rawWatchHours
-
         return User(
             uid = uid,
             displayName = d["displayName"] as? String ?: "User",
             email = d["email"] as? String ?: "",
-            bio = sanitizeMock(d["bio"] as? String, "Engineer is a problem solver"),
+            bio = d["bio"] as? String ?: "",
             photoUrl = d["photoUrl"] as? String ?: "",
             coverPhotoUrl = d["coverPhotoUrl"] as? String ?: "",
             isAdmin = d["isAdmin"] as? Boolean ?: false,
@@ -718,7 +830,7 @@ object FirebaseManager {
             lastSeen = (d["lastSeen"] as? Number)?.toLong() ?: System.currentTimeMillis(),
             createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
             gender = d["gender"] as? String ?: "",
-            birthDate = sanitizeMock(d["birthDate"] as? String, "May 11, 1994"),
+            birthDate = d["birthDate"] as? String ?: "",
             phoneNumber = d["phoneNumber"] as? String ?: "",
             starBalance = (d["starBalance"] as? Number)?.toInt() ?: 0,
             creatorGrossEarnings = (d["creatorGrossEarnings"] as? Number)?.toDouble() ?: 0.0,
@@ -726,19 +838,22 @@ object FirebaseManager {
             vipMemberships = (d["vipMemberships"] as? Map<*, *>)?.mapNotNull { (k, v) ->
                 if (k is String && v is String) k to v else null
             }?.toMap() ?: emptyMap(),
-            followersCount = safeFollowers,
-            followingCount = safeFollowing,
-            profession = sanitizeMock(d["profession"] as? String, "Public figure"),
-            location = sanitizeMock(d["location"] as? String, "Calgary, Alberta"),
-            hometown = sanitizeMock(d["hometown"] as? String, "Calgary, Alberta"),
-            workplace = sanitizeMock(d["workplace"] as? String, "Adigrat university _Engineering Sciences"),
-            workRole = sanitizeMock(d["workRole"] as? String, "Civil Engineering"),
-            education = sanitizeMock(d["education"] as? String, "Adigrat University"),
-            educationClass = sanitizeMock(d["educationClass"] as? String, "Class of 2018"),
-            watchHours = safeWatchHours,
+            followersCount = (d["followersCount"] as? Number)?.toInt() ?: 0,
+            followingCount = (d["followingCount"] as? Number)?.toInt() ?: 0,
+            profession = d["profession"] as? String ?: "",
+            location = d["location"] as? String ?: "",
+            hometown = d["hometown"] as? String ?: "",
+            workplace = d["workplace"] as? String ?: "",
+            workRole = d["workRole"] as? String ?: "",
+            education = d["education"] as? String ?: "",
+            educationClass = d["educationClass"] as? String ?: "",
+            watchHours = (d["watchHours"] as? Number)?.toDouble() ?: 0.0,
             kycVerified = d["kycVerified"] as? Boolean ?: false,
             policyStrikes = (d["policyStrikes"] as? Number)?.toInt() ?: 0,
-            payoutDestinationAccount = d["payoutDestinationAccount"] as? String ?: ""
+            payoutDestinationAccount = d["payoutDestinationAccount"] as? String ?: "",
+            isVerified = d["isVerified"] as? Boolean ?: false,
+            savedPostIds = (d["savedPostIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+            subscribedPostIds = (d["subscribedPostIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         )
     }
 
@@ -746,9 +861,15 @@ object FirebaseManager {
         "id" to m.id,
         "convoId" to m.convoId,
         "fromUid" to m.fromUid,
+        "senderId" to m.fromUid,
         "toUid" to m.toUid,
+        "recipientId" to m.toUid,
         "users" to listOf(m.fromUid, m.toUid).filter { it.isNotBlank() },
         "text" to m.text,
+        "mediaUrl" to m.mediaUrl,
+        "mediaType" to m.mediaType,
+        "fileName" to m.fileName,
+        "fileSize" to m.fileSize,
         "isCallLog" to m.isCallLog,
         "callType" to m.callType,
         "callStatus" to m.callStatus,
@@ -760,9 +881,13 @@ object FirebaseManager {
     private fun parseChatMessage(id: String, d: Map<String, Any?>): ChatMessage = ChatMessage(
         id = id,
         convoId = d["convoId"] as? String ?: "",
-        fromUid = d["fromUid"] as? String ?: "",
-        toUid = d["toUid"] as? String ?: "",
+        fromUid = d["senderId"] as? String ?: d["fromUid"] as? String ?: "",
+        toUid = d["recipientId"] as? String ?: d["toUid"] as? String ?: "",
         text = d["text"] as? String ?: "",
+        mediaUrl = d["mediaUrl"] as? String,
+        mediaType = d["mediaType"] as? String,
+        fileName = d["fileName"] as? String,
+        fileSize = d["fileSize"] as? String,
         isCallLog = d["isCallLog"] as? Boolean ?: false,
         callType = d["callType"] as? String ?: "audio",
         callStatus = d["callStatus"] as? String ?: "completed",
@@ -797,6 +922,7 @@ object FirebaseManager {
         "fromName" to n.fromName,
         "fromPhoto" to n.fromPhoto,
         "toUid" to n.toUid,
+        "recipientId" to n.toUid,
         "text" to n.text,
         "type" to n.type,
         "targetId" to n.targetId,
@@ -811,7 +937,7 @@ object FirebaseManager {
         fromUid = d["fromUid"] as? String ?: "",
         fromName = d["fromName"] as? String ?: "User",
         fromPhoto = d["fromPhoto"] as? String ?: "",
-        toUid = d["toUid"] as? String ?: "",
+        toUid = d["recipientId"] as? String ?: d["toUid"] as? String ?: "",
         text = d["text"] as? String ?: "",
         type = d["type"] as? String ?: "interaction",
         targetId = d["targetId"] as? String,

@@ -26,6 +26,7 @@ import com.example.data.ProgramStatus
 import com.example.util.CallAudioManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -83,7 +84,27 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     val notifications: StateFlow<List<NotificationItem>> = repository.notifications
     val conversations: StateFlow<Map<String, List<ChatMessage>>> = repository.conversations
     val savedPostIds: StateFlow<Set<String>> = repository.savedPostIds
+    val subscribedPostIds: StateFlow<Set<String>> = repository.subscribedPostIds
     val incomingCall: StateFlow<CallSession?> = repository.incomingCall
+
+    // Real-time ticking state & Presence Heartbeat
+    private val _tickerTimeMs = MutableStateFlow(System.currentTimeMillis())
+    val tickerTimeMs: StateFlow<Long> = _tickerTimeMs.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            while (isActive) {
+                delay(30_000L) // tick every 30 seconds for live UI relative times
+                _tickerTimeMs.value = System.currentTimeMillis()
+                repository.updateCurrentUserLastSeen()
+            }
+        }
+    }
+
+    fun refreshPresence() {
+        _tickerTimeMs.value = System.currentTimeMillis()
+        repository.updateCurrentUserLastSeen()
+    }
 
     // Monetization & Ads
     val adCampaigns: StateFlow<List<AdCampaign>> = repository.adCampaigns
@@ -381,6 +402,11 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         showMessage(if (wasSaved) "Removed from Saved" else "Saved to your bookmarks")
     }
 
+    fun togglePostNotifications(postId: String) {
+        val isNowSubscribed = repository.togglePostNotifications(postId)
+        showMessage(if (isNowSubscribed) "🔔 Notifications turned on for this post" else "🔕 Notifications turned off for this post")
+    }
+
     fun hidePost(postId: String) {
         repository.hidePost(postId)
         showMessage("Post hidden")
@@ -504,7 +530,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         showMessage("⭐ Sent $count Stars ($giftName) to creator!")
     }
 
-    // Meta Verified Subscription
+    // Meskot Verified Subscription
     fun subscribeMetaVerified(paymentMethod: String = "GOOGLE_PLAY", planId: String = "meta_verified_monthly") {
         val success = repository.subscribeMetaVerified(paymentMethod, planId)
         if (success) {
@@ -514,16 +540,16 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
                 "CHAPA" -> "Chapa Gateway"
                 else -> paymentMethod
             }
-            showMessage("🎉 Welcome to Meta Verified! Blue badge activated via $providerName.")
+            showMessage("🎉 Welcome to Meskot Verified! Golden badge activated via $providerName.")
         } else {
-            showMessage("Failed to activate Meta Verified.")
+            showMessage("Failed to activate Meskot Verified.")
         }
     }
 
     fun cancelMetaVerified() {
         val success = repository.cancelMetaVerified()
         if (success) {
-            showMessage("Meta Verified subscription cancelled.")
+            showMessage("Meskot Verified subscription cancelled.")
         }
     }
 
@@ -767,10 +793,29 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         return repository.getMessages(otherUid)
     }
 
-    fun sendMessage(otherUid: String, text: String) {
-        if (text.isNotBlank()) {
-            repository.sendMessage(otherUid, text.trim())
+    fun sendMessage(
+        otherUid: String,
+        text: String,
+        mediaUrl: String? = null,
+        mediaType: String? = null,
+        fileName: String? = null,
+        fileSize: String? = null
+    ) {
+        if (text.isNotBlank() || !mediaUrl.isNullOrBlank() || mediaType != null) {
+            repository.sendMessage(
+                otherUid = otherUid,
+                text = text.trim(),
+                mediaUrl = mediaUrl,
+                mediaType = mediaType,
+                fileName = fileName,
+                fileSize = fileSize
+            )
         }
+    }
+
+    fun clearConversation(otherUid: String) {
+        repository.clearConversation(otherUid)
+        showMessage("Conversation cleared")
     }
 
     fun deleteMessage(otherUid: String, msgId: String) {

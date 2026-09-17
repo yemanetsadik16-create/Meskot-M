@@ -304,26 +304,12 @@ class FirestoreUserRepository(
      * Parses a raw Firestore document snapshot map into a strongly-typed [User] object.
      * Extracts all 29 fields without fallback to mock profiles.
      */
-    private fun sanitizeMock(str: String?, mockVal: String): String {
-        val s = str?.trim() ?: ""
-        return if (s.equals(mockVal.trim(), ignoreCase = true)) "" else s
-    }
-
     fun parseUserDocument(uid: String, d: Map<String, Any?>): User {
-        val rawFollowers = (d["followersCount"] as? Number)?.toInt() ?: 0
-        val rawFollowing = (d["followingCount"] as? Number)?.toInt() ?: 0
-        val rawWatchHours = (d["watchHours"] as? Number)?.toDouble() ?: 0.0
-
-        // Real Meskot counts: discard legacy mock seeds (8500, 3700, 3420) and use real metrics
-        val safeFollowers = if (rawFollowers == 8500) 0 else rawFollowers
-        val safeFollowing = if (rawFollowing == 3700 || rawFollowing == 370) 0 else rawFollowing
-        val safeWatchHours = if (rawWatchHours == 3420.0) 0.0 else rawWatchHours
-
         return User(
             uid = uid,
             displayName = d["displayName"] as? String ?: "User",
             email = d["email"] as? String ?: "",
-            bio = sanitizeMock(d["bio"] as? String, "Engineer is a problem solver"),
+            bio = d["bio"] as? String ?: "",
             photoUrl = d["photoUrl"] as? String ?: "",
             coverPhotoUrl = d["coverPhotoUrl"] as? String ?: "",
             isAdmin = d["isAdmin"] as? Boolean ?: false,
@@ -331,7 +317,7 @@ class FirestoreUserRepository(
             lastSeen = (d["lastSeen"] as? Number)?.toLong() ?: System.currentTimeMillis(),
             createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
             gender = d["gender"] as? String ?: "",
-            birthDate = sanitizeMock(d["birthDate"] as? String, "May 11, 1994"),
+            birthDate = d["birthDate"] as? String ?: "",
             phoneNumber = d["phoneNumber"] as? String ?: "",
             starBalance = (d["starBalance"] as? Number)?.toInt() ?: 0,
             creatorGrossEarnings = (d["creatorGrossEarnings"] as? Number)?.toDouble() ?: 0.0,
@@ -339,24 +325,27 @@ class FirestoreUserRepository(
             vipMemberships = (d["vipMemberships"] as? Map<*, *>)?.mapNotNull { (k, v) ->
                 if (k is String && v is String) k to v else null
             }?.toMap() ?: emptyMap(),
-            followersCount = safeFollowers,
-            followingCount = safeFollowing,
-            profession = sanitizeMock(d["profession"] as? String, "Public figure"),
-            location = sanitizeMock(d["location"] as? String, "Calgary, Alberta"),
-            hometown = sanitizeMock(d["hometown"] as? String, "Calgary, Alberta"),
-            workplace = sanitizeMock(d["workplace"] as? String, "Adigrat university _Engineering Sciences"),
-            workRole = sanitizeMock(d["workRole"] as? String, "Civil Engineering"),
-            education = sanitizeMock(d["education"] as? String, "Adigrat University"),
-            educationClass = sanitizeMock(d["educationClass"] as? String, "Class of 2018"),
-            watchHours = safeWatchHours,
+            followersCount = (d["followersCount"] as? Number)?.toInt() ?: 0,
+            followingCount = (d["followingCount"] as? Number)?.toInt() ?: 0,
+            profession = d["profession"] as? String ?: "",
+            location = d["location"] as? String ?: "",
+            hometown = d["hometown"] as? String ?: "",
+            workplace = d["workplace"] as? String ?: "",
+            workRole = d["workRole"] as? String ?: "",
+            education = d["education"] as? String ?: "",
+            educationClass = d["educationClass"] as? String ?: "",
+            watchHours = (d["watchHours"] as? Number)?.toDouble() ?: 0.0,
             kycVerified = d["kycVerified"] as? Boolean ?: false,
             policyStrikes = (d["policyStrikes"] as? Number)?.toInt() ?: 0,
-            payoutDestinationAccount = d["payoutDestinationAccount"] as? String ?: ""
+            payoutDestinationAccount = d["payoutDestinationAccount"] as? String ?: "",
+            isVerified = d["isVerified"] as? Boolean ?: false,
+            savedPostIds = (d["savedPostIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+            subscribedPostIds = (d["subscribedPostIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         )
     }
 
     /**
-     * Serializes all 29 fields of a [User] into a key-value Map suitable for Firestore persistence.
+     * Serializes all fields of a [User] into a key-value Map suitable for Firestore persistence.
      */
     fun userToMap(u: User): Map<String, Any?> = mapOf(
         "uid" to u.uid,
@@ -388,7 +377,10 @@ class FirestoreUserRepository(
         "watchHours" to u.watchHours,
         "kycVerified" to u.kycVerified,
         "policyStrikes" to u.policyStrikes,
-        "payoutDestinationAccount" to u.payoutDestinationAccount
+        "payoutDestinationAccount" to u.payoutDestinationAccount,
+        "isVerified" to u.isVerified,
+        "savedPostIds" to u.savedPostIds,
+        "subscribedPostIds" to u.subscribedPostIds
     )
 
     private suspend fun <T> Task<T>.awaitTask(): T =

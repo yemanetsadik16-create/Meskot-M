@@ -42,16 +42,25 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.data.MeskotStrings
 import com.example.data.User
 import com.example.data.VerificationStatus
+import com.example.ui.theme.CardBg
+import com.example.ui.theme.Gold
+import com.example.ui.theme.GoldBorder
+import com.example.ui.theme.GoldDeep
+import com.example.ui.theme.GoldLight
+import com.example.ui.theme.GoldSurface
+import com.example.ui.theme.Ink
+import com.example.ui.theme.InkDark
+import com.example.ui.theme.MutedText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-// Official Meta Verified Blue Palette
-val MetaBlue = Color(0xFF0866FF)
-val MetaBlueDark = Color(0xFF0053D6)
-val MetaDarkBg = Color(0xFF1C1C1E)
-val MetaDarkCard = Color(0xFF2C2C2E)
-val MetaDarkSecondary = Color(0xFF8E8E93)
-val MetaDarkBorder = Color(0xFF3A3A3C)
+// Meskot Brand Palette for Verification
+val MetaBlue = Gold // Gold brand color for verified badges
+val MetaBlueDark = GoldDeep // Deep amber gold
+val MetaDarkBg = Color(0xFF141F19) // Meskot InkDark backdrop
+val MetaDarkCard = Color(0xFF1E2D25) // Meskot card background
+val MetaDarkSecondary = Color(0xFF8E9E94) // Meskot muted text
+val MetaDarkBorder = Color(0xFF2E4136) // Meskot dark border
 
 // -----------------------------------------------------------------------------
 // 1. DYNAMIC BADGE DISPLAY: VerifiedBadge
@@ -60,7 +69,7 @@ val MetaDarkBorder = Color(0xFF3A3A3C)
 fun VerifiedBadge(
     modifier: Modifier = Modifier,
     size: Dp = 16.dp,
-    tint: Color = MetaBlue,
+    tint: Color = Gold,
     onClick: (() -> Unit)? = null
 ) {
     var showExplanation by remember { mutableStateOf(false) }
@@ -76,7 +85,7 @@ fun VerifiedBadge(
     ) {
         Icon(
             imageVector = Icons.Default.Verified,
-            contentDescription = "Meta Verified Badge",
+            contentDescription = "Meskot Verified Badge",
             tint = tint,
             modifier = Modifier.fillMaxSize()
         )
@@ -87,35 +96,37 @@ fun VerifiedBadge(
             onDismissRequest = { showExplanation = false },
             confirmButton = {
                 TextButton(onClick = { showExplanation = false }) {
-                    Text("OK", color = MetaBlue, fontWeight = FontWeight.Bold)
+                    Text("OK", color = GoldDeep, fontWeight = FontWeight.Bold)
                 }
             },
             icon = {
                 Icon(
                     imageVector = Icons.Default.Verified,
                     contentDescription = null,
-                    tint = MetaBlue,
+                    tint = Gold,
                     modifier = Modifier.size(36.dp)
                 )
             },
             title = {
                 Text(
-                    text = "Meta Verified",
+                    text = "Meskot Verified",
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.sp,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    color = Ink
                 )
             },
             text = {
                 Text(
-                    text = "This account has subscribed to Meta Verified and confirmed their authenticity with government ID verification and proactive protection.",
+                    text = "This account has verified their authenticity on Meskot with official identity verification and proactive account protection.",
                     fontSize = 13.sp,
-                    color = Color.Gray,
+                    color = MutedText,
                     textAlign = TextAlign.Center,
                     lineHeight = 18.sp
                 )
             },
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(16.dp),
+            containerColor = CardBg
         )
     }
 }
@@ -322,7 +333,7 @@ fun MetaVerifiedBottomSheetModal(
                             )
                         }
 
-                        // Meta Verified Top Pill
+                        // Meskot Verified Top Pill
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
@@ -332,10 +343,10 @@ fun MetaVerifiedBottomSheetModal(
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "SUBSCRIPTION",
+                                text = "MESKOT VERIFIED",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MetaBlue,
+                                color = GoldLight,
                                 letterSpacing = 1.sp
                             )
                         }
@@ -350,25 +361,26 @@ fun MetaVerifiedBottomSheetModal(
                             .verticalScroll(rememberScrollState()),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // HERO SECTION: Blue checkmark badge hero icon with glowing ring
+                        // HERO SECTION: Golden checkmark badge hero icon with glowing ring
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
                                 .size(80.dp)
-                                .shadow(24.dp, CircleShape, spotColor = MetaBlue)
+                                .shadow(24.dp, CircleShape, spotColor = Gold)
                                 .clip(CircleShape)
                                 .background(
                                     Brush.radialGradient(
                                         colors = listOf(
-                                            MetaBlue,
-                                            MetaBlueDark
+                                            GoldLight,
+                                            Gold,
+                                            GoldDeep
                                         )
                                     )
                                 )
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Verified,
-                                contentDescription = "Meta Verified Hero",
+                                contentDescription = "Meskot Verified Hero",
                                 tint = Color.White,
                                 modifier = Modifier.size(46.dp)
                             )
@@ -378,7 +390,7 @@ fun MetaVerifiedBottomSheetModal(
 
                         // Title & Subtitle
                         Text(
-                            text = "Build trust with Meta Verified",
+                            text = "Build trust with Meskot Verified",
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
@@ -389,7 +401,7 @@ fun MetaVerifiedBottomSheetModal(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "A verified badge, increased account protection, direct support and more for ${currentUser?.displayName ?: "your account"}.",
+                            text = "A verified golden badge, increased account protection, direct support and more for ${currentUser?.displayName ?: "your account"}.",
                             fontSize = 13.sp,
                             color = MetaDarkSecondary,
                             textAlign = TextAlign.Center,
@@ -403,8 +415,8 @@ fun MetaVerifiedBottomSheetModal(
                         if (isAlreadyVerified) {
                             Card(
                                 shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF0D3823)),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF10B981)),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF162B20)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Gold),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -414,21 +426,21 @@ fun MetaVerifiedBottomSheetModal(
                                     Icon(
                                         imageVector = Icons.Default.Verified,
                                         contentDescription = null,
-                                        tint = Color(0xFF10B981),
+                                        tint = Gold,
                                         modifier = Modifier.size(24.dp)
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Column {
                                         Text(
-                                            text = "Active Meta Verified Subscriber",
+                                            text = "Active Meskot Verified Subscriber",
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 13.sp,
-                                            color = Color.White
+                                            color = GoldLight
                                         )
                                         Text(
-                                            text = "Your badge is live and identity protections are active on your profile.",
+                                            text = "Your golden badge is live and identity protections are active on your profile.",
                                             fontSize = 11.sp,
-                                            color = Color(0xFFA7F3D0)
+                                            color = Color(0xFFD3E0D8)
                                         )
                                     }
                                 }
@@ -437,8 +449,8 @@ fun MetaVerifiedBottomSheetModal(
                         } else if (isPending) {
                             Card(
                                 shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF38290D)),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B)),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2213)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Gold),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -447,7 +459,7 @@ fun MetaVerifiedBottomSheetModal(
                                 ) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(20.dp),
-                                        color = Color(0xFFF59E0B),
+                                        color = Gold,
                                         strokeWidth = 2.dp
                                     )
                                     Spacer(modifier = Modifier.width(12.dp))
@@ -456,7 +468,7 @@ fun MetaVerifiedBottomSheetModal(
                                             text = "Verification In Progress",
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 13.sp,
-                                            color = Color.White
+                                            color = GoldLight
                                         )
                                         Text(
                                             text = "Your submitted ID and profile details are currently undergoing standard review.",
@@ -472,8 +484,8 @@ fun MetaVerifiedBottomSheetModal(
                         // LIST OF BENEFITS
                         BenefitItem(
                             icon = Icons.Default.Verified,
-                            title = "A verified badge",
-                            description = "Your audience can trust that you're a real person sharing your real stories with government-backed identity confirmation."
+                            title = "A verified golden badge",
+                            description = "Your audience can trust that you're a real person sharing authentic stories with official identity confirmation."
                         )
 
                         Spacer(modifier = Modifier.height(14.dp))
@@ -570,8 +582,8 @@ fun MetaVerifiedBottomSheetModal(
                                 onClick = { /* Already verified */ },
                                 enabled = false,
                                 colors = ButtonDefaults.buttonColors(
-                                    disabledContainerColor = Color(0xFF2C2C2E),
-                                    disabledContentColor = Color(0xFF10B981)
+                                    disabledContainerColor = MetaDarkCard,
+                                    disabledContentColor = GoldLight
                                 ),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
@@ -582,12 +594,12 @@ fun MetaVerifiedBottomSheetModal(
                                     Icon(
                                         imageVector = Icons.Default.Verified,
                                         contentDescription = null,
-                                        tint = Color(0xFF10B981),
+                                        tint = Gold,
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Subscribed · Verified Badge Active ✓",
+                                        text = "Subscribed · Golden Badge Active ✓",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp
                                     )
@@ -604,7 +616,7 @@ fun MetaVerifiedBottomSheetModal(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    text = "Cancel Meta Verified Subscription",
+                                    text = "Cancel Meskot Verified Subscription",
                                     color = Color(0xFFEF4444),
                                     fontSize = 12.sp
                                 )
@@ -614,8 +626,8 @@ fun MetaVerifiedBottomSheetModal(
                                 onClick = { /* Pending review */ },
                                 enabled = false,
                                 colors = ButtonDefaults.buttonColors(
-                                    disabledContainerColor = Color(0xFF2C2C2E),
-                                    disabledContentColor = Color(0xFFF59E0B)
+                                    disabledContainerColor = MetaDarkCard,
+                                    disabledContentColor = GoldLight
                                 ),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
@@ -649,8 +661,8 @@ fun MetaVerifiedBottomSheetModal(
                                 },
                                 enabled = !isProcessing,
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = MetaBlue,
-                                    contentColor = Color.White
+                                    containerColor = Gold,
+                                    contentColor = InkDark
                                 ),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
@@ -659,22 +671,31 @@ fun MetaVerifiedBottomSheetModal(
                             ) {
                                 if (isProcessing) {
                                     CircularProgressIndicator(
-                                        color = Color.White,
+                                        color = InkDark,
                                         strokeWidth = 2.dp,
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
-                                        text = "Connecting to Google Play Billing...",
+                                        text = "Processing Meskot Verification...",
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                 } else {
-                                    Text(
-                                        text = buttonText,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Verified,
+                                            contentDescription = null,
+                                            tint = InkDark,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = buttonText,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -712,7 +733,7 @@ private fun BenefitItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MetaBlue,
+                tint = Gold,
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -751,11 +772,11 @@ private fun PaymentOptionCard(
     Card(
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MetaBlue.copy(alpha = 0.15f) else MetaDarkCard
+            containerColor = if (isSelected) Gold.copy(alpha = 0.2f) else MetaDarkCard
         ),
         border = androidx.compose.foundation.BorderStroke(
             1.5.dp,
-            if (isSelected) MetaBlue else MetaDarkBorder
+            if (isSelected) Gold else MetaDarkBorder
         ),
         modifier = modifier
             .clickable { onClick() }
@@ -779,7 +800,7 @@ private fun PaymentOptionCard(
                 text = subtitle,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isSelected) MetaBlue else Color.White
+                color = if (isSelected) GoldLight else Color.White
             )
         }
     }

@@ -56,7 +56,9 @@ data class User(
     val verificationSubscribedAt: Long? = null,
     val verificationExpiresAt: Long? = null,
     val verificationPlan: String = "MONTHLY_STANDARD",
-    val verificationPaymentMethod: String = ""
+    val verificationPaymentMethod: String = "",
+    val savedPostIds: List<String> = emptyList(),
+    val subscribedPostIds: List<String> = emptyList()
 )
 
 enum class VerificationStatus {
@@ -112,7 +114,8 @@ data class Post(
     val createdAt: Long = System.currentTimeMillis(),
     val editedAt: Long? = null,
     val isSaved: Boolean = false,
-    val isAuthorVerified: Boolean = false
+    val isAuthorVerified: Boolean = false,
+    val sharesCount: Int = 0
 )
 
 data class Comment(
@@ -162,6 +165,10 @@ data class ChatMessage(
     val fromUid: String,
     val toUid: String = "",
     val text: String,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null, // "image", "file", "audio", "like"
+    val fileName: String? = null,
+    val fileSize: String? = null,
     val isCallLog: Boolean = false,
     val callType: String = "audio", // "audio", "video"
     val callStatus: String = "completed", // "missed", "completed"

@@ -70,7 +70,7 @@ class MeskotRepository(
     val albums: StateFlow<List<AlbumItem>> = _albums.asStateFlow()
 
     // Conversations map: otherUid -> List<ChatMessage>
-    private val _conversations = MutableStateFlow<Map<String, List<ChatMessage>>>(emptyMap())
+    private val _conversations = MutableStateFlow<Map<String, List<ChatMessage>>>(createInitialChatMessages())
     val conversations: StateFlow<Map<String, List<ChatMessage>>> = _conversations.asStateFlow()
 
     // Notifications
@@ -80,6 +80,10 @@ class MeskotRepository(
     // Saved post IDs
     private val _savedPostIds = MutableStateFlow<Set<String>>(emptySet())
     val savedPostIds: StateFlow<Set<String>> = _savedPostIds.asStateFlow()
+
+    // Subscribed post notification IDs
+    private val _subscribedPostIds = MutableStateFlow<Set<String>>(emptySet())
+    val subscribedPostIds: StateFlow<Set<String>> = _subscribedPostIds.asStateFlow()
 
     // Hidden post IDs
     private val _hiddenPostIds = MutableStateFlow<Set<String>>(emptySet())
@@ -214,13 +218,22 @@ class MeskotRepository(
             }
         }
 
+        repoScope.launch {
+            _currentUser.collect { user ->
+                if (user != null) {
+                    _savedPostIds.value = user.savedPostIds.toSet()
+                    _subscribedPostIds.value = user.subscribedPostIds.toSet()
+                }
+            }
+        }
+
         // Continuous live watch time session accumulator: increments real watch time during active app usage
         repoScope.launch {
             while (isActive) {
                 delay(15_000L) // every 15 seconds of active session
                 val user = _currentUser.value
                 if (user != null) {
-                    val currentWatch = if (user.watchHours == 3420.0) 0.0 else user.watchHours
+                    val currentWatch = user.watchHours
                     val added = 15.0 / 3600.0 // ~0.00417 hours
                     val newWatch = ((currentWatch + added) * 1000.0).toLong() / 1000.0
                     _currentUser.value = user.copy(watchHours = newWatch)
@@ -501,6 +514,19 @@ class MeskotRepository(
         FirebaseManager.saveUser(updated)
     }
 
+    fun updateCurrentUserLastSeen() {
+        val curr = _currentUser.value ?: return
+        val now = System.currentTimeMillis()
+        if (now - curr.lastSeen < 25_000L) return
+        val updated = curr.copy(lastSeen = now)
+        _currentUser.value = updated
+        _users.value = _users.value.map { if (it.uid == curr.uid) updated else it }
+        userRepository.setCurrentUser(updated)
+        repoScope.launch {
+            userRepository.saveUser(updated)
+        }
+    }
+
     // META VERIFIED METHODS
     fun subscribeMetaVerified(
         paymentMethod: String = "GOOGLE_PLAY",
@@ -639,7 +665,14 @@ class MeskotRepository(
             createdAt = System.currentTimeMillis(),
             isAuthorVerified = user.isVerified
         )
-        _posts.value = listOf(newPost) + _posts.value
+        _posts.value = listOf(newPost) + _posts.value.map {
+            if (it.id == postId) it.copy(sharesCount = it.sharesCount + 1) else it
+        }
+        // Save shared post to Firestore backend
+        FirebaseManager.createPost(newPost)
+        // Increment shares count on source post in Firestore backend
+        FirebaseManager.incrementPostShareCount(postId)
+
         if (sourcePost.uid != user.uid) {
             addNotification(
                 fromUid = user.uid,
@@ -653,12 +686,47 @@ class MeskotRepository(
 
     fun toggleSavePost(postId: String) {
         val currentSaved = _savedPostIds.value.toMutableSet()
-        if (currentSaved.contains(postId)) {
+        val isNowSaved = if (currentSaved.contains(postId)) {
             currentSaved.remove(postId)
+            false
         } else {
             currentSaved.add(postId)
+            true
         }
         _savedPostIds.value = currentSaved
+        val user = _currentUser.value
+        if (user != null) {
+            val updatedUser = user.copy(savedPostIds = currentSaved.toList())
+            _currentUser.value = updatedUser
+            userRepository.setCurrentUser(updatedUser)
+            repoScope.launch {
+                userRepository.saveUser(updatedUser)
+            }
+            FirebaseManager.toggleSavePost(user.uid, postId, isNowSaved)
+        }
+    }
+
+    fun togglePostNotifications(postId: String): Boolean {
+        val currentSubscribed = _subscribedPostIds.value.toMutableSet()
+        val isNowSubscribed = if (currentSubscribed.contains(postId)) {
+            currentSubscribed.remove(postId)
+            false
+        } else {
+            currentSubscribed.add(postId)
+            true
+        }
+        _subscribedPostIds.value = currentSubscribed
+        val user = _currentUser.value
+        if (user != null) {
+            val updatedUser = user.copy(subscribedPostIds = currentSubscribed.toList())
+            _currentUser.value = updatedUser
+            userRepository.setCurrentUser(updatedUser)
+            repoScope.launch {
+                userRepository.saveUser(updatedUser)
+            }
+            FirebaseManager.togglePostNotifications(user.uid, postId, isNowSubscribed)
+        }
+        return isNowSubscribed
     }
 
     fun hidePost(postId: String) {
@@ -896,6 +964,7 @@ class MeskotRepository(
             boostMultiplier = multiplier
         )
         _boostCampaigns.value = listOf(campaign) + _boostCampaigns.value
+        FirebaseManager.saveBoostCampaign(campaign)
 
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
@@ -907,6 +976,8 @@ class MeskotRepository(
                 )
             } else post
         }
+        FirebaseManager.updatePostBoost(postId, true, multiplier, dailyBudgetEtb, durationDays)
+        FirebaseManager.saveUser(updatedUser)
 
         // Financial Ledger Record
         val newEntry = EarningsLedgerEntry(
@@ -931,7 +1002,7 @@ class MeskotRepository(
     // REAL-TIME AUDIENCE & WATCH TIME ENGINE
     fun incrementFollowers(count: Int = 1) {
         val user = _currentUser.value ?: return
-        val currentFollowers = if (user.followersCount == 8500) _friends.value.size else maxOf(user.followersCount, _friends.value.size)
+        val currentFollowers = user.followersCount
         val updated = user.copy(followersCount = (currentFollowers + count).coerceAtLeast(0))
         _currentUser.value = updated
         _users.value = _users.value.map { if (it.uid == user.uid) updated else it }
@@ -945,7 +1016,7 @@ class MeskotRepository(
 
     fun incrementWatchHours(hours: Double = 1.0) {
         val user = _currentUser.value ?: return
-        val currentWatch = if (user.watchHours == 3420.0) 0.0 else user.watchHours
+        val currentWatch = user.watchHours
         val rounded = ((currentWatch + hours) * 10.0).toLong() / 10.0
         val updated = user.copy(watchHours = rounded)
         _currentUser.value = updated
@@ -1574,7 +1645,14 @@ class MeskotRepository(
         return fromDirectKey
     }
 
-    fun sendMessage(otherUid: String, text: String) {
+    fun sendMessage(
+        otherUid: String,
+        text: String,
+        mediaUrl: String? = null,
+        mediaType: String? = null,
+        fileName: String? = null,
+        fileSize: String? = null
+    ) {
         val user = _currentUser.value ?: return
         val convoId = if (user.uid < otherUid) "${user.uid}_$otherUid" else "${otherUid}_${user.uid}"
         val newMsg = ChatMessage(
@@ -1583,6 +1661,10 @@ class MeskotRepository(
             fromUid = user.uid,
             toUid = otherUid,
             text = text,
+            mediaUrl = mediaUrl,
+            mediaType = mediaType,
+            fileName = fileName,
+            fileSize = fileSize,
             createdAt = System.currentTimeMillis()
         )
         // Zero-latency instant local update across convoId and direct UID
@@ -1593,6 +1675,13 @@ class MeskotRepository(
         FirebaseManager.sendMessage(newMsg)
 
         // Instant push notification to recipient
+        val notifText = when (mediaType) {
+            "image" -> "${user.displayName} sent a photo 📷"
+            "file" -> "${user.displayName} sent a file: ${fileName ?: "attachment"}"
+            "audio" -> "${user.displayName} sent a voice message 🎤"
+            "like" -> "${user.displayName} sent a thumbs up 👍"
+            else -> "${user.displayName}: $text"
+        }
         val notif = NotificationItem(
             id = "notif_" + System.currentTimeMillis() + "_" + java.util.UUID.randomUUID().toString().take(6),
             fromUid = user.uid,
@@ -1600,11 +1689,22 @@ class MeskotRepository(
             fromPhoto = user.photoUrl,
             toUid = otherUid,
             type = "message",
-            text = "${user.displayName}: $text",
+            text = notifText,
             targetId = user.uid,
             createdAt = System.currentTimeMillis()
         )
         FirebaseManager.sendNotification(notif)
+    }
+
+    fun clearConversation(otherUid: String) {
+        val currentMap = _conversations.value.toMutableMap()
+        val user = _currentUser.value
+        val convoId = if (user != null) {
+            if (user.uid < otherUid) "${user.uid}_$otherUid" else "${otherUid}_${user.uid}"
+        } else null
+        currentMap.remove(otherUid)
+        if (convoId != null) currentMap.remove(convoId)
+        _conversations.value = currentMap
     }
 
     fun logCall(otherUid: String, callType: String, callStatus: String, durationSec: Int) {
@@ -1854,7 +1954,51 @@ class MeskotRepository(
     }
 
     // INITIAL DATA GENERATORS
-    private fun createInitialUsers(): List<User> = emptyList()
+    private fun createInitialUsers(): List<User> {
+        val now = System.currentTimeMillis()
+        return listOf(
+            User(
+                uid = "user_gebreslassie",
+                displayName = "Gebreslassie Tsadik",
+                bio = "Living life with faith, courage, and purpose.",
+                photoUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300",
+                lastSeen = now - 12 * 60 * 1000L, // 12 minutes ago
+                followersCount = 384,
+                followingCount = 142,
+                location = "Mekelle, Ethiopia"
+            ),
+            User(
+                uid = "user_rahel",
+                displayName = "Rahel Tesfaye",
+                bio = "Tech innovator & community organizer 🇪🇹",
+                photoUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300",
+                lastSeen = now - 45 * 1000L, // 45 seconds ago (Active now)
+                followersCount = 512,
+                followingCount = 230,
+                location = "Addis Ababa, Ethiopia"
+            ),
+            User(
+                uid = "user_daniel",
+                displayName = "Daniel Haile",
+                bio = "Photographer & cultural heritage storyteller 📸",
+                photoUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300",
+                lastSeen = now - 2 * 3600 * 1000L, // 2 hours ago
+                followersCount = 289,
+                followingCount = 175,
+                location = "Hawassa, Ethiopia"
+            ),
+            User(
+                uid = "user_almaz",
+                displayName = "Almaz Berhe",
+                bio = "Culinary artist celebrating traditional flavors ☕",
+                photoUrl = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300",
+                lastSeen = now - 26 * 3600 * 1000L, // Yesterday
+                followersCount = 410,
+                followingCount = 190,
+                location = "Gondar, Ethiopia"
+            )
+        )
+    }
 
     private fun createInitialPosts(): List<Post> = emptyList()
 
@@ -1905,7 +2049,90 @@ class MeskotRepository(
 
     private fun createInitialAlbums(): List<AlbumItem> = emptyList()
 
-    private fun createInitialChatMessages(): Map<String, List<ChatMessage>> = emptyMap()
+    private fun createInitialChatMessages(): Map<String, List<ChatMessage>> {
+        val gebUid = "user_gebreslassie"
+        val myUid = "user_0"
+        val cal = java.util.Calendar.getInstance()
+        fun timeFor(day: Int, hour: Int, minute: Int): Long {
+            cal.set(2026, java.util.Calendar.AUGUST, day, hour, minute, 0)
+            return cal.timeInMillis
+        }
+        val messages = listOf(
+            ChatMessage(
+                id = "geb_msg_1",
+                convoId = "convo_gebreslassie",
+                fromUid = myUid,
+                toUid = gebUid,
+                text = "Chigir yeblun eshi kifelu trah",
+                createdAt = timeFor(8, 13, 40)
+            ),
+            ChatMessage(
+                id = "geb_msg_2",
+                convoId = "convo_gebreslassie",
+                fromUid = gebUid,
+                toUid = myUid,
+                text = "ብሰርዓት",
+                createdAt = timeFor(14, 7, 38)
+            ),
+            ChatMessage(
+                id = "geb_msg_3",
+                convoId = "convo_gebreslassie",
+                fromUid = myUid,
+                toUid = gebUid,
+                text = "Hi",
+                createdAt = timeFor(16, 9, 50)
+            ),
+            ChatMessage(
+                id = "geb_msg_4",
+                convoId = "convo_gebreslassie",
+                fromUid = myUid,
+                toUid = gebUid,
+                text = "Hishuka do",
+                createdAt = timeFor(16, 9, 50) + 1500L
+            ),
+            ChatMessage(
+                id = "geb_msg_5",
+                convoId = "convo_gebreslassie",
+                fromUid = gebUid,
+                toUid = myUid,
+                text = "Mnm lewti yelen",
+                createdAt = timeFor(16, 9, 52)
+            ),
+            ChatMessage(
+                id = "geb_msg_6",
+                convoId = "convo_gebreslassie",
+                fromUid = myUid,
+                toUid = gebUid,
+                text = "Hikmna kedka do",
+                createdAt = timeFor(16, 9, 53)
+            ),
+            ChatMessage(
+                id = "geb_msg_7",
+                convoId = "convo_gebreslassie",
+                fromUid = gebUid,
+                toUid = myUid,
+                text = "Aykedkun zeleku",
+                createdAt = timeFor(16, 9, 55)
+            ),
+            ChatMessage(
+                id = "geb_msg_8",
+                convoId = "convo_gebreslassie",
+                fromUid = myUid,
+                toUid = gebUid,
+                text = "Hi",
+                createdAt = timeFor(18, 12, 13)
+            ),
+            ChatMessage(
+                id = "geb_msg_9",
+                convoId = "convo_gebreslassie",
+                fromUid = gebUid,
+                toUid = myUid,
+                text = "Hi",
+                createdAt = timeFor(18, 12, 54)
+            )
+        )
+        return mapOf(gebUid to messages)
+    }
 
     private fun createInitialNotifications(): List<NotificationItem> = emptyList()
 

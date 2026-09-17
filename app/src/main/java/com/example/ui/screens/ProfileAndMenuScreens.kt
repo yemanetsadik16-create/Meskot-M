@@ -111,7 +111,10 @@ import com.example.ui.theme.ActiveGreen
 import com.example.ui.theme.CardBg
 import com.example.ui.theme.CrossRed
 import com.example.ui.theme.Gold
+import com.example.ui.theme.GoldBorder
 import com.example.ui.theme.GoldDeep
+import com.example.ui.theme.GoldLight
+import com.example.ui.theme.GoldSurface
 import com.example.ui.theme.Ink
 import com.example.ui.theme.LineBorder
 import com.example.ui.theme.MutedText
@@ -746,16 +749,16 @@ fun ProfileScreen(
                     }
                 }
 
-                // Meta Verified Subscription Card
+                // Meskot Verified Subscription Card
                 item {
                     Card(
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (user.isVerified) Color(0xFFE7F3FF) else Color(0xFF1C1C1E)
+                            containerColor = if (user.isVerified) GoldSurface else CardBg
                         ),
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
-                            if (user.isVerified) Color(0xFF0866FF).copy(alpha = 0.3f) else Color(0xFF2C2C2E)
+                            if (user.isVerified) GoldBorder else LineBorder
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -774,12 +777,12 @@ fun ProfileScreen(
                                     modifier = Modifier
                                         .size(38.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF0866FF)),
+                                        .background(Gold),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Verified,
-                                        contentDescription = "Meta Verified",
+                                        contentDescription = "Meskot Verified",
                                         tint = Color.White,
                                         modifier = Modifier.size(22.dp)
                                     )
@@ -788,16 +791,16 @@ fun ProfileScreen(
                                 Column {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = if (user.isVerified) "Meta Verified · Active Subscriber" else "Meta Verified",
+                                            text = if (user.isVerified) "Meskot Verified · Active Subscriber" else "Meskot Verified",
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 13.sp,
-                                            color = if (user.isVerified) Color(0xFF0866FF) else Color.White
+                                            color = if (user.isVerified) GoldDeep else Ink
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Box(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(4.dp))
-                                                .background(if (user.isVerified) Color(0xFF10B981) else Color(0xFF0866FF))
+                                                .background(if (user.isVerified) ActiveGreen else Gold)
                                                 .padding(horizontal = 5.dp, vertical = 1.dp)
                                         ) {
                                             Text(
@@ -809,9 +812,9 @@ fun ProfileScreen(
                                         }
                                     }
                                     Text(
-                                        text = if (user.isVerified) "Identity protected · Tap to view benefits or manage" else "Verified badge, impersonation protection & direct support",
+                                        text = if (user.isVerified) "Identity protected · Tap to view benefits or manage" else "Golden verified badge, impersonation protection & direct support",
                                         fontSize = 11.sp,
-                                        color = if (user.isVerified) Color(0xFF475569) else Color(0xFF8E8E93)
+                                        color = MutedText
                                     )
                                 }
                             }
@@ -819,7 +822,7 @@ fun ProfileScreen(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
                                 contentDescription = null,
-                                tint = if (user.isVerified) Color(0xFF0866FF) else Color.White,
+                                tint = if (user.isVerified) GoldDeep else MutedText,
                                 modifier = Modifier.size(12.dp)
                             )
                         }
@@ -1907,7 +1910,7 @@ fun MenuScreen(
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
-            // Dedicated Meta Verified Shortcut in Menu
+            // Dedicated Meskot Verified Shortcut in Menu
             item {
                 Card(
                     modifier = Modifier
@@ -1915,11 +1918,11 @@ fun MenuScreen(
                         .clickable { showMetaVerifiedModal = true },
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (currentUser.isVerified) Color(0xFFE7F3FF) else Color(0xFF1C1C1E)
+                        containerColor = if (currentUser.isVerified) GoldSurface else CardBg
                     ),
                     border = androidx.compose.foundation.BorderStroke(
                         1.dp,
-                        if (currentUser.isVerified) Color(0xFF0866FF).copy(alpha = 0.3f) else Color(0xFF2C2C2E)
+                        if (currentUser.isVerified) GoldBorder else LineBorder
                     )
                 ) {
                     Row(
@@ -1932,12 +1935,12 @@ fun MenuScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF0866FF)),
+                                .background(Gold),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Verified,
-                                contentDescription = "Meta Verified",
+                                contentDescription = "Meskot Verified",
                                 tint = Color.White,
                                 modifier = Modifier.size(24.dp)
                             )
@@ -1946,16 +1949,16 @@ fun MenuScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "Meta Verified",
+                                    text = "Meskot Verified",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (currentUser.isVerified) Color(0xFF0866FF) else Color.White
+                                    color = if (currentUser.isVerified) GoldDeep else Ink
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(4.dp))
-                                        .background(if (currentUser.isVerified) Color(0xFF10B981) else Color(0xFF0866FF))
+                                        .background(if (currentUser.isVerified) ActiveGreen else Gold)
                                         .padding(horizontal = 5.dp, vertical = 1.dp)
                                 ) {
                                     Text(
@@ -1967,15 +1970,15 @@ fun MenuScreen(
                                 }
                             }
                             Text(
-                                text = if (currentUser.isVerified) "Active blue badge & account protection" else "Subscribe for a verified badge, protection & support",
+                                text = if (currentUser.isVerified) "Active golden badge & account protection" else "Subscribe for a golden badge, protection & support",
                                 fontSize = 12.sp,
-                                color = if (currentUser.isVerified) Color(0xFF475569) else Color(0xFF8E8E93)
+                                color = MutedText
                             )
                         }
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
                             contentDescription = null,
-                            tint = if (currentUser.isVerified) Color(0xFF0866FF) else Color.White,
+                            tint = if (currentUser.isVerified) GoldDeep else MutedText,
                             modifier = Modifier.size(14.dp)
                         )
                     }

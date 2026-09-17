@@ -192,7 +192,7 @@ fun PostCard(
                             }
                         }
                         Text(
-                            text = MeskotStrings.timeAgo(post.createdAt, currentLanguage) + if (post.editedAt != null) " · edited" else "",
+                            text = MeskotStrings.formatPostTime(post.createdAt, currentLanguage) + if (post.editedAt != null) " · edited" else "",
                             fontSize = 12.sp,
                             color = MutedText
                         )
@@ -779,7 +779,7 @@ fun CommentItemRow(
                 )
 
                 Text(
-                    text = MeskotStrings.timeAgo(comment.createdAt, currentLanguage),
+                    text = MeskotStrings.formatPostTime(comment.createdAt, currentLanguage),
                     fontSize = 11.sp,
                     color = MutedText
                 )
@@ -840,7 +840,7 @@ fun SharedPostBox(
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
                     Text(text = shared.authorName, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    Text(text = MeskotStrings.timeAgo(shared.createdAt, currentLanguage), fontSize = 11.sp, color = MutedText)
+                    Text(text = MeskotStrings.formatPostTime(shared.createdAt, currentLanguage), fontSize = 11.sp, color = MutedText)
                 }
             }
 

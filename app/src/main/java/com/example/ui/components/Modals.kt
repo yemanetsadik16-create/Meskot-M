@@ -411,6 +411,7 @@ fun PostOptionsMenu(
     isAuthor: Boolean,
     isAdmin: Boolean,
     isSaved: Boolean,
+    isNotifSubscribed: Boolean = false,
     currentLanguage: AppLanguage,
     onDismiss: () -> Unit,
     onSaveToggle: () -> Unit,
@@ -501,8 +502,8 @@ fun PostOptionsMenu(
                 }
 
                 MenuOptionItem(
-                    emoji = "🔔",
-                    title = MeskotStrings.get("turnOnNotifs", currentLanguage),
+                    emoji = if (isNotifSubscribed) "🔕" else "🔔",
+                    title = if (isNotifSubscribed) MeskotStrings.get("turnOffNotifs", currentLanguage) else MeskotStrings.get("turnOnNotifs", currentLanguage),
                     onClick = { onToggleNotifs(); onDismiss() }
                 )
 

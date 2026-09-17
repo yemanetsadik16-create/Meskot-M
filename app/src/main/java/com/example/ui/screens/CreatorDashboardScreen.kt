@@ -96,9 +96,12 @@ import com.example.ui.components.ChapaConfigModal
 import com.example.ui.components.MetaVerifiedBottomSheetModal
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Bolt
+import com.example.ui.theme.ActiveGreen
 import com.example.ui.theme.CardBg
 import com.example.ui.theme.Gold
+import com.example.ui.theme.GoldBorder
 import com.example.ui.theme.GoldDeep
+import com.example.ui.theme.GoldLight
 import com.example.ui.theme.GoldSurface
 import com.example.ui.theme.Ink
 import com.example.ui.theme.LineBorder
@@ -701,16 +704,16 @@ fun CreatorDashboardScreen(
                         }
                     }
 
-                    // Meta Verified Creator Badge Feature Card
+                    // Meskot Verified Creator Badge Feature Card
                     item {
                         Card(
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (currentUser?.isVerified == true) Color(0xFFE7F3FF) else Color(0xFF1C1C1E)
+                                containerColor = if (currentUser?.isVerified == true) GoldSurface else CardBg
                             ),
                             border = androidx.compose.foundation.BorderStroke(
                                 1.dp,
-                                if (currentUser?.isVerified == true) Color(0xFF0866FF).copy(alpha = 0.3f) else Color(0xFF2C2C2E)
+                                if (currentUser?.isVerified == true) GoldBorder else LineBorder
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -727,12 +730,12 @@ fun CreatorDashboardScreen(
                                     modifier = Modifier
                                         .size(42.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF0866FF)),
+                                        .background(Gold),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Verified,
-                                        contentDescription = "Meta Verified",
+                                        contentDescription = "Meskot Verified",
                                         tint = Color.White,
                                         modifier = Modifier.size(24.dp)
                                     )
@@ -741,16 +744,16 @@ fun CreatorDashboardScreen(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = "Meta Verified",
+                                            text = "Meskot Verified",
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 14.sp,
-                                            color = if (currentUser?.isVerified == true) Color(0xFF0866FF) else Color.White
+                                            color = if (currentUser?.isVerified == true) GoldDeep else Ink
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Box(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(4.dp))
-                                                .background(if (currentUser?.isVerified == true) Color(0xFF10B981) else Color(0xFF0866FF))
+                                                .background(if (currentUser?.isVerified == true) ActiveGreen else Gold)
                                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                                         ) {
                                             Text(
@@ -762,16 +765,16 @@ fun CreatorDashboardScreen(
                                         }
                                     }
                                     Text(
-                                        text = if (currentUser?.isVerified == true) "Verified badge active · Priority algorithm reach & protection" else "Blue checkmark badge, impersonation protection & direct support",
+                                        text = if (currentUser?.isVerified == true) "Golden verified badge active · Priority algorithm reach & protection" else "Golden checkmark badge, impersonation protection & direct support",
                                         fontSize = 11.5.sp,
-                                        color = if (currentUser?.isVerified == true) Color(0xFF334155) else Color(0xFF94A3B8)
+                                        color = MutedText
                                     )
                                 }
                                 Text(
                                     text = if (currentUser?.isVerified == true) "Manage →" else "Get →",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (currentUser?.isVerified == true) Color(0xFF0866FF) else Color(0xFF38BDF8)
+                                    color = GoldDeep
                                 )
                             }
                         }
