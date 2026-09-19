@@ -34,6 +34,7 @@ object FirebaseManager {
     const val COL_FRIEND_REQUESTS = "friend_requests"
     const val COL_FRIENDSHIPS = "friendships"
     const val COL_CALLS = "calls"
+    const val COL_STORIES = "stories"
 
     fun initialize(context: Context) {
         if (isInitialized) return
@@ -201,6 +202,24 @@ object FirebaseManager {
     fun getCurrentFirebaseUser(): FirebaseUser? = auth?.currentUser
 
     // FIRESTORE: POSTS
+    fun fetchPostsOnce(onComplete: (List<Post>) -> Unit) {
+        val db = firestore ?: run { onComplete(emptyList()); return }
+        db.collection(COL_POSTS)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(50)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val posts = snapshot.documents.mapNotNull { doc ->
+                    doc.data?.let { parsePost(doc.id, it) }
+                }
+                onComplete(posts)
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "fetchPostsOnce error: ${e.message}")
+                onComplete(emptyList())
+            }
+    }
+
     fun listenToPosts(onPostsUpdated: (List<Post>) -> Unit): ListenerRegistration? {
         val db = firestore ?: return null
         return try {
@@ -698,7 +717,11 @@ object FirebaseManager {
         },
         "createdAt" to p.createdAt,
         "editedAt" to p.editedAt,
-        "isAuthorVerified" to p.isAuthorVerified
+        "isAuthorVerified" to p.isAuthorVerified,
+        "postType" to p.postType,
+        "videoUrl" to p.videoUrl,
+        "audioTrackTitle" to p.audioTrackTitle,
+        "viewsCount" to p.viewsCount
     )
 
     private fun parsePost(id: String, d: Map<String, Any?>): Post {
@@ -725,6 +748,11 @@ object FirebaseManager {
             is com.google.firebase.Timestamp -> editedVal.toDate().time
             else -> null
         }
+        val vidUrl = d["videoUrl"] as? String ?: ""
+        val pType = d["postType"] as? String ?: if (vidUrl.isNotBlank()) "REEL" else if (((d["mediaUrls"] as? List<*>)?.size ?: 0) > 0) "PHOTO" else "POST"
+        val audioTitle = d["audioTrackTitle"] as? String ?: ""
+        val vCount = (d["viewsCount"] as? Number)?.toInt() ?: (d["playsCount"] as? Number)?.toInt() ?: 0
+
         return Post(
             id = id,
             uid = d["authorId"] as? String ?: d["uid"] as? String ?: "",
@@ -748,7 +776,11 @@ object FirebaseManager {
             sharedPost = parsedSharedPost,
             createdAt = createdLong,
             editedAt = editedLong,
-            isAuthorVerified = d["isAuthorVerified"] as? Boolean ?: false
+            isAuthorVerified = d["isAuthorVerified"] as? Boolean ?: false,
+            postType = pType,
+            videoUrl = vidUrl,
+            audioTrackTitle = audioTitle,
+            viewsCount = vCount
         )
     }
 
@@ -1051,4 +1083,147 @@ object FirebaseManager {
         startedAt = (d["startedAt"] as? Number)?.toLong(),
         endedAt = (d["endedAt"] as? Number)?.toLong()
     )
+
+    // ==========================================
+    // STORIES WITH EXPIRATION TIMER LOGIC
+    // ==========================================
+    fun createStory(story: StoryItem, onComplete: (Boolean) -> Unit = {}) {
+        val db = firestore
+        if (db == null) {
+            onComplete(true)
+            return
+        }
+        val map = storyToMap(story)
+        db.collection(COL_STORIES).document(story.id)
+            .set(map, SetOptions.merge())
+            .addOnSuccessListener {
+                Log.d(TAG, "Story created in Firebase: ${story.id} with expiresAt: ${story.expiresAt}")
+                onComplete(true)
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Failed to create story in Firebase: ${e.message}")
+                onComplete(false)
+            }
+    }
+
+    fun deleteStory(storyId: String, onComplete: (Boolean) -> Unit = {}) {
+        val db = firestore ?: return
+        db.collection(COL_STORIES).document(storyId).delete()
+            .addOnSuccessListener { onComplete(true) }
+            .addOnFailureListener { onComplete(false) }
+    }
+
+    fun recordStoryView(storyId: String, viewerUid: String) {
+        if (viewerUid.isBlank()) return
+        val db = firestore ?: return
+        db.collection(COL_STORIES).document(storyId)
+            .update("viewers", FieldValue.arrayUnion(viewerUid))
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Could not record story view: ${e.message}")
+            }
+    }
+
+    fun toggleStoryLike(storyId: String, uid: String, isLiked: Boolean) {
+        val db = firestore ?: return
+        db.collection(COL_STORIES).document(storyId)
+            .update("likes.$uid", isLiked)
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Could not update story like: ${e.message}")
+            }
+    }
+
+    fun fetchStoriesOnce(onComplete: (List<StoryItem>) -> Unit) {
+        val db = firestore ?: run { onComplete(emptyList()); return }
+        db.collection(COL_STORIES).get()
+            .addOnSuccessListener { snapshot ->
+                val nowMs = System.currentTimeMillis()
+                val activeStories = mutableListOf<StoryItem>()
+                for (doc in snapshot.documents) {
+                    try {
+                        val data = doc.data ?: continue
+                        val story = parseStory(doc.id, data)
+                        if (!story.isExpired(nowMs)) {
+                            activeStories.add(story)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing story doc: ${e.message}")
+                    }
+                }
+                activeStories.sortByDescending { it.createdAt }
+                onComplete(activeStories)
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "fetchStoriesOnce error: ${e.message}")
+                onComplete(emptyList())
+            }
+    }
+
+    fun listenToStories(onStoriesUpdated: (List<StoryItem>) -> Unit): ListenerRegistration? {
+        val db = firestore ?: return null
+        return db.collection(COL_STORIES)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e(TAG, "Listen to stories error: ${error.message}")
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val nowMs = System.currentTimeMillis()
+                    val activeStories = mutableListOf<StoryItem>()
+                    for (doc in snapshot.documents) {
+                        try {
+                            val data = doc.data ?: continue
+                            val story = parseStory(doc.id, data)
+                            // Expiration timer check: only keep non-expired stories
+                            if (!story.isExpired(nowMs)) {
+                                activeStories.add(story)
+                            } else {
+                                // Auto-cleanup expired story in Firestore if older than expiration
+                                doc.reference.delete()
+                                    .addOnSuccessListener { Log.d(TAG, "Auto-cleaned expired story: ${story.id}") }
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error parsing story doc: ${e.message}")
+                        }
+                    }
+                    activeStories.sortByDescending { it.createdAt }
+                    onStoriesUpdated(activeStories)
+                }
+            }
+    }
+
+    private fun storyToMap(s: StoryItem): Map<String, Any?> = mapOf(
+        "id" to s.id,
+        "uid" to s.uid,
+        "authorName" to s.authorName,
+        "authorPhoto" to s.authorPhoto,
+        "mediaUrl" to s.mediaUrl,
+        "caption" to s.caption,
+        "filterName" to s.filterName,
+        "createdAt" to s.createdAt,
+        "expiresAt" to s.expiresAt,
+        "viewers" to s.viewers,
+        "likes" to s.likes
+    )
+
+    private fun parseStory(id: String, d: Map<String, Any?>): StoryItem {
+        val rawLikes = (d["likes"] as? Map<*, *>)?.entries?.associate {
+            it.key.toString() to (it.value as? Boolean ?: false)
+        } ?: emptyMap()
+
+        val rawViewers = (d["viewers"] as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+
+        return StoryItem(
+            id = id,
+            uid = d["uid"] as? String ?: "",
+            authorName = d["authorName"] as? String ?: "User",
+            authorPhoto = d["authorPhoto"] as? String ?: "",
+            mediaUrl = d["mediaUrl"] as? String ?: "",
+            caption = d["caption"] as? String ?: "",
+            filterName = d["filterName"] as? String ?: "Normal",
+            createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+            expiresAt = (d["expiresAt"] as? Number)?.toLong() ?: (System.currentTimeMillis() + 24 * 3600 * 1000L),
+            viewers = rawViewers,
+            likes = rawLikes
+        )
+    }
 }

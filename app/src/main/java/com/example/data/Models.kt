@@ -115,8 +115,40 @@ data class Post(
     val editedAt: Long? = null,
     val isSaved: Boolean = false,
     val isAuthorVerified: Boolean = false,
-    val sharesCount: Int = 0
+    val sharesCount: Int = 0,
+    val postType: String = "POST", // "POST", "PHOTO", "REEL"
+    val videoUrl: String = "",
+    val audioTrackTitle: String = "",
+    val viewsCount: Int = 0
 )
+
+data class StoryItem(
+    val id: String,
+    val uid: String,
+    val authorName: String,
+    val authorPhoto: String = "",
+    val mediaUrl: String,
+    val caption: String = "",
+    val filterName: String = "Normal",
+    val createdAt: Long = System.currentTimeMillis(),
+    val expiresAt: Long = System.currentTimeMillis() + 24 * 60 * 60 * 1000L,
+    val viewers: List<String> = emptyList(),
+    val likes: Map<String, Boolean> = emptyMap()
+) {
+    fun isExpired(nowMs: Long = System.currentTimeMillis()): Boolean = nowMs >= expiresAt
+
+    fun formattedRemaining(nowMs: Long = System.currentTimeMillis()): String {
+        val remainingMs = expiresAt - nowMs
+        if (remainingMs <= 0) return "Expired"
+        val hours = remainingMs / (3600 * 1000L)
+        val minutes = (remainingMs % (3600 * 1000L)) / (60 * 1000L)
+        return when {
+            hours > 0 -> "${hours}h left"
+            minutes > 0 -> "${minutes}m left"
+            else -> "< 1m left"
+        }
+    }
+}
 
 data class Comment(
     val id: String,

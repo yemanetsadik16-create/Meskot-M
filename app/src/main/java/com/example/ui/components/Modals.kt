@@ -21,6 +21,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.VideoCameraBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.Delete
@@ -90,13 +101,42 @@ fun ComposerDialog(
     currentUser: User,
     currentLanguage: AppLanguage,
     onDismiss: () -> Unit,
-    onSubmit: (text: String, mediaUrls: List<String>, bgColorIndex: Int, visibility: String) -> Unit
+    onSubmit: (text: String, mediaUrls: List<String>, bgColorIndex: Int, visibility: String) -> Unit,
+    onOpenCreateReel: (() -> Unit)? = null
 ) {
+    val context = LocalContext.current
     var text by remember { mutableStateOf("") }
     var selectedBgIndex by remember { mutableStateOf(0) }
     var selectedVisibility by remember { mutableStateOf("public") }
     var isPrivacyDropdownOpen by remember { mutableStateOf(false) }
     var selectedMediaUrls by remember { mutableStateOf<List<String>>(emptyList()) }
+    var showUrlDialog by remember { mutableStateOf(false) }
+    var customUrlInput by remember { mutableStateOf("") }
+
+    // Multi-photo picker from device gallery
+    val pickMultipleMediaLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            selectedMediaUrls = selectedMediaUrls + uris.map { it.toString() }
+            selectedBgIndex = 0
+        }
+    }
+
+    // Camera launcher to capture photos immediately
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            try {
+                val cachedPath = saveStoryBitmapToCache(context, bitmap)
+                selectedMediaUrls = selectedMediaUrls + cachedPath
+                selectedBgIndex = 0
+            } catch (e: Exception) {
+                Toast.makeText(context, "Failed to capture photo: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     // Preset Ethiopian Cultural Visuals for testing photo posts easily
     val samplePhotos = listOf(
@@ -363,13 +403,127 @@ fun ComposerDialog(
                     }
                 }
 
+                // Media attachment toolbar (Camera, Gallery, Add URL, Post Reel)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Pick photos from Gallery
+                    Surface(
+                        onClick = {
+                            pickMultipleMediaLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        color = Paper2,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PhotoLibrary,
+                                contentDescription = "Gallery",
+                                tint = Ink,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Photos", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Ink)
+                        }
+                    }
+
+                    // Snap Photo with Camera
+                    Surface(
+                        onClick = { takePictureLauncher.launch(null) },
+                        shape = RoundedCornerShape(10.dp),
+                        color = Paper2,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CameraAlt,
+                                contentDescription = "Camera",
+                                tint = Ink,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Camera", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Ink)
+                        }
+                    }
+
+                    // Add Image URL
+                    Surface(
+                        onClick = { showUrlDialog = true },
+                        shape = RoundedCornerShape(10.dp),
+                        color = Paper2,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "URL",
+                                tint = Ink,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Link", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Ink)
+                        }
+                    }
+
+                    // Post a Reel Shortcut
+                    if (onOpenCreateReel != null) {
+                        Surface(
+                            onClick = {
+                                onDismiss()
+                                onOpenCreateReel()
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            color = GoldSurface,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                            modifier = Modifier.weight(1.1f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.VideoCameraBack,
+                                    contentDescription = "Create Reel",
+                                    tint = GoldDeep,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Reel", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GoldDeep)
+                            }
+                        }
+                    }
+                }
+
                 // Quick photo selector
                 Text(
                     text = "🖼️ " + MeskotStrings.get("addPhoto", currentLanguage) + " (Habesha Gallery):",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = MutedText,
-                    modifier = Modifier.padding(top = 6.dp, bottom = 4.dp)
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
                 )
 
                 LazyRow(
@@ -402,6 +556,46 @@ fun ComposerDialog(
                 }
             }
         }
+    }
+
+    if (showUrlDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showUrlDialog = false },
+            title = { Text("Add Image URL", fontWeight = FontWeight.Bold, color = Ink) },
+            text = {
+                Column {
+                    Text("Enter direct link to an image (JPEG, PNG, WebP):", fontSize = 13.sp, color = MutedText)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = customUrlInput,
+                        onValueChange = { customUrlInput = it },
+                        placeholder = { Text("https://example.com/photo.jpg") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (customUrlInput.isNotBlank()) {
+                            selectedMediaUrls = selectedMediaUrls + customUrlInput.trim()
+                            selectedBgIndex = 0
+                            customUrlInput = ""
+                            showUrlDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = GoldDeep)
+                ) {
+                    Text("Add Photo", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUrlDialog = false }) {
+                    Text("Cancel", color = Ink)
+                }
+            }
+        )
     }
 }
 

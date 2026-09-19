@@ -118,9 +118,11 @@ import coil.compose.AsyncImage
 import com.example.data.AppLanguage
 import com.example.data.ChatMessage
 import com.example.data.MeskotStrings
+import com.example.data.StoryItem
 import com.example.data.User
 import com.example.ui.MeskotViewModel
 import com.example.ui.ScreenTab
+import com.example.ui.components.StoryAvatarRingItem
 import com.example.ui.components.UserAvatar
 import com.example.ui.theme.CardBg
 import com.example.ui.theme.CrossRed
@@ -185,6 +187,18 @@ fun MessagesScreen(
         }
     }
 
+    val stories by viewModel.stories.collectAsState()
+    val tickerTimeMs by viewModel.tickerTimeMs.collectAsState()
+    val activeStories = remember(stories, tickerTimeMs) {
+        stories.filter { !it.isExpired(tickerTimeMs) }
+    }
+    val myStories = remember(activeStories, currentUser?.uid) {
+        if (currentUser == null) emptyList() else activeStories.filter { it.uid == currentUser.uid }
+    }
+    val otherStoriesByUser = remember(activeStories, currentUser?.uid) {
+        activeStories.filter { it.uid != currentUser?.uid }.groupBy { it.uid }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -199,23 +213,68 @@ fun MessagesScreen(
             modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 8.dp)
         )
 
-        // Friends Instant Chat Story Strip
-        if (friendsList.isNotEmpty()) {
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                items(friendsList) { friend ->
-                    StoryAvatarItem(
-                        user = friend,
-                        onClick = { viewModel.openChat(friend) }
+        // Stories & Friends Instant Chat Rail
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 1. Current user "Your Story"
+            if (currentUser != null) {
+                item {
+                    StoryAvatarRingItem(
+                        user = currentUser,
+                        hasStory = myStories.isNotEmpty(),
+                        isCurrentUser = true,
+                        isStoryViewed = false,
+                        expirationText = myStories.firstOrNull()?.formattedRemaining(tickerTimeMs),
+                        onClick = {
+                            if (myStories.isNotEmpty()) {
+                                viewModel.viewStory(myStories.first())
+                            } else {
+                                viewModel.openCreateStory()
+                            }
+                        }
                     )
                 }
             }
-            HorizontalDivider(color = LineBorder, modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
+
+            // 2. Active Stories from community & friends
+            otherStoriesByUser.forEach { (authorUid, userStories) ->
+                val latestStory = userStories.first()
+                val friendObj = friendsList.find { it.uid == authorUid } ?: User(
+                    uid = authorUid,
+                    displayName = latestStory.authorName,
+                    photoUrl = latestStory.authorPhoto
+                )
+                val isAllViewed = userStories.all { it.viewers.contains(currentUser?.uid) }
+
+                item(key = "msg_story_$authorUid") {
+                    StoryAvatarRingItem(
+                        user = friendObj,
+                        hasStory = true,
+                        isCurrentUser = false,
+                        isStoryViewed = isAllViewed,
+                        expirationText = latestStory.formattedRemaining(tickerTimeMs),
+                        onClick = { viewModel.viewStory(latestStory) }
+                    )
+                }
+            }
+
+            // 3. Friends without active stories
+            val friendsWithoutStories = friendsList.filterNot { otherStoriesByUser.containsKey(it.uid) }
+            items(friendsWithoutStories, key = { "msg_friend_${it.uid}" }) { friend ->
+                StoryAvatarRingItem(
+                    user = friend,
+                    hasStory = false,
+                    isCurrentUser = false,
+                    onClick = { viewModel.openChat(friend) }
+                )
+            }
         }
+        HorizontalDivider(color = LineBorder, modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
 
         // Conversations List
         LazyColumn(

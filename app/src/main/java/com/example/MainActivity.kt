@@ -28,14 +28,19 @@ import com.example.ui.ScreenTab
 import com.example.ui.components.BoostPostModal
 import com.example.ui.components.CallOverlay
 import com.example.ui.components.ComposerDialog
+import com.example.ui.components.CreateReelDialog
+import com.example.ui.components.CreateStoryDialog
 import com.example.ui.components.EditProfileDialog
 import com.example.ui.components.IconNavBar
 import com.example.ui.components.IncomingCallOverlay
 import com.example.ui.components.PostOptionsMenu
+import com.example.ui.components.ReelViewerDialog
+import com.example.ui.components.StoryViewerDialog
 import com.example.ui.components.SubscriptionModal
 import com.example.ui.components.TipModal
 import com.example.ui.components.ChapaDepositModal
 import com.example.ui.components.ChapaPaymentModal
+import com.example.ui.components.MeskotLiveStreamModal
 import com.example.ui.components.TopNavBar
 import com.example.util.CallAudioManager
 import com.example.ui.screens.AdminScreen
@@ -130,6 +135,11 @@ fun MeskotApp(viewModel: MeskotViewModel) {
     val subscribingToCreator by viewModel.subscribingToCreator.collectAsState()
     val postMenuTarget by viewModel.postMenuTarget.collectAsState()
     val isEditProfileOpen by viewModel.isEditProfileOpen.collectAsState()
+    val isCreateStoryOpen by viewModel.isCreateStoryOpen.collectAsState()
+    val activeStoryToView by viewModel.activeStoryToView.collectAsState()
+    val isCreateReelOpen by viewModel.isCreateReelOpen.collectAsState()
+    val activeReelToView by viewModel.activeReelToView.collectAsState()
+    val isLiveStreamOpen by viewModel.isLiveStreamOpen.collectAsState()
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as? android.app.Activity
@@ -193,6 +203,7 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                             currentLanguage = currentLanguage,
                             onToggleLanguage = { viewModel.toggleLanguage() },
                             onOpenComposer = { viewModel.openComposer() },
+                            onOpenLive = { viewModel.openLiveStream() },
                             onOpenSearch = { viewModel.navigateTo(ScreenTab.FRIENDS) },
                             onOpenMenu = { viewModel.navigateTo(ScreenTab.MENU) },
                             onProfileClick = { currentUser?.let { viewModel.openProfile(it) } },
@@ -380,9 +391,96 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                             onBack = { viewModel.navigateTo(ScreenTab.MENU) }
                         )
                     }
+
+                    ScreenTab.LIVE -> {
+                        FeedScreen(
+                            viewModel = viewModel,
+                            currentUser = currentUser,
+                            feedPosts = feedPosts,
+                            currentLanguage = currentLanguage,
+                            allUsers = users,
+                            stories = stories
+                        )
+                        LaunchedEffect(Unit) {
+                            viewModel.openLiveStream()
+                        }
+                    }
                 }
 
                 // Global Modals & Overlays
+                if (isCreateStoryOpen && currentUser != null) {
+                    CreateStoryDialog(
+                        currentUser = currentUser!!,
+                        currentLanguage = currentLanguage,
+                        onDismiss = { viewModel.closeCreateStory() },
+                        onSubmitStory = { mediaUrl, caption, filterName, expirationHours ->
+                            viewModel.createStory(
+                                mediaUrl = mediaUrl,
+                                caption = caption,
+                                filterName = filterName,
+                                expirationHours = expirationHours,
+                                onComplete = { success ->
+                                    if (success) {
+                                        viewModel.showMessage("Story posted! Expiring in ${expirationHours}h 🔥")
+                                    } else {
+                                        viewModel.showMessage("Could not post story. Please try again.")
+                                    }
+                                }
+                            )
+                        }
+                    )
+                }
+
+                activeStoryToView?.let { story ->
+                    StoryViewerDialog(
+                        story = story,
+                        currentUser = currentUser,
+                        onDismiss = { viewModel.closeStoryViewer() },
+                        onDeleteStory = { storyId ->
+                            viewModel.deleteStory(storyId)
+                            viewModel.showMessage("Story deleted.")
+                        },
+                        onToggleLike = { storyId ->
+                            viewModel.toggleStoryLike(storyId)
+                        }
+                    )
+                }
+
+                if (isCreateReelOpen && currentUser != null) {
+                    CreateReelDialog(
+                        currentUser = currentUser!!,
+                        currentLanguage = currentLanguage,
+                        onDismiss = { viewModel.closeCreateReel() },
+                        onSubmitReel = { videoUrl, caption, audioTrackTitle, thumbUrl, visibility ->
+                            viewModel.submitReel(
+                                videoUrl = videoUrl,
+                                caption = caption,
+                                audioTrackTitle = audioTrackTitle,
+                                thumbnailUrl = thumbUrl,
+                                visibility = visibility
+                            )
+                        }
+                    )
+                }
+
+                activeReelToView?.let { reel ->
+                    ReelViewerDialog(
+                        reel = reel,
+                        currentUser = currentUser,
+                        currentLanguage = currentLanguage,
+                        onDismiss = { viewModel.closeReelViewer() },
+                        onToggleLike = {
+                            viewModel.toggleReaction(reel.id, "heart")
+                        },
+                        onShare = {
+                            viewModel.sharePost(reel.id)
+                        },
+                        onTip = {
+                            viewModel.openTipModal(reel)
+                        }
+                    )
+                }
+
                 if (isComposerOpen && currentUser != null) {
                     ComposerDialog(
                         currentUser = currentUser!!,
@@ -390,6 +488,9 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         onDismiss = { viewModel.closeComposer() },
                         onSubmit = { text, media, bgIdx, vis ->
                             viewModel.submitPost(text, media, bgIdx, vis)
+                        },
+                        onOpenCreateReel = {
+                            viewModel.openCreateReel()
                         }
                     )
                 }
@@ -558,6 +659,20 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         onToggleCamera = { viewModel.toggleCallCamera() },
                         onFlipCamera = { viewModel.flipCamera() },
                         onEndCall = { viewModel.endCall() }
+                    )
+                }
+
+                // Interactive Live Stream & 100 Cultural Gifts Engine
+                if (isLiveStreamOpen) {
+                    MeskotLiveStreamModal(
+                        currentUser = currentUser,
+                        onDismiss = { viewModel.closeLiveStream() },
+                        onGiftSent = { giftId, giftName, giftIcon, cost ->
+                            viewModel.onGiftSentFromLive(giftId, giftName, giftIcon, cost)
+                        },
+                        onDepositCompleted = { coins, amountEtb, txRef ->
+                            viewModel.buyStarsWithChapa(coins, amountEtb, txRef)
+                        }
                     )
                 }
             }

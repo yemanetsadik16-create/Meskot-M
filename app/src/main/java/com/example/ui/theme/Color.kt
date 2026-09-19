@@ -20,10 +20,20 @@ val MutedText = Color(0xFF5F6E64)
 val ActiveGreen = Color(0xFF31A24C)
 val GreenAccent = Color(0xFF31A24C)
 
+// Luxury Modern Glass & Gold Palette
+val LuxuryGoldAccent = Color(0xFFD4AF37) // Pure metallic champagne gold
+val LuxuryGoldShimmer = Color(0xFFFBF4D7) // Frosted luxury gold highlight
+val LuxuryGoldBorder = Color(0x66D4AF37) // Subtle metallic perimeter line
+val LuxuryDarkGlass = Color(0xEE121B16) // Deep obsidian emerald tint for dark luxury
+val LuxuryLightGlass = Color(0xF2FDFCFA) // Frosted luminous pearl glass
+
 // Meskot Signature Gradients (Iconic arched window logo colors)
 val MeskotLogoBrush = Brush.linearGradient(listOf(GoldLight, Gold, GoldDeep))
 val MeskotLogoHorizontalBrush = Brush.horizontalGradient(listOf(GoldLight, Gold, GoldDeep))
 val MeskotAccentBrush = Brush.horizontalGradient(listOf(Gold, CrossRed, GoldDeep))
+val LuxuryGoldGradient = Brush.horizontalGradient(listOf(Color(0xFFE5B54F), Color(0xFFD49E35), Color(0xFFB88225)))
+val LuxuryGlassGradient = Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.98f), Color(0xFFF9F6F0).copy(alpha = 0.95f)))
+val LuxuryTabActiveBrush = Brush.horizontalGradient(listOf(Color(0xFFFBF4D7), Color(0xFFF8EDCF), Color(0xFFFBF4D7)))
 
 // Post Background Gradients
 val PostGradient1 = Brush.linearGradient(listOf(Color(0xFF8C2F39), Color(0xFFB8863A)))

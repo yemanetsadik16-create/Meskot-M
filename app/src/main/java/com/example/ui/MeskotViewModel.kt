@@ -11,6 +11,7 @@ import com.example.data.GroupItem
 import com.example.data.MeskotRepository
 import com.example.data.NotificationItem
 import com.example.data.Post
+import com.example.data.StoryItem
 import com.example.data.User
 import com.example.data.AdCampaign
 import com.example.data.BoostCampaign
@@ -52,7 +53,8 @@ enum class ScreenTab {
     GROUP_DETAIL,
     ALBUM_DETAIL,
     ADS_MANAGER,
-    CREATOR_STUDIO
+    CREATOR_STUDIO,
+    LIVE
 }
 
 data class ActiveCall(
@@ -76,6 +78,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     val users: StateFlow<List<User>> = repository.users
     val isUsersLoading: StateFlow<Boolean> = repository.isUsersLoading
     val usersError: StateFlow<String?> = repository.usersError
+    val isFeedRefreshing: StateFlow<Boolean> = repository.isFeedRefreshing
     val friends: StateFlow<Set<String>> = repository.friends
     val incomingRequests: StateFlow<List<User>> = repository.incomingRequests
     val outgoingRequests: StateFlow<Set<String>> = repository.outgoingRequests
@@ -86,6 +89,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     val savedPostIds: StateFlow<Set<String>> = repository.savedPostIds
     val subscribedPostIds: StateFlow<Set<String>> = repository.subscribedPostIds
     val incomingCall: StateFlow<CallSession?> = repository.incomingCall
+    val stories: StateFlow<List<StoryItem>> = repository.stories
 
     // Real-time ticking state & Presence Heartbeat
     private val _tickerTimeMs = MutableStateFlow(System.currentTimeMillis())
@@ -193,6 +197,134 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
 
     fun openBuyStars() { _isBuyStarsOpen.value = true }
     fun closeBuyStars() { _isBuyStarsOpen.value = false }
+
+    // Live Stream & Ethiopian Cultural Gifting Engine
+    private val _isLiveStreamOpen = MutableStateFlow(false)
+    val isLiveStreamOpen: StateFlow<Boolean> = _isLiveStreamOpen.asStateFlow()
+
+    fun openLiveStream() {
+        _isLiveStreamOpen.value = true
+    }
+
+    fun closeLiveStream() {
+        _isLiveStreamOpen.value = false
+    }
+
+    fun onGiftSentFromLive(giftId: Int, giftName: String, giftIcon: String, coinsCost: Int) {
+        val user = currentUser.value
+        if (user != null) {
+            val remainingStars = maxOf(0, user.starBalance - coinsCost)
+            val updatedUser = user.copy(starBalance = remainingStars)
+            repository.updateUserProfile(updatedUser)
+        }
+        showMessage("🎁 Sent $giftName $giftIcon ($coinsCost 🪙) in Live Stream!")
+    }
+
+    fun buyStarsWithChapa(starCount: Int, amountEtb: Double, txRef: String) {
+        repository.buyStarsWithChapa(starCount, amountEtb, txRef)
+        showMessage("⭐ Added $starCount Coins to your balance via Chapa! Ref: $txRef")
+    }
+
+    // Story Creation & Story Viewer Flow
+    private val _isCreateStoryOpen = MutableStateFlow(false)
+    val isCreateStoryOpen: StateFlow<Boolean> = _isCreateStoryOpen.asStateFlow()
+
+    private val _activeStoryToView = MutableStateFlow<StoryItem?>(null)
+    val activeStoryToView: StateFlow<StoryItem?> = _activeStoryToView.asStateFlow()
+
+    fun openCreateStory() {
+        _isCreateStoryOpen.value = true
+    }
+
+    fun closeCreateStory() {
+        _isCreateStoryOpen.value = false
+    }
+
+    fun viewStory(story: StoryItem) {
+        _activeStoryToView.value = story
+        val curUser = currentUser.value
+        if (curUser != null) {
+            repository.recordStoryView(story.id, curUser.uid)
+        }
+    }
+
+    fun closeStoryViewer() {
+        _activeStoryToView.value = null
+    }
+
+    fun createStory(
+        mediaUrl: String,
+        caption: String = "",
+        filterName: String = "Normal",
+        expirationHours: Int = 24,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        repository.createStory(
+            mediaUrl = mediaUrl,
+            caption = caption,
+            filterName = filterName,
+            expirationHours = expirationHours,
+            onComplete = { success ->
+                if (success) {
+                    closeCreateStory()
+                }
+                onComplete(success)
+            }
+        )
+    }
+
+    fun deleteStory(storyId: String, onComplete: (Boolean) -> Unit = {}) {
+        if (_activeStoryToView.value?.id == storyId) {
+            _activeStoryToView.value = null
+        }
+        repository.deleteStory(storyId, onComplete)
+    }
+
+    fun toggleStoryLike(storyId: String) {
+        val user = currentUser.value ?: return
+        repository.toggleStoryLike(storyId, user.uid)
+    }
+
+    // Reel Creation & Reel Viewer Flow
+    private val _isCreateReelOpen = MutableStateFlow(false)
+    val isCreateReelOpen: StateFlow<Boolean> = _isCreateReelOpen.asStateFlow()
+
+    private val _activeReelToView = MutableStateFlow<Post?>(null)
+    val activeReelToView: StateFlow<Post?> = _activeReelToView.asStateFlow()
+
+    fun openCreateReel() {
+        _isCreateReelOpen.value = true
+    }
+
+    fun closeCreateReel() {
+        _isCreateReelOpen.value = false
+    }
+
+    fun viewReel(reelPost: Post) {
+        _activeReelToView.value = reelPost
+    }
+
+    fun closeReelViewer() {
+        _activeReelToView.value = null
+    }
+
+    fun submitReel(
+        videoUrl: String,
+        caption: String,
+        audioTrackTitle: String = "Original Audio",
+        thumbnailUrl: String = "",
+        visibility: String = "public"
+    ) {
+        repository.createReel(
+            videoUrl = videoUrl,
+            caption = caption,
+            audioTrackTitle = audioTrackTitle,
+            thumbnailUrl = thumbnailUrl,
+            visibility = visibility
+        )
+        closeCreateReel()
+        showMessage("🎥 Reel posted successfully!")
+    }
 
     private val _activeChapaSession = MutableStateFlow<ChapaPaymentSession?>(null)
     val activeChapaSession: StateFlow<ChapaPaymentSession?> = _activeChapaSession.asStateFlow()
@@ -375,15 +507,32 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _composerGroupId.value = null
     }
 
-    fun submitPost(text: String, mediaUrls: List<String>, bgColorIndex: Int, visibility: String) {
+    fun submitPost(
+        text: String,
+        mediaUrls: List<String>,
+        bgColorIndex: Int,
+        visibility: String,
+        postType: String = "POST",
+        videoUrl: String = "",
+        audioTrackTitle: String = ""
+    ) {
         val gid = _composerGroupId.value
         if (gid != null) {
             repository.createGroupPost(gid, text, mediaUrls)
         } else {
-            repository.createPost(text, mediaUrls, bgColorIndex, visibility)
+            repository.createPost(
+                text = text,
+                mediaUrls = mediaUrls,
+                bgColorIndex = bgColorIndex,
+                visibility = visibility,
+                postType = postType,
+                videoUrl = videoUrl,
+                audioTrackTitle = audioTrackTitle
+            )
         }
         closeComposer()
-        showMessage("Posted successfully")
+        val msg = if (postType == "REEL") "🎥 Reel posted!" else if (mediaUrls.isNotEmpty()) "📸 Photo post published!" else "Posted successfully"
+        showMessage(msg)
     }
 
     // Post Actions
@@ -1112,6 +1261,12 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
 
     fun refreshUsers() {
         repository.refreshUsers()
+    }
+
+    fun refreshFeed() {
+        viewModelScope.launch {
+            repository.refreshFeed()
+        }
     }
 }
 

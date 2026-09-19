@@ -8,8 +8,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -57,6 +61,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.VideoCameraBack
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.window.Dialog
@@ -165,15 +170,30 @@ fun ProfileScreen(
         }
     }
 
+    var viewingPhotoUrl by remember { mutableStateOf<String?>(null) }
+
     // Filter posts if search query is active
-    val filteredPosts = remember(userPosts, searchQuery, selectedTab) {
-        val base = if (searchQuery.isBlank()) userPosts else userPosts.filter {
+    val allPosts = remember(userPosts, searchQuery) {
+        if (searchQuery.isBlank()) userPosts else userPosts.filter {
             it.text.contains(searchQuery, ignoreCase = true)
         }
-        when (selectedTab) {
-            1 -> base.filter { it.mediaUrls.isNotEmpty() }
-            2 -> base.filter { it.mediaUrls.isNotEmpty() }
-            else -> base
+    }
+
+    val userReels = remember(allPosts) {
+        allPosts.filter { it.postType.equals("REEL", ignoreCase = true) || it.videoUrl.isNotBlank() }
+    }
+
+    val userPhotos = remember(allPosts) {
+        allPosts.filter {
+            (it.mediaUrls.isNotEmpty() || it.postType.equals("PHOTO", ignoreCase = true)) &&
+            !it.postType.equals("REEL", ignoreCase = true) &&
+            it.videoUrl.isBlank()
+        }
+    }
+
+    val allPhotosList = remember(userPhotos) {
+        userPhotos.flatMap { post ->
+            post.mediaUrls.map { url -> url to post }
         }
     }
 
@@ -183,62 +203,87 @@ fun ProfileScreen(
             .background(Color.White)
             .testTag("profile_screen")
     ) {
-        // TOP BAR: Facebook Lite Profile Navigation Bar
+        // TOP BAR: Modern Luxury Meskot Profile Navigation Bar
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            color = Color.White,
-            shadowElevation = 1.dp
+            color = Color.White.copy(alpha = 0.98f),
+            shadowElevation = 3.dp
         ) {
             Column {
+                // Top micro luxury gold line
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.5.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(GoldLight, Gold, GoldDeep, Gold, GoldLight)
+                            )
+                        )
+                )
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 6.dp),
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { viewModel.navigateTo(ScreenTab.FEED) }) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(GoldSurface)
+                            .border(1.dp, GoldBorder.copy(alpha = 0.7f), CircleShape)
+                            .clickable { viewModel.navigateTo(ScreenTab.FEED) },
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = fbDark
+                            tint = Ink,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
-                    // User name with red '1' notification badge and dropdown arrow
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    // User name with gold badge and dropdown
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(GoldSurface)
+                            .border(1.dp, GoldBorder.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
                             .clickable { isAccountMenuOpen = !isAccountMenuOpen }
-                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = if (user.displayName.length > 14) user.displayName.take(13) + "…" else user.displayName,
-                            fontSize = 17.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = fbDark
+                            color = Ink
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Box(
                             modifier = Modifier
                                 .size(18.dp)
                                 .clip(CircleShape)
-                                .background(fbBadgeRed),
+                                .background(CrossRed),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = "1",
                                 color = Color.White,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        Spacer(modifier = Modifier.width(2.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = Icons.Default.ArrowDropDown,
                             contentDescription = "Dropdown",
-                            tint = fbDark,
-                            modifier = Modifier.size(20.dp)
+                            tint = GoldDeep,
+                            modifier = Modifier.size(18.dp)
                         )
 
                         DropdownMenu(
@@ -271,37 +316,73 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.weight(1f))
 
                     // Edit Profile Icon Button
-                    IconButton(onClick = {
-                        if (isMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
-                    }) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(GoldSurface)
+                            .border(1.dp, GoldBorder.copy(alpha = 0.6f), CircleShape)
+                            .clickable {
+                                if (isMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Edit Profile",
-                            tint = fbDark,
-                            modifier = Modifier.size(22.dp)
+                            tint = GoldDeep,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
+                    Spacer(modifier = Modifier.width(6.dp))
+
                     // Search In Profile Icon Button
-                    IconButton(onClick = { isSearchOpen = !isSearchOpen }) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(GoldSurface)
+                            .border(1.dp, GoldBorder.copy(alpha = 0.6f), CircleShape)
+                            .clickable { isSearchOpen = !isSearchOpen },
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search Profile",
-                            tint = fbDark,
-                            modifier = Modifier.size(22.dp)
+                            tint = GoldDeep,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
+                    Spacer(modifier = Modifier.width(6.dp))
+
                     // More Options Icon Button (...)
-                    IconButton(onClick = { isMoreOptionsOpen = true }) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(GoldSurface)
+                            .border(1.dp, GoldBorder.copy(alpha = 0.6f), CircleShape)
+                            .clickable { isMoreOptionsOpen = true },
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
                             contentDescription = "More Options",
-                            tint = fbDark,
-                            modifier = Modifier.size(22.dp)
+                            tint = GoldDeep,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
+
+                // Micro hairline divider
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(0.5.dp)
+                        .background(LineBorder.copy(alpha = 0.5f))
+                )
 
                 // Optional Expandable Search Input Field
                 if (isSearchOpen) {
@@ -919,8 +1000,9 @@ fun ProfileScreen(
                 }
             }
 
-            // PERSONAL DETAILS SECTION (Screenshot 1)
-            item {
+            // PERSONAL DETAILS SECTION (Only shown in 'All' tab)
+            if (selectedTab == 0) {
+                item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1426,7 +1508,7 @@ fun ProfileScreen(
                             modifier = Modifier.padding(vertical = 10.dp)
                         )
 
-                        // 3 Composer actions matching FB Lite: Photo | Check In | Life Event
+                        // Composer actions: Photo | Reel | Check In | Life Event
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceAround
@@ -1446,6 +1528,27 @@ fun ProfileScreen(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "Photo",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = fbDark
+                                )
+                            }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clickable { viewModel.openCreateReel() }
+                                    .padding(vertical = 4.dp, horizontal = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.VideoCameraBack,
+                                    contentDescription = "Reel",
+                                    tint = GoldDeep,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Reel",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = fbDark
@@ -1497,52 +1600,28 @@ fun ProfileScreen(
                     }
                 }
             }
+            } // End of if (selectedTab == 0) for Personal details & composer
 
-            // POSTS / PHOTOS / REELS CONTENT
-            if (filteredPosts.isEmpty()) {
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = if (selectedTab == 2) "No photos uploaded yet" else "No posts yet",
-                            color = fbTextGray,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-            } else {
-                if (selectedTab == 2) {
-                    // PHOTOS GRID
-                    val allMedia = filteredPosts.flatMap { it.mediaUrls }
+            // TABS CONTENT: ALL (POSTS) | REELS | PHOTOS
+            if (selectedTab == 0) {
+                // ALL / POSTS TAB
+                if (allPosts.isEmpty()) {
                     item {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(3),
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(320.dp)
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                .padding(vertical = 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            items(allMedia) { url ->
-                                AsyncImage(
-                                    model = url,
-                                    contentDescription = "User Photo",
-                                    modifier = Modifier
-                                        .size(100.dp)
-                                        .clip(RoundedCornerShape(6.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
+                            Text(
+                                text = "No posts yet",
+                                color = fbTextGray,
+                                fontSize = 14.sp
+                            )
                         }
                     }
                 } else {
-                    // FEED OF POST CARDS
-                    items(filteredPosts) { post ->
+                    items(allPosts) { post ->
                         val comments = viewModel.getComments(post.id)
                         val userTier = viewModel.getUserMembershipTier(post.uid)
                         PostCard(
@@ -1561,14 +1640,404 @@ fun ProfileScreen(
                             onOpenMenu = { viewModel.openPostMenu(it) },
                             onAddComment = { pid, text, parentId -> viewModel.addComment(pid, text, parentId) },
                             onToggleCommentLike = { pid, cid -> viewModel.toggleCommentLike(pid, cid) },
-                            onDeleteComment = { pid, cid -> viewModel.deleteComment(pid, cid) }
+                            onDeleteComment = { pid, cid -> viewModel.deleteComment(pid, cid) },
+                            onReelClick = { viewModel.viewReel(it) }
                         )
+                    }
+                }
+            } else if (selectedTab == 1) {
+                // REELS TAB
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.VideoCameraBack,
+                                contentDescription = null,
+                                tint = GoldDeep,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Reels",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = fbDark
+                            )
+                            if (userReels.isNotEmpty()) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "(${userReels.size})",
+                                    fontSize = 14.sp,
+                                    color = fbTextGray
+                                )
+                            }
+                        }
+                        if (isMe) {
+                            Surface(
+                                onClick = { viewModel.openCreateReel() },
+                                shape = RoundedCornerShape(16.dp),
+                                color = GoldSurface,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = GoldDeep,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Create Reel",
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = GoldDeep
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (userReels.isEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 40.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(CircleShape)
+                                    .background(GoldSurface)
+                                    .border(1.5.dp, GoldBorder, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.VideoCameraBack,
+                                    contentDescription = null,
+                                    tint = GoldDeep,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text(
+                                text = if (isMe) "No reels posted yet" else "No reels posted by ${user.displayName}",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = fbDark
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = if (isMe) "Share short video clips, music vibes, and cultural moments with your audience" else "When they share a reel, it will appear here.",
+                                fontSize = 13.sp,
+                                color = fbTextGray,
+                                textAlign = TextAlign.Center
+                            )
+                            if (isMe) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = { viewModel.openCreateReel() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = GoldDeep),
+                                    shape = RoundedCornerShape(20.dp)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Create First Reel", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    items(userReels.chunked(3)) { rowReels ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            rowReels.forEach { reel ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .aspectRatio(9f / 16f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color.Black)
+                                        .clickable { viewModel.viewReel(reel) }
+                                ) {
+                                    val mediaUrl = reel.videoUrl.ifBlank { reel.mediaUrls.firstOrNull() }
+                                    if (!mediaUrl.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model = mediaUrl,
+                                            contentDescription = reel.text,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+
+                                    // Vertical dark gradient overlay
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    0.0f to Color.Black.copy(alpha = 0.35f),
+                                                    0.6f to Color.Transparent,
+                                                    1.0f to Color.Black.copy(alpha = 0.85f)
+                                                )
+                                            )
+                                    )
+
+                                    // Top Views count
+                                    Row(
+                                        modifier = Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Text(
+                                            text = if (reel.viewsCount > 0) "${reel.viewsCount}" else "1.2K",
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    // Bottom caption or audio title
+                                    Column(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomStart)
+                                            .padding(6.dp)
+                                    ) {
+                                        if (reel.audioTrackTitle.isNotBlank()) {
+                                            Text(
+                                                text = "🎵 ${reel.audioTrackTitle}",
+                                                color = GoldLight,
+                                                fontSize = 9.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        if (reel.text.isNotBlank()) {
+                                            Text(
+                                                text = reel.text,
+                                                color = Color.White,
+                                                fontSize = 10.sp,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            repeat(3 - rowReels.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            } else if (selectedTab == 2) {
+                // PHOTOS TAB
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.PhotoLibrary,
+                                contentDescription = null,
+                                tint = fbDark,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Photos",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = fbDark
+                            )
+                            if (allPhotosList.isNotEmpty()) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "(${allPhotosList.size})",
+                                    fontSize = 14.sp,
+                                    color = fbTextGray
+                                )
+                            }
+                        }
+                        if (isMe) {
+                            Surface(
+                                onClick = { viewModel.openComposer() },
+                                shape = RoundedCornerShape(16.dp),
+                                color = fbLightGray.copy(alpha = 0.6f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = fbDark,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Add Photo",
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = fbDark
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (allPhotosList.isEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 40.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(CircleShape)
+                                    .background(fbLightGray.copy(alpha = 0.5f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PhotoLibrary,
+                                    contentDescription = null,
+                                    tint = fbTextGray,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text(
+                                text = if (isMe) "No photos uploaded yet" else "No photos uploaded by ${user.displayName}",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = fbDark
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = if (isMe) "Photos and memories you share with your friends will appear here" else "When they upload photos, they will appear here.",
+                                fontSize = 13.sp,
+                                color = fbTextGray,
+                                textAlign = TextAlign.Center
+                            )
+                            if (isMe) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = { viewModel.openComposer() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = fbBlue),
+                                    shape = RoundedCornerShape(20.dp)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Upload Photo", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    items(allPhotosList.chunked(3)) { rowPhotos ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            rowPhotos.forEach { (url, post) ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .aspectRatio(1f)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0xFFF0F2F5))
+                                        .clickable { viewingPhotoUrl = url }
+                                ) {
+                                    AsyncImage(
+                                        model = url,
+                                        contentDescription = post.text.ifBlank { "User Photo" },
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                            }
+                            repeat(3 - rowPhotos.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
                     }
                 }
             }
 
             item {
                 Spacer(modifier = Modifier.height(90.dp))
+            }
+        }
+    }
+
+    // FULLSCREEN PHOTO PREVIEW DIALOG
+    viewingPhotoUrl?.let { photoUrl ->
+        Dialog(
+            onDismissRequest = { viewingPhotoUrl = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            ) {
+                AsyncImage(
+                    model = photoUrl,
+                    contentDescription = "Full photo preview",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    contentScale = ContentScale.Fit
+                )
+                IconButton(
+                    onClick = { viewingPhotoUrl = null },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(20.dp)
+                        .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close photo",
+                        tint = Color.White
+                    )
+                }
             }
         }
     }
@@ -2000,7 +2469,8 @@ fun MenuScreen(
                 Triple("📊", "Dashboard", ScreenTab.DASHBOARD),
                 Triple("🔖", MeskotStrings.get("savedPosts", currentLanguage), ScreenTab.SAVED),
                 Triple("📢", "Ads Manager", ScreenTab.ADS_MANAGER),
-                Triple("👑", "Creator Studio", ScreenTab.CREATOR_STUDIO)
+                Triple("👑", "Creator Studio", ScreenTab.CREATOR_STUDIO),
+                Triple("🔴", "Live Streaming", ScreenTab.LIVE)
             )
 
             Row(
@@ -2078,6 +2548,26 @@ fun MenuScreen(
                         onClick = { viewModel.navigateTo(item.third) },
                         modifier = Modifier.weight(1f)
                     )
+                }
+            }
+
+            if (menuItems.size > 10) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    menuItems.drop(10).forEach { item ->
+                        MenuShortcutCard(
+                            emoji = item.first,
+                            title = item.second,
+                            onClick = { viewModel.navigateTo(item.third) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (menuItems.size % 2 != 0) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }

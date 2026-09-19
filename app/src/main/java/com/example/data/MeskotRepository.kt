@@ -31,15 +31,62 @@ class MeskotRepository(
     val isUsersLoading: StateFlow<Boolean> = userRepository.isLoading
     val usersError: StateFlow<String?> = userRepository.error
 
+    // Feed Refreshing State (for pull-to-refresh)
+    private val _isFeedRefreshing = MutableStateFlow(false)
+    val isFeedRefreshing: StateFlow<Boolean> = _isFeedRefreshing.asStateFlow()
+
     fun refreshUsers() {
         repoScope.launch {
             userRepository.refreshUsers()
         }
     }
 
+    suspend fun refreshFeed() {
+        _isFeedRefreshing.value = true
+        try {
+            coroutineScope {
+                val usersDeferred = async {
+                    try {
+                        userRepository.refreshUsers()
+                    } catch (e: Exception) {
+                        android.util.Log.e("MeskotRepository", "Error refreshing users: ${e.message}")
+                    }
+                }
+
+                val postsDeferred = CompletableDeferred<Unit>()
+                FirebaseManager.fetchPostsOnce { livePosts ->
+                    if (livePosts.isNotEmpty()) {
+                        _posts.value = livePosts
+                    }
+                    postsDeferred.complete(Unit)
+                }
+
+                val storiesDeferred = CompletableDeferred<Unit>()
+                FirebaseManager.fetchStoriesOnce { liveStories ->
+                    _stories.value = liveStories
+                    storiesDeferred.complete(Unit)
+                }
+
+                usersDeferred.await()
+                postsDeferred.await()
+                storiesDeferred.await()
+            }
+            updateCurrentUserLastSeen()
+        } catch (e: Exception) {
+            android.util.Log.e("MeskotRepository", "Error refreshing feed: ${e.message}")
+        } finally {
+            _isFeedRefreshing.value = false
+        }
+    }
+
     // Posts list (populated directly from Firebase Firestore)
     private val _posts = MutableStateFlow<List<Post>>(emptyList())
     val posts: StateFlow<List<Post>> = _posts.asStateFlow()
+
+    // Stories list (synchronized with Firebase Firestore with expiration timer)
+    private val _stories = MutableStateFlow<List<StoryItem>>(emptyList())
+    val stories: StateFlow<List<StoryItem>> = _stories.asStateFlow()
+    private var storiesRegistration: com.google.firebase.firestore.ListenerRegistration? = null
 
     // Comments map: postId -> List<Comment>
     private val _comments = MutableStateFlow<Map<String, List<Comment>>>(emptyMap())
@@ -286,6 +333,11 @@ class MeskotRepository(
                 _posts.value = livePosts
             }
 
+            storiesRegistration?.remove()
+            storiesRegistration = FirebaseManager.listenToStories { liveStories ->
+                _stories.value = liveStories
+            }
+
             FirebaseManager.listenToComments { liveComments ->
                 _comments.value = liveComments
             }
@@ -467,6 +519,8 @@ class MeskotRepository(
         userMessageRegistrations = emptyList()
         generalMessagesRegistration?.remove()
         generalMessagesRegistration = null
+        storiesRegistration?.remove()
+        storiesRegistration = null
         _incomingMessageAlert.value = null
         _incomingCall.value = null
         userRepository.setCurrentUser(null)
@@ -584,8 +638,17 @@ class MeskotRepository(
     }
 
     // POSTS METHODS
-    fun createPost(text: String, mediaUrls: List<String> = emptyList(), bgColorIndex: Int = 0, visibility: String = "public") {
+    fun createPost(
+        text: String,
+        mediaUrls: List<String> = emptyList(),
+        bgColorIndex: Int = 0,
+        visibility: String = "public",
+        postType: String = "POST",
+        videoUrl: String = "",
+        audioTrackTitle: String = ""
+    ) {
         val user = _currentUser.value ?: return
+        val calculatedType = if (postType != "POST") postType else if (videoUrl.isNotBlank()) "REEL" else if (mediaUrls.isNotEmpty()) "PHOTO" else "POST"
         val newPost = Post(
             id = "post_" + System.currentTimeMillis(),
             uid = user.uid,
@@ -595,6 +658,10 @@ class MeskotRepository(
             mediaUrls = mediaUrls,
             bgColorIndex = bgColorIndex,
             visibility = visibility,
+            postType = calculatedType,
+            videoUrl = videoUrl,
+            audioTrackTitle = audioTrackTitle,
+            viewsCount = if (calculatedType == "REEL") 1 else 0,
             reactions = emptyMap(),
             commentCount = 0,
             createdAt = System.currentTimeMillis(),
@@ -602,6 +669,25 @@ class MeskotRepository(
         )
         _posts.value = listOf(newPost) + _posts.value
         FirebaseManager.createPost(newPost)
+    }
+
+    fun createReel(
+        videoUrl: String,
+        caption: String,
+        audioTrackTitle: String = "Original Audio",
+        thumbnailUrl: String = "",
+        visibility: String = "public"
+    ) {
+        val media = if (thumbnailUrl.isNotBlank()) listOf(thumbnailUrl) else if (videoUrl.isNotBlank()) listOf(videoUrl) else emptyList()
+        createPost(
+            text = caption,
+            mediaUrls = media,
+            bgColorIndex = 0,
+            visibility = visibility,
+            postType = "REEL",
+            videoUrl = videoUrl,
+            audioTrackTitle = audioTrackTitle
+        )
     }
 
     fun editPost(postId: String, newText: String) {
@@ -614,6 +700,66 @@ class MeskotRepository(
     fun deletePost(postId: String) {
         _posts.value = _posts.value.filterNot { it.id == postId }
         FirebaseManager.deletePost(postId)
+    }
+
+    // ==========================================
+    // STORIES METHODS WITH EXPIRATION TIMER
+    // ==========================================
+    fun createStory(
+        mediaUrl: String,
+        caption: String = "",
+        filterName: String = "Normal",
+        expirationHours: Int = 24,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        val user = _currentUser.value ?: return
+        val nowMs = System.currentTimeMillis()
+        val expiresAt = nowMs + (expirationHours * 3600 * 1000L)
+        val newStory = StoryItem(
+            id = "story_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().take(6),
+            uid = user.uid,
+            authorName = user.displayName,
+            authorPhoto = user.photoUrl,
+            mediaUrl = mediaUrl,
+            caption = caption,
+            filterName = filterName,
+            createdAt = nowMs,
+            expiresAt = expiresAt,
+            viewers = listOf(user.uid),
+            likes = emptyMap()
+        )
+        // Optimistic update
+        _stories.value = listOf(newStory) + _stories.value.filter { it.id != newStory.id }
+        FirebaseManager.createStory(newStory) { success ->
+            onComplete(success)
+        }
+    }
+
+    fun deleteStory(storyId: String, onComplete: (Boolean) -> Unit = {}) {
+        _stories.value = _stories.value.filterNot { it.id == storyId }
+        FirebaseManager.deleteStory(storyId, onComplete)
+    }
+
+    fun recordStoryView(storyId: String, viewerUid: String) {
+        if (viewerUid.isBlank()) return
+        _stories.value = _stories.value.map {
+            if (it.id == storyId && !it.viewers.contains(viewerUid)) {
+                it.copy(viewers = it.viewers + viewerUid)
+            } else it
+        }
+        FirebaseManager.recordStoryView(storyId, viewerUid)
+    }
+
+    fun toggleStoryLike(storyId: String, uid: String) {
+        _stories.value = _stories.value.map {
+            if (it.id == storyId) {
+                val currentlyLiked = it.likes[uid] ?: false
+                val newLikes = it.likes.toMutableMap()
+                if (currentlyLiked) newLikes.remove(uid) else newLikes[uid] = true
+                FirebaseManager.toggleStoryLike(storyId, uid, !currentlyLiked)
+                it.copy(likes = newLikes)
+            } else it
+        }
     }
 
     fun toggleReaction(postId: String, reactionType: String) {

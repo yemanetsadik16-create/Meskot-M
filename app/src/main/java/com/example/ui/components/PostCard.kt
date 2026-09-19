@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -27,6 +28,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
@@ -100,6 +104,7 @@ fun PostCard(
     currentUserTier: MembershipTier = MembershipTier.FREE,
     onBoostClick: (Post) -> Unit = {},
     onUnlockVip: (String) -> Unit = {},
+    onReelClick: (Post) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isCommentsOpen by remember { mutableStateOf(false) }
@@ -321,8 +326,13 @@ fun PostCard(
                     }
                 }
 
-                // Media Images Grid
-                if (post.mediaUrls.isNotEmpty()) {
+                // Media Images Grid or Reel Video Card
+                if (post.postType == "REEL" || post.videoUrl.isNotBlank()) {
+                    ReelMediaPreviewCard(
+                        post = post,
+                        onClick = { onReelClick(post) }
+                    )
+                } else if (post.mediaUrls.isNotEmpty()) {
                     MediaGrid(urls = post.mediaUrls)
                 }
 
@@ -865,6 +875,141 @@ fun SharedPostBox(
                     contentScale = ContentScale.Crop
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun ReelMediaPreviewCard(
+    post: Post,
+    onClick: () -> Unit
+) {
+    val mediaUrl = post.videoUrl.ifBlank { post.mediaUrls.firstOrNull() }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+            .height(290.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.Black)
+            .border(1.2.dp, Gold.copy(alpha = 0.55f), RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+    ) {
+        if (!mediaUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = mediaUrl,
+                contentDescription = "Reel Content",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF221A12)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("🎥 Meskot Reel", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        // Gradient overlay
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to Color.Black.copy(alpha = 0.4f),
+                        0.55f to Color.Transparent,
+                        1.0f to Color.Black.copy(alpha = 0.85f)
+                    )
+                )
+        )
+
+        // Top Left: "🎥 REEL" Pill
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.Black.copy(alpha = 0.65f))
+                .border(1.dp, Gold, RoundedCornerShape(8.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.PlayCircle,
+                    contentDescription = null,
+                    tint = Gold,
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "REEL",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        // Center Play Button with Glow
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.65f))
+                .border(2.dp, Gold, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.PlayArrow,
+                contentDescription = "Watch Reel",
+                tint = Color.White,
+                modifier = Modifier.size(32.dp)
+            )
+        }
+
+        // Bottom Details: Audio track pill & views
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = Gold,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = post.audioTrackTitle.ifBlank { "Original Audio" },
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Text(
+                text = "▶ Tap to Watch",
+                color = Gold,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
