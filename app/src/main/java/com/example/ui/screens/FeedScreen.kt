@@ -50,11 +50,14 @@ import androidx.compose.material.icons.filled.VideoCameraBack
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.layout.offset
 import com.example.data.AppLanguage
 import com.example.data.MeskotStrings
 import com.example.data.Post
 import com.example.data.StoryItem
 import com.example.data.User
+import com.example.data.LiveStreamSession
 import com.example.ui.MeskotViewModel
 import com.example.ui.components.MeskotReelsRail
 import com.example.ui.components.PostCard
@@ -74,6 +77,11 @@ fun FeedScreen(
     val stories by viewModel.stories.collectAsState()
     val tickerTimeMs by viewModel.tickerTimeMs.collectAsState()
     val isRefreshing by viewModel.isFeedRefreshing.collectAsState()
+    val activeLiveStreams by viewModel.activeLiveStreams.collectAsState()
+
+    val liveStreamsList = remember(activeLiveStreams) {
+        activeLiveStreams.filter { it.isLive }
+    }
 
     // Filter active (non-expired) stories
     val activeStories = remember(stories, tickerTimeMs) {
@@ -145,6 +153,66 @@ fun FeedScreen(
                                     }
                                 }
                             )
+                        }
+                    }
+
+                    // Active Live Broadcasts in Community (Firebase Firestore backed)
+                    liveStreamsList.forEach { liveStream ->
+                        item(key = "live_stream_${liveStream.id}") {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clickable { viewModel.openLiveStream(liveStream) }
+                                    .width(72.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .border(
+                                            width = 2.5.dp,
+                                            brush = Brush.sweepGradient(
+                                                listOf(
+                                                    Color(0xFFE53935),
+                                                    Color(0xFFFED100),
+                                                    Color(0xFF009A44),
+                                                    Color(0xFFE53935)
+                                                )
+                                            ),
+                                            shape = CircleShape
+                                        )
+                                        .padding(3.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    UserAvatar(
+                                        photoUrl = liveStream.hostPhoto,
+                                        name = liveStream.hostName,
+                                        size = 56
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .offset(y = 4.dp)
+                                            .background(Color(0xFFE53935), RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                    ) {
+                                        Text(
+                                            text = "LIVE",
+                                            color = Color.White,
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = liveStream.hostName,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Ink,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
 

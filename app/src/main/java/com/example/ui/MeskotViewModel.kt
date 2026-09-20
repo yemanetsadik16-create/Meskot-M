@@ -24,6 +24,8 @@ import com.example.data.DailyEarningsMetric
 import com.example.data.CreatorPayoutAccount
 import com.example.data.ChapaGatewayConfig
 import com.example.data.ProgramStatus
+import com.example.data.LiveStreamSession
+import com.example.data.LiveStreamComment
 import com.example.util.CallAudioManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -43,6 +45,7 @@ enum class ScreenTab {
     MESSAGES,
     GROUPS,
     PHOTOS,
+    REELS,
     NOTIFICATIONS,
     DASHBOARD,
     MENU,
@@ -198,25 +201,56 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     fun openBuyStars() { _isBuyStarsOpen.value = true }
     fun closeBuyStars() { _isBuyStarsOpen.value = false }
 
-    // Live Stream & Ethiopian Cultural Gifting Engine
+    // Live Stream & Ethiopian Cultural Gifting Engine connected with Firebase Firestore
     private val _isLiveStreamOpen = MutableStateFlow(false)
     val isLiveStreamOpen: StateFlow<Boolean> = _isLiveStreamOpen.asStateFlow()
 
-    fun openLiveStream() {
-        _isLiveStreamOpen.value = true
+    val activeLiveStreams: StateFlow<List<LiveStreamSession>> = repository.activeLiveStreams
+    val currentLiveSession: StateFlow<LiveStreamSession?> = repository.currentLiveSession
+    val currentLiveMessages: StateFlow<List<LiveStreamComment>> = repository.currentLiveMessages
+
+    fun openLiveStream(session: LiveStreamSession? = null) {
+        if (session != null) {
+            repository.joinLiveStream(session)
+            _isLiveStreamOpen.value = true
+        } else {
+            // Check if there is already an active stream by the current user or anyone else
+            val curUid = currentUser.value?.uid
+            val myExistingStream = activeLiveStreams.value.find { it.hostUid == curUid && it.isLive }
+            if (myExistingStream != null) {
+                repository.joinLiveStream(myExistingStream)
+                _isLiveStreamOpen.value = true
+            } else {
+                // Start a new live stream broadcast in Firebase
+                val userName = currentUser.value?.displayName ?: "Meskot Broadcaster"
+                repository.startLiveStream("$userName's Meskot Live") {
+                    _isLiveStreamOpen.value = true
+                }
+            }
+        }
+    }
+
+    fun startLiveStream(title: String, category: String = "Culture & Chat") {
+        repository.startLiveStream(title, category) {
+            _isLiveStreamOpen.value = true
+        }
     }
 
     fun closeLiveStream() {
+        repository.leaveLiveStream()
         _isLiveStreamOpen.value = false
     }
 
+    fun sendLiveComment(text: String) {
+        repository.sendLiveComment(text)
+    }
+
+    fun sendLiveHeart() {
+        repository.sendLiveHeart()
+    }
+
     fun onGiftSentFromLive(giftId: Int, giftName: String, giftIcon: String, coinsCost: Int) {
-        val user = currentUser.value
-        if (user != null) {
-            val remainingStars = maxOf(0, user.starBalance - coinsCost)
-            val updatedUser = user.copy(starBalance = remainingStars)
-            repository.updateUserProfile(updatedUser)
-        }
+        repository.sendLiveGift(giftId, giftName, giftIcon, coinsCost)
         showMessage("🎁 Sent $giftName $giftIcon ($coinsCost 🪙) in Live Stream!")
     }
 

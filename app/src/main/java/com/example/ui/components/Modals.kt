@@ -1638,8 +1638,8 @@ fun EditProfileDialog(
     var gender by remember { mutableStateOf(currentUser.gender) }
     var birthDate by remember { mutableStateOf(if (currentUser.birthDate.trim().equals("May 11, 1994", ignoreCase = true)) "" else currentUser.birthDate) }
     var profession by remember { mutableStateOf(if (currentUser.profession.trim().equals("Public figure", ignoreCase = true)) "" else currentUser.profession) }
-    var location by remember { mutableStateOf(if (currentUser.location.trim().equals("Calgary, Alberta", ignoreCase = true) || currentUser.location.trim().equals("Calgary", ignoreCase = true)) "" else currentUser.location) }
-    var hometown by remember { mutableStateOf(if (currentUser.hometown.trim().equals("Calgary, Alberta", ignoreCase = true) || currentUser.hometown.trim().equals("Calgary", ignoreCase = true)) "" else currentUser.hometown) }
+    var location by remember { mutableStateOf(currentUser.location) }
+    var hometown by remember { mutableStateOf(currentUser.hometown) }
     var workplace by remember { mutableStateOf(if (currentUser.workplace.trim().equals("Adigrat university _Engineering Sciences", ignoreCase = true)) "" else currentUser.workplace) }
     var workRole by remember { mutableStateOf(if (currentUser.workRole.trim().equals("Civil Engineering", ignoreCase = true)) "" else currentUser.workRole) }
     var education by remember { mutableStateOf(if (currentUser.education.trim().equals("Adigrat University", ignoreCase = true)) "" else currentUser.education) }
@@ -1707,7 +1707,7 @@ fun EditProfileDialog(
                 OutlinedTextField(
                     value = location,
                     onValueChange = { location = it },
-                    label = { Text("Current City / Location") },
+                    label = { Text("Current City / Location (Lives in)") },
                     placeholder = { Text("e.g. Addis Ababa, Ethiopia") },
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
                     colors = com.example.ui.theme.meskotTextFieldColors(),
@@ -1715,18 +1715,68 @@ fun EditProfileDialog(
                     shape = RoundedCornerShape(10.dp)
                 )
 
+                // Quick city suggestions
+                val citySuggestions = listOf("Addis Ababa, Ethiopia", "Mekelle, Ethiopia", "Hawassa, Ethiopia", "Bahir Dar, Ethiopia", "Asmara, Eritrea", "Washington, DC")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    citySuggestions.take(3).forEach { city ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (location == city) GoldSurface else Color(0xFFF1F5F9))
+                                .border(1.dp, if (location == city) Gold else Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+                                .clickable { location = city }
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = city.substringBefore(","),
+                                fontSize = 11.sp,
+                                color = if (location == city) GoldDeep else Ink
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(10.dp))
 
                 OutlinedTextField(
                     value = hometown,
                     onValueChange = { hometown = it },
-                    label = { Text("Hometown") },
+                    label = { Text("Hometown (From)") },
                     placeholder = { Text("e.g. Asmara, Eritrea") },
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
                     colors = com.example.ui.theme.meskotTextFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)
                 )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    citySuggestions.drop(1).take(3).forEach { city ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (hometown == city) GoldSurface else Color(0xFFF1F5F9))
+                                .border(1.dp, if (hometown == city) Gold else Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+                                .clickable { hometown = city }
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = city.substringBefore(","),
+                                fontSize = 11.sp,
+                                color = if (hometown == city) GoldDeep else Ink
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(10.dp))
 

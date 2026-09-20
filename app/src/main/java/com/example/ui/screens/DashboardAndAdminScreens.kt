@@ -76,7 +76,6 @@ fun DashboardScreen(
 
     val totalLikes = myPosts.sumOf { it.reactions.size }
     val totalComments = myPosts.sumOf { it.commentCount }
-    val totalTips = myPosts.sumOf { it.tipTotal }
 
     Column(
         modifier = Modifier
@@ -176,30 +175,6 @@ fun DashboardScreen(
                                 emoji = "💬",
                                 modifier = Modifier.weight(1f)
                             )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Creator Support ETB Card
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = Paper2),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Gold)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(text = "Creator Earnings via Chapa", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-                                    Text(text = "${totalTips.toInt()} ETB", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = GoldDeep)
-                                }
-                                Text(text = "💰", fontSize = 32.sp)
-                            }
                         }
                     }
                 }

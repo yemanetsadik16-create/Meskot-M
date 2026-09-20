@@ -128,6 +128,21 @@ class MeskotRepository(
     private val _savedPostIds = MutableStateFlow<Set<String>>(emptySet())
     val savedPostIds: StateFlow<Set<String>> = _savedPostIds.asStateFlow()
 
+    // Real-time Live Streams & Sessions synchronized with Firebase Firestore
+    private val _activeLiveStreams = MutableStateFlow<List<LiveStreamSession>>(emptyList())
+    val activeLiveStreams: StateFlow<List<LiveStreamSession>> = _activeLiveStreams.asStateFlow()
+    private var liveStreamsRegistration: com.google.firebase.firestore.ListenerRegistration? = null
+
+    // Currently active live session (either as host or viewer)
+    private val _currentLiveSession = MutableStateFlow<LiveStreamSession?>(null)
+    val currentLiveSession: StateFlow<LiveStreamSession?> = _currentLiveSession.asStateFlow()
+    private var currentLiveSessionRegistration: com.google.firebase.firestore.ListenerRegistration? = null
+
+    // Real-time live comments & gifts in current session
+    private val _currentLiveMessages = MutableStateFlow<List<LiveStreamComment>>(emptyList())
+    val currentLiveMessages: StateFlow<List<LiveStreamComment>> = _currentLiveMessages.asStateFlow()
+    private var currentLiveMessagesRegistration: com.google.firebase.firestore.ListenerRegistration? = null
+
     // Subscribed post notification IDs
     private val _subscribedPostIds = MutableStateFlow<Set<String>>(emptySet())
     val subscribedPostIds: StateFlow<Set<String>> = _subscribedPostIds.asStateFlow()
@@ -336,6 +351,12 @@ class MeskotRepository(
             storiesRegistration?.remove()
             storiesRegistration = FirebaseManager.listenToStories { liveStories ->
                 _stories.value = liveStories
+            }
+
+            // Real-time active Live Streams in Firebase Firestore
+            liveStreamsRegistration?.remove()
+            liveStreamsRegistration = FirebaseManager.listenToActiveLiveStreams { liveStreams ->
+                _activeLiveStreams.value = liveStreams
             }
 
             FirebaseManager.listenToComments { liveComments ->
@@ -552,8 +573,8 @@ class MeskotRepository(
             birthDate = if (birthDate.isNotBlank()) birthDate else curr.birthDate,
             coverPhotoUrl = if (coverPhotoUrl.isNotBlank()) coverPhotoUrl else curr.coverPhotoUrl,
             profession = if (profession.isNotBlank()) profession else curr.profession,
-            location = if (location.isNotBlank()) location else curr.location,
-            hometown = if (hometown.isNotBlank()) hometown else curr.hometown,
+            location = location.trim(),
+            hometown = hometown.trim(),
             workplace = if (workplace.isNotBlank()) workplace else curr.workplace,
             workRole = if (workRole.isNotBlank()) workRole else curr.workRole,
             education = if (education.isNotBlank()) education else curr.education,
@@ -2772,6 +2793,126 @@ class MeskotRepository(
                 isDefault = false,
                 isVerified = true
             )
+        )
+    }
+
+    // LIVE STREAMING & REAL-TIME FIRESTORE ACTIONS
+    fun startLiveStream(
+        title: String = "",
+        category: String = "Culture & Chat",
+        onStarted: (LiveStreamSession) -> Unit = {}
+    ) {
+        val user = _currentUser.value ?: return
+        val streamId = "live_${user.uid}_${System.currentTimeMillis()}"
+        val streamTitle = title.ifBlank { "${user.displayName}'s Meskot Live" }
+        val session = LiveStreamSession(
+            id = streamId,
+            hostUid = user.uid,
+            hostName = user.displayName,
+            hostPhoto = user.photoUrl,
+            title = streamTitle,
+            category = category,
+            status = "live",
+            viewerCount = 1,
+            viewers = listOf(user.uid),
+            likesCount = 0,
+            totalCoins = 0,
+            createdAt = System.currentTimeMillis()
+        )
+        _currentLiveSession.value = session
+        _currentLiveMessages.value = emptyList()
+        attachLiveSessionListeners(streamId)
+
+        FirebaseManager.createLiveStream(session) {
+            onStarted(session)
+        }
+    }
+
+    fun joinLiveStream(session: LiveStreamSession) {
+        val user = _currentUser.value ?: return
+        _currentLiveSession.value = session
+        _currentLiveMessages.value = emptyList()
+        attachLiveSessionListeners(session.id)
+        FirebaseManager.joinLiveStream(session.id, user)
+    }
+
+    fun leaveLiveStream() {
+        val user = _currentUser.value
+        val session = _currentLiveSession.value
+        if (session != null && user != null) {
+            if (session.hostUid == user.uid) {
+                // Broadcaster ending live stream in Firebase
+                FirebaseManager.endLiveStream(session.id)
+            } else {
+                // Viewer leaving live stream in Firebase
+                FirebaseManager.leaveLiveStream(session.id, user.uid)
+            }
+        }
+        detachLiveSessionListeners()
+        _currentLiveSession.value = null
+        _currentLiveMessages.value = emptyList()
+    }
+
+    private fun attachLiveSessionListeners(streamId: String) {
+        currentLiveSessionRegistration?.remove()
+        currentLiveSessionRegistration = FirebaseManager.listenToLiveStream(streamId) { updatedSession ->
+            if (updatedSession != null) {
+                _currentLiveSession.value = updatedSession
+            }
+        }
+
+        currentLiveMessagesRegistration?.remove()
+        currentLiveMessagesRegistration = FirebaseManager.listenToLiveMessages(streamId) { msgs ->
+            _currentLiveMessages.value = msgs
+        }
+    }
+
+    private fun detachLiveSessionListeners() {
+        currentLiveSessionRegistration?.remove()
+        currentLiveSessionRegistration = null
+        currentLiveMessagesRegistration?.remove()
+        currentLiveMessagesRegistration = null
+    }
+
+    fun sendLiveComment(text: String) {
+        val user = _currentUser.value ?: return
+        val session = _currentLiveSession.value ?: return
+        if (text.isBlank()) return
+        val comment = LiveStreamComment(
+            id = "comment_${user.uid}_${System.currentTimeMillis()}",
+            streamId = session.id,
+            senderUid = user.uid,
+            senderName = user.displayName,
+            senderPhoto = user.photoUrl,
+            text = text.trim(),
+            type = "CHAT",
+            timestamp = System.currentTimeMillis()
+        )
+        FirebaseManager.sendLiveComment(comment)
+    }
+
+    fun sendLiveHeart() {
+        val session = _currentLiveSession.value ?: return
+        FirebaseManager.sendLiveHeart(session.id)
+    }
+
+    fun sendLiveGift(giftId: Int, giftName: String, giftIcon: String, coins: Int) {
+        val user = _currentUser.value ?: return
+        val session = _currentLiveSession.value ?: return
+        if (user.starBalance < coins) return
+
+        // Local optimistic update
+        val updatedUser = user.copy(starBalance = maxOf(0, user.starBalance - coins))
+        _currentUser.value = updatedUser
+
+        FirebaseManager.sendLiveGift(
+            streamId = session.id,
+            hostUid = session.hostUid,
+            sender = user,
+            giftId = giftId,
+            giftName = giftName,
+            giftIcon = giftIcon,
+            coins = coins
         )
     }
 }

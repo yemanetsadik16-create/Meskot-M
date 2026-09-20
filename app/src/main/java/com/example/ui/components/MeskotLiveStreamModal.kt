@@ -29,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +45,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.data.LiveStreamComment
+import com.example.data.LiveStreamSession
 import com.example.data.User
 
 /**
@@ -52,7 +55,10 @@ import com.example.data.User
 class MeskotLiveGiftsBridge(
     private val onGiftSent: (giftId: Int, giftName: String, giftIcon: String, coins: Int) -> Unit,
     private val onDepositSuccess: (coins: Int, amountEtb: Double, txRef: String) -> Unit,
-    private val onCloseLive: () -> Unit
+    private val onCloseLive: () -> Unit,
+    private val onSendComment: (String) -> Unit = {},
+    private val onSendLike: () -> Unit = {},
+    private val onEndLive: () -> Unit = {}
 ) {
     @JavascriptInterface
     fun sendGift(giftId: Int, giftName: String, giftIcon: String, coins: Int) {
@@ -68,6 +74,21 @@ class MeskotLiveGiftsBridge(
     fun closeLive() {
         onCloseLive()
     }
+
+    @JavascriptInterface
+    fun sendComment(text: String) {
+        onSendComment(text)
+    }
+
+    @JavascriptInterface
+    fun sendLike() {
+        onSendLike()
+    }
+
+    @JavascriptInterface
+    fun endLive() {
+        onEndLive()
+    }
 }
 
 /**
@@ -78,10 +99,14 @@ fun buildLiveGiftsHtml(
     initialCoins: Int,
     userName: String,
     streamerName: String = "Meskot Official",
-    viewerCount: String = "52.4k Viewers"
+    viewerCount: String = "52.4k Viewers",
+    streamTitle: String = "Meskot Live",
+    isHost: Boolean = false,
+    likesCount: Int = 0
 ): String {
     val escapedUserName = userName.replace("'", "\\'").replace("\"", "\\\"")
     val escapedStreamerName = streamerName.replace("'", "\\'").replace("\"", "\\\"")
+    val escapedStreamTitle = streamTitle.replace("'", "\\'").replace("\"", "\\\"")
 
     return """
 <!DOCTYPE html>
@@ -182,6 +207,36 @@ fun buildLiveGiftsHtml(
       font-size: 13px;
     }
 
+    .end-broadcast-btn {
+      background: linear-gradient(135deg, #ef2b2d, #c41f21);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 5px 9px;
+      border-radius: 14px;
+      font-size: 10.5px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(239, 43, 45, 0.5);
+    }
+
+    .live-pulse-badge {
+      background: #ef2b2d;
+      color: #fff;
+      font-size: 8.5px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+      display: inline-block;
+      animation: pulseLive 1.5s infinite;
+    }
+
+    @keyframes pulseLive {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.65; transform: scale(1.06); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
     .streamer-info {
       display: flex;
       align-items: center;
@@ -268,10 +323,10 @@ fun buildLiveGiftsHtml(
 
     .chat-container {
       position: absolute;
-      bottom: 255px;
+      bottom: 285px;
       left: 12px;
-      width: 220px;
-      max-height: 160px;
+      width: 250px;
+      max-height: 150px;
       overflow-y: hidden;
       display: flex;
       flex-direction: column;
@@ -296,12 +351,86 @@ fun buildLiveGiftsHtml(
       font-weight: bold;
     }
 
+    .live-action-bar {
+      position: absolute;
+      bottom: 242px;
+      left: 10px;
+      right: 10px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      z-index: 85;
+    }
+
+    .chat-input-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 20px;
+      padding: 3px 4px 3px 10px;
+      backdrop-filter: blur(8px);
+    }
+
+    #live-chat-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-size: 11px;
+    }
+
+    #live-chat-input::placeholder {
+      color: rgba(255, 255, 255, 0.55);
+    }
+
+    .chat-send-btn {
+      background: #009a44;
+      color: #fff;
+      border: none;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    .chat-send-btn:active {
+      transform: scale(0.9);
+    }
+
+    .live-heart-btn {
+      background: rgba(0, 0, 0, 0.65);
+      border: 1px solid rgba(239, 43, 45, 0.6);
+      color: #fff;
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      backdrop-filter: blur(8px);
+      transition: transform 0.15s ease;
+    }
+
+    .live-heart-btn:active {
+      transform: scale(0.92);
+    }
+
     .gift-panel {
       position: absolute;
       bottom: 0;
       left: 0;
       right: 0;
-      height: 240px;
+      height: 236px;
       background: rgba(14, 20, 16, 0.96);
       backdrop-filter: blur(16px);
       border-top-left-radius: 20px;
@@ -1023,14 +1152,22 @@ fun buildLiveGiftsHtml(
       <div class="streamer-info">
         <div class="avatar">ETH</div>
         <div>
-          <div style="font-size: 11.5px; font-weight: bold;">$escapedStreamerName</div>
-          <div style="font-size: 9.5px; color: #ccc;">$viewerCount</div>
+          <div style="display: flex; align-items: center; gap: 5px;">
+            <span class="live-pulse-badge">● LIVE</span>
+            <span style="font-size: 11px; font-weight: bold; color: #fff;">$escapedStreamerName</span>
+          </div>
+          <div style="font-size: 9.5px; color: #ffd966; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">$escapedStreamTitle</div>
+          <div style="display: flex; align-items: center; gap: 5px; font-size: 9px; color: #ccc;">
+            <span id="viewer-count-text">$viewerCount</span>
+            <span>•</span>
+            <span id="likes-count-text">$likesCount ❤️</span>
+          </div>
         </div>
       </div>
       <div class="wallet-group">
         <div class="coin-badge"><span id="coin-balance">$initialCoins</span> 🪙</div>
         <button class="deposit-btn" onclick="openDepositModal()">+ Top Up</button>
-        <button class="close-live-btn" onclick="handleNativeClose()">✕</button>
+        ${if (isHost) """<button class="end-broadcast-btn" onclick="handleNativeEndLive()">End</button>""" else """<button class="close-live-btn" onclick="handleNativeClose()">✕</button>"""}
       </div>
     </div>
 
@@ -1041,6 +1178,14 @@ fun buildLiveGiftsHtml(
     <div class="chat-container" id="chat-box">
       <div class="chat-msg"><span class="chat-user">System:</span> Welcome to Meskot live streaming!</div>
       <div class="chat-msg"><span class="chat-user">System:</span> Gifting is enabled for all viewers.</div>
+    </div>
+
+    <div class="live-action-bar">
+      <div class="chat-input-wrapper">
+        <input type="text" id="live-chat-input" placeholder="Say something in Live..." maxlength="120" onkeypress="if(event.key==='Enter') submitLiveChat()">
+        <button class="chat-send-btn" onclick="submitLiveChat()">➤</button>
+      </div>
+      <button class="live-heart-btn" onclick="triggerLiveLike()">❤️ <span id="likes-count">$likesCount</span></button>
     </div>
 
     <div class="gift-panel">
@@ -1459,6 +1604,58 @@ fun buildLiveGiftsHtml(
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
+    function submitLiveChat() {
+      const input = document.getElementById('live-chat-input');
+      if (!input) return;
+      const text = input.value.trim();
+      if (!text) return;
+      if (window.AndroidBridge && window.AndroidBridge.sendComment) {
+        window.AndroidBridge.sendComment(text);
+      }
+      input.value = '';
+    }
+
+    function triggerLiveLike() {
+      createMicroParticle('❤️');
+      const countEl = document.getElementById('likes-count');
+      if (countEl) {
+        const cur = parseInt(countEl.innerText) || 0;
+        countEl.innerText = cur + 1;
+      }
+      const topLikes = document.getElementById('likes-count-text');
+      if (topLikes) {
+        const cur = parseInt(topLikes.innerText) || 0;
+        topLikes.innerText = (cur + 1) + ' ❤️';
+      }
+      if (window.AndroidBridge && window.AndroidBridge.sendLike) {
+        window.AndroidBridge.sendLike();
+      }
+    }
+
+    function handleNativeEndLive() {
+      if (window.AndroidBridge && window.AndroidBridge.endLive) {
+        window.AndroidBridge.endLive();
+      }
+    }
+
+    window.receiveRemoteMessage = function(user, text, color, type, giftIcon) {
+      addChatMessage(user, text, color);
+      if (type === 'GIFT' && giftIcon) {
+        createMicroParticle(giftIcon);
+      } else if (type === 'LIKE') {
+        createMicroParticle('❤️');
+      }
+    };
+
+    window.updateStreamStats = function(viewerStr, likesCount, totalCoins) {
+      const vEl = document.getElementById('viewer-count-text');
+      if (vEl) vEl.innerText = viewerStr;
+      const lEl = document.getElementById('likes-count-text');
+      if (lEl) lEl.innerText = likesCount + ' ❤️';
+      const cEl = document.getElementById('likes-count');
+      if (cEl) cEl.innerText = likesCount;
+    };
+
     renderGifts('all');
 
     const COIN_PACKAGES = [
@@ -1673,27 +1870,73 @@ fun buildLiveGiftsHtml(
 }
 
 /**
- * Fullscreen Interactive Live Stream & Ethiopian Cultural Gifting Modal.
+ * Fullscreen Interactive Live Stream & Ethiopian Cultural Gifting Modal connected to Firebase.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun MeskotLiveStreamModal(
     currentUser: User?,
+    liveSession: LiveStreamSession? = null,
+    liveMessages: List<LiveStreamComment> = emptyList(),
     onDismiss: () -> Unit,
+    onSendMessage: (String) -> Unit = {},
+    onSendLike: () -> Unit = {},
     onGiftSent: (giftId: Int, giftName: String, giftIcon: String, coinsCost: Int) -> Unit,
-    onDepositCompleted: (coins: Int, amountEtb: Double, txRef: String) -> Unit
+    onDepositCompleted: (coins: Int, amountEtb: Double, txRef: String) -> Unit,
+    onEndLive: () -> Unit = {}
 ) {
     var isLoading by remember { mutableStateOf(true) }
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
+    val isHost = liveSession?.hostUid == currentUser?.uid
     val initialCoins = currentUser?.starBalance ?: 500
     val userName = currentUser?.displayName ?: "Meskot Member"
+    val streamerName = if (isHost) currentUser?.displayName ?: "Broadcaster" else liveSession?.hostName ?: "Meskot Live"
+    val viewerCount = liveSession?.formattedViewers ?: "1 Viewer"
+    val streamTitle = liveSession?.title ?: "Meskot Live Stream"
+    val likesCount = liveSession?.likesCount ?: 0
 
-    val htmlContent = remember(initialCoins, userName) {
+    val htmlContent = remember(initialCoins, userName, streamerName, isHost) {
         buildLiveGiftsHtml(
             initialCoins = initialCoins,
             userName = userName,
-            streamerName = "Meskot Live",
-            viewerCount = "52.4k Viewers"
+            streamerName = streamerName,
+            viewerCount = viewerCount,
+            streamTitle = streamTitle,
+            isHost = isHost,
+            likesCount = likesCount
+        )
+    }
+
+    // Push new Firestore live messages into the WebView
+    LaunchedEffect(liveMessages.size) {
+        if (liveMessages.isNotEmpty() && webViewRef != null) {
+            val last = liveMessages.last()
+            val escapedName = last.senderName.replace("'", "\\'")
+            val escapedText = last.text.replace("'", "\\'")
+            val color = when (last.type) {
+                "GIFT" -> "#fed100"
+                "JOIN" -> "#4fd67a"
+                "LIKE" -> "#ef2b2d"
+                else -> "#ffffff"
+            }
+            val icon = last.giftIcon ?: ""
+            webViewRef?.evaluateJavascript(
+                "if(window.receiveRemoteMessage){ window.receiveRemoteMessage('$escapedName', '$escapedText', '$color', '${last.type}', '$icon'); }",
+                null
+            )
+        }
+    }
+
+    // Push updated Firestore stream statistics into the WebView
+    LaunchedEffect(liveSession?.viewerCount, liveSession?.likesCount, liveSession?.totalCoins) {
+        val session = liveSession ?: return@LaunchedEffect
+        val vStr = session.formattedViewers
+        val likes = session.likesCount
+        val coins = session.totalCoins
+        webViewRef?.evaluateJavascript(
+            "if(window.updateStreamStats){ window.updateStreamStats('$vStr', $likes, $coins); }",
+            null
         )
     }
 
@@ -1715,6 +1958,7 @@ fun MeskotLiveStreamModal(
                 AndroidView(
                     factory = { ctx ->
                         WebView(ctx).apply {
+                            webViewRef = this
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
                             settings.loadWithOverviewMode = true
@@ -1733,6 +1977,15 @@ fun MeskotLiveStreamModal(
                                     },
                                     onCloseLive = {
                                         post { onDismiss() }
+                                    },
+                                    onSendComment = { text ->
+                                        post { onSendMessage(text) }
+                                    },
+                                    onSendLike = {
+                                        post { onSendLike() }
+                                    },
+                                    onEndLive = {
+                                        post { onEndLive() }
                                     }
                                 ),
                                 "AndroidBridge"

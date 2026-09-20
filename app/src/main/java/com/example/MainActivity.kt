@@ -59,6 +59,7 @@ import com.example.ui.screens.MessagesScreen
 import com.example.ui.screens.NotificationsScreen
 import com.example.ui.screens.PhotosScreen
 import com.example.ui.screens.ProfileScreen
+import com.example.ui.screens.ReelsScreen
 import com.example.ui.screens.SavedScreen
 import com.example.ui.theme.MeskotTheme
 import com.example.ui.theme.Paper
@@ -140,6 +141,8 @@ fun MeskotApp(viewModel: MeskotViewModel) {
     val isCreateReelOpen by viewModel.isCreateReelOpen.collectAsState()
     val activeReelToView by viewModel.activeReelToView.collectAsState()
     val isLiveStreamOpen by viewModel.isLiveStreamOpen.collectAsState()
+    val currentLiveSession by viewModel.currentLiveSession.collectAsState()
+    val currentLiveMessages by viewModel.currentLiveMessages.collectAsState()
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as? android.app.Activity
@@ -298,6 +301,15 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         PhotosScreen(
                             viewModel = viewModel,
                             albums = albums,
+                            currentLanguage = currentLanguage
+                        )
+                    }
+
+                    ScreenTab.REELS -> {
+                        ReelsScreen(
+                            viewModel = viewModel,
+                            posts = feedPosts,
+                            currentUser = currentUser,
                             currentLanguage = currentLanguage
                         )
                     }
@@ -662,17 +674,22 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                     )
                 }
 
-                // Interactive Live Stream & 100 Cultural Gifts Engine
+                // Interactive Live Stream & 100 Cultural Gifts Engine connected with Firebase
                 if (isLiveStreamOpen) {
                     MeskotLiveStreamModal(
                         currentUser = currentUser,
+                        liveSession = currentLiveSession,
+                        liveMessages = currentLiveMessages,
                         onDismiss = { viewModel.closeLiveStream() },
+                        onSendMessage = { text -> viewModel.sendLiveComment(text) },
+                        onSendLike = { viewModel.sendLiveHeart() },
                         onGiftSent = { giftId, giftName, giftIcon, cost ->
                             viewModel.onGiftSentFromLive(giftId, giftName, giftIcon, cost)
                         },
                         onDepositCompleted = { coins, amountEtb, txRef ->
                             viewModel.buyStarsWithChapa(coins, amountEtb, txRef)
-                        }
+                        },
+                        onEndLive = { viewModel.closeLiveStream() }
                     )
                 }
             }

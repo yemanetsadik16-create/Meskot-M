@@ -413,5 +413,52 @@ data class ChapaGatewayConfig(
     val supportedMethods: List<String> = listOf("Telebirr", "CBE Birr", "eBirr", "M-Pesa", "Cards")
 )
 
+/**
+ * Firebase Firestore Live Stream Session Model
+ */
+data class LiveStreamSession(
+    val id: String = "",
+    val hostUid: String = "",
+    val hostName: String = "",
+    val hostPhoto: String = "",
+    val title: String = "Meskot Live",
+    val category: String = "Culture & Chat",
+    val status: String = "live", // "live", "ended"
+    val viewerCount: Int = 1,
+    val viewers: List<String> = emptyList(),
+    val likesCount: Int = 0,
+    val totalCoins: Int = 0,
+    val roomUrl: String = "",
+    val createdAt: Long = System.currentTimeMillis(),
+    val endedAt: Long? = null
+) {
+    val isLive: Boolean get() = status == "live"
+    val formattedViewers: String get() {
+        return if (viewerCount >= 1000) {
+            String.format("%.1fk", viewerCount / 1000.0) + " Viewers"
+        } else {
+            "$viewerCount Viewers"
+        }
+    }
+}
+
+/**
+ * Real-time Live Stream Message / Comment / Gift Model in Firestore
+ */
+data class LiveStreamComment(
+    val id: String = "",
+    val streamId: String = "",
+    val senderUid: String = "",
+    val senderName: String = "",
+    val senderPhoto: String = "",
+    val text: String = "",
+    val type: String = "CHAT", // "CHAT", "GIFT", "JOIN", "LIKE"
+    val giftId: Int? = null,
+    val giftName: String? = null,
+    val giftIcon: String? = null,
+    val giftCoins: Int? = null,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 
 

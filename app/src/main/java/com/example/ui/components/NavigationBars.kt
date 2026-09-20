@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.filled.OndemandVideo
+import androidx.compose.material.icons.outlined.OndemandVideo
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.BarChart
@@ -156,42 +158,6 @@ fun TopNavBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // [🔴 Live] Functional Live Stream & Gifts Button with pulsating badge styling
-                    Box(
-                        modifier = Modifier
-                            .height(36.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(Color(0xFFE53935), Color(0xFFC62828), Color(0xFFB71C1C))
-                                )
-                            )
-                            .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
-                            .clickable { onOpenLive() }
-                            .padding(horizontal = 11.dp)
-                            .testTag("live_stream_nav_btn"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(7.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White)
-                            )
-                            Text(
-                                text = "Live",
-                                color = Color.White,
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.2.sp
-                            )
-                        }
-                    }
-
                     // [+] Create Post button in radiant Meskot Gold with luxury drop glow
                     Box(
                         modifier = Modifier
@@ -340,12 +306,12 @@ fun IconNavBar(
                 )
 
                 NavLuxuryItem(
-                    activeIcon = Icons.Filled.PhotoLibrary,
-                    inactiveIcon = Icons.Outlined.PhotoLibrary,
-                    label = "Photos",
-                    isSelected = currentTab == ScreenTab.PHOTOS || currentTab == ScreenTab.ALBUM_DETAIL,
-                    onClick = { onTabSelected(ScreenTab.PHOTOS) },
-                    testTag = "tab_photos"
+                    activeIcon = Icons.Filled.OndemandVideo,
+                    inactiveIcon = Icons.Outlined.OndemandVideo,
+                    label = "Reels",
+                    isSelected = currentTab == ScreenTab.REELS,
+                    onClick = { onTabSelected(ScreenTab.REELS) },
+                    testTag = "tab_reels"
                 )
 
                 NavLuxuryItem(

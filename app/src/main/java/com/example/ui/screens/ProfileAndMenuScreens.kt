@@ -53,10 +53,15 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.RssFeed
 import androidx.compose.material.icons.filled.School
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
@@ -582,7 +587,7 @@ fun ProfileScreen(
 
                     // Quick Meta line: Profession · City · Alma Mater (only show real entries)
                     val cleanProfession = if (user.profession.trim().equals("Public figure", ignoreCase = true)) "" else user.profession.trim()
-                    val cleanLocation = if (user.location.trim().equals("Calgary, Alberta", ignoreCase = true) || user.location.trim().equals("Calgary", ignoreCase = true)) "" else user.location.trim()
+                    val cleanLocation = user.location.trim()
                     val cleanEdu = if (user.education.trim().equals("Adigrat University", ignoreCase = true)) "" else user.education.trim()
 
                     val metaList = mutableListOf<String>()
@@ -1000,7 +1005,7 @@ fun ProfileScreen(
                 }
             }
 
-            // PERSONAL DETAILS SECTION (Only shown in 'All' tab)
+            // PERSONAL DETAILS SECTION (Facebook style, only shown in 'All' tab)
             if (selectedTab == 0) {
                 item {
                 Column(
@@ -1014,122 +1019,264 @@ fun ProfileScreen(
                     ) {
                         Text(
                             text = "Personal details",
-                            fontSize = 17.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = fbDark
                         )
                         Spacer(modifier = Modifier.weight(1f))
-                        IconButton(
-                            onClick = {
-                                if (isMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit personal details",
-                                tint = fbDark,
-                                modifier = Modifier.size(18.dp)
-                            )
+                        if (isMe) {
+                            IconButton(
+                                onClick = { viewModel.openEditProfile() },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit personal details",
+                                    tint = fbDark,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    val cleanLocation = if (user.location.trim().equals("Calgary, Alberta", ignoreCase = true) || user.location.trim().equals("Calgary", ignoreCase = true)) "" else user.location.trim()
-                    val cleanHometown = if (user.hometown.trim().equals("Calgary, Alberta", ignoreCase = true) || user.hometown.trim().equals("Calgary", ignoreCase = true)) "" else user.hometown.trim()
+                    val cleanLocation = user.location.trim()
+                    val cleanHometown = user.hometown.trim()
                     val cleanBirthDate = if (user.birthDate.trim().equals("May 11, 1994", ignoreCase = true)) "" else user.birthDate.trim()
                     val cleanGender = user.gender.trim()
 
-                    val hasAnyDetails = cleanLocation.isNotBlank() || cleanHometown.isNotBlank() || cleanBirthDate.isNotBlank() || cleanGender.isNotBlank()
-
-                    if (!hasAnyDetails) {
-                        Text(
-                            text = if (isMe) "No personal details added yet. Tap the edit icon to add your city, hometown, and birthday." else "No personal details shared.",
-                            fontSize = 13.5.sp,
-                            color = fbTextGray,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-                    } else {
-                        // Location
-                        if (cleanLocation.isNotBlank()) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.LocationOn,
-                                    contentDescription = "Location",
-                                    tint = fbTextGray,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(text = cleanLocation, fontSize = 14.5.sp, color = fbDark)
-                            }
+                    // 1. Current City / Location (Facebook style: "Lives in <City>")
+                    if (cleanLocation.isNotBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (isMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
+                                }
+                                .padding(vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Home,
+                                contentDescription = "Current city",
+                                tint = fbTextGray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = buildAnnotatedString {
+                                    append("Lives in ")
+                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
+                                        append(cleanLocation)
+                                    }
+                                },
+                                fontSize = 14.5.sp,
+                                color = fbDark
+                            )
                         }
-
-                        // Hometown
-                        if (cleanHometown.isNotBlank()) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Home,
-                                    contentDescription = "Hometown",
-                                    tint = fbTextGray,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(text = "From $cleanHometown", fontSize = 14.5.sp, color = fbDark)
-                            }
-                        }
-
-                        // Birthday
-                        if (cleanBirthDate.isNotBlank()) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Cake,
-                                    contentDescription = "Birthday",
-                                    tint = fbTextGray,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(text = "Born $cleanBirthDate", fontSize = 14.5.sp, color = fbDark)
-                            }
-                        }
-
-                        // Gender
-                        if (cleanGender.isNotBlank()) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = "Gender",
-                                    tint = fbTextGray,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(text = cleanGender, fontSize = 14.5.sp, color = fbDark)
-                            }
+                    } else if (isMe) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.openEditProfile() }
+                                .padding(vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Home,
+                                contentDescription = "Add current city",
+                                tint = fbBlue,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "+ Add current city",
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = fbBlue
+                            )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    // 2. Hometown (Facebook style: "From <Hometown>")
+                    if (cleanHometown.isNotBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (isMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
+                                }
+                                .padding(vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = "Hometown",
+                                tint = fbTextGray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = buildAnnotatedString {
+                                    append("From ")
+                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
+                                        append(cleanHometown)
+                                    }
+                                },
+                                fontSize = 14.5.sp,
+                                color = fbDark
+                            )
+                        }
+                    } else if (isMe) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.openEditProfile() }
+                                .padding(vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = "Add hometown",
+                                tint = fbBlue,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "+ Add hometown",
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = fbBlue
+                            )
+                        }
+                    }
 
-                    Text(
-                        text = "See more details",
-                        fontSize = 14.sp,
-                        color = fbTextGray,
+                    // 3. Birthday
+                    if (cleanBirthDate.isNotBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Cake,
+                                contentDescription = "Birthday",
+                                tint = fbTextGray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = buildAnnotatedString {
+                                    append("Born on ")
+                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
+                                        append(cleanBirthDate)
+                                    }
+                                },
+                                fontSize = 14.5.sp,
+                                color = fbDark
+                            )
+                        }
+                    }
+
+                    // 4. Gender
+                    if (cleanGender.isNotBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = "Gender",
+                                tint = fbTextGray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = cleanGender,
+                                fontSize = 14.5.sp,
+                                color = fbDark
+                            )
+                        }
+                    }
+
+                    // 5. Followers count (Facebook style)
+                    if (user.followersCount > 0) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.RssFeed,
+                                contentDescription = "Followers",
+                                tint = fbTextGray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = buildAnnotatedString {
+                                    append("Followed by ")
+                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
+                                        append("${user.followersCount} people")
+                                    }
+                                },
+                                fontSize = 14.5.sp,
+                                color = fbDark
+                            )
+                        }
+                    }
+
+                    // 6. See more details link
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
+                            .fillMaxWidth()
                             .clickable { isSeeMoreDetailsOpen = true }
-                            .padding(vertical = 4.dp)
-                    )
+                            .padding(vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "See more",
+                            tint = fbTextGray,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "See your About info",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = fbDark
+                        )
+                    }
+
+                    // 7. Facebook-style "Edit public details" button for profile owner
+                    if (isMe) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = { viewModel.openEditProfile() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = fbLightGray,
+                                contentColor = fbDark
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                        ) {
+                            Text(
+                                text = "Edit public details",
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = fbDark
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(8.dp))
                     HorizontalDivider(color = fbLightGray, thickness = 1.dp)
@@ -2165,13 +2312,13 @@ fun ProfileScreen(
                     if (catText.isNotBlank()) {
                         Text("• Category: $catText", fontSize = 14.sp, color = fbDark)
                     }
-                    val cityText = if (user.location.equals("Calgary, Alberta", ignoreCase = true) || user.location.equals("Calgary", ignoreCase = true)) "" else user.location.trim()
+                    val cityText = user.location.trim()
                     if (cityText.isNotBlank()) {
-                        Text("• Current City: $cityText", fontSize = 14.sp, color = fbDark)
+                        Text("• Lives in $cityText", fontSize = 14.sp, color = fbDark)
                     }
-                    val homeText = if (user.hometown.equals("Calgary, Alberta", ignoreCase = true) || user.hometown.equals("Calgary", ignoreCase = true)) "" else user.hometown.trim()
+                    val homeText = user.hometown.trim()
                     if (homeText.isNotBlank()) {
-                        Text("• Hometown: $homeText", fontSize = 14.sp, color = fbDark)
+                        Text("• From $homeText", fontSize = 14.sp, color = fbDark)
                     }
                     val bdayText = if (user.birthDate.equals("May 11, 1994", ignoreCase = true)) "" else user.birthDate.trim()
                     if (bdayText.isNotBlank()) {
@@ -2585,71 +2732,6 @@ fun MenuScreen(
             }
         }
 
-        // Chapa Payment Integration Card
-        item {
-            Spacer(modifier = Modifier.height(12.dp))
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { viewModel.openTestChapaCheckout(100.0) },
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = CardBg),
-                border = androidx.compose.foundation.BorderStroke(1.2.dp, Color(0xFF4CAF50).copy(alpha = 0.5f))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFFE8F5E9)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "💳", fontSize = 22.sp)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Chapa Payment Checkout",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Ink
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(Color(0xFF4CAF50))
-                                    .padding(horizontal = 5.dp, vertical = 1.dp)
-                            ) {
-                                Text(
-                                    text = "100 ETB",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
-                        }
-                        Text(
-                            text = "Telebirr · CBE Birr · eBirr · M-Pesa · Chapa",
-                            fontSize = 11.5.sp,
-                            color = MutedText
-                        )
-                    }
-                    Text(
-                        text = "Pay Now ›",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF2E7D32)
-                    )
-                }
-            }
-        }
 
         // Brand Badge in Menu
         item {

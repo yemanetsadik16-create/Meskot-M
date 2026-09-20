@@ -35,6 +35,8 @@ object FirebaseManager {
     const val COL_FRIENDSHIPS = "friendships"
     const val COL_CALLS = "calls"
     const val COL_STORIES = "stories"
+    const val COL_LIVE_STREAMS = "live_streams"
+    const val COL_LIVE_MESSAGES = "live_messages"
 
     fun initialize(context: Context) {
         if (isInitialized) return
@@ -1224,6 +1226,316 @@ object FirebaseManager {
             expiresAt = (d["expiresAt"] as? Number)?.toLong() ?: (System.currentTimeMillis() + 24 * 3600 * 1000L),
             viewers = rawViewers,
             likes = rawLikes
+        )
+    }
+
+    // FIRESTORE: LIVE STREAMING & REAL-TIME GIFTS
+    fun createLiveStream(session: LiveStreamSession, onComplete: ((Boolean) -> Unit)? = null) {
+        val db = firestore ?: run {
+            onComplete?.invoke(false)
+            return
+        }
+        val map = liveStreamToMap(session)
+        db.collection(COL_LIVE_STREAMS).document(session.id).set(map, SetOptions.merge())
+            .addOnSuccessListener {
+                Log.d(TAG, "Live stream created in Firestore: ${session.id}")
+                // Add initial system message
+                val initialMsg = LiveStreamComment(
+                    id = "msg_sys_${System.currentTimeMillis()}",
+                    streamId = session.id,
+                    senderUid = "system",
+                    senderName = "Meskot Live",
+                    senderPhoto = "",
+                    text = "Welcome to ${session.title}! Ethiopian Cultural Gifting & Chat is active.",
+                    type = "CHAT",
+                    timestamp = System.currentTimeMillis()
+                )
+                sendLiveComment(initialMsg)
+                onComplete?.invoke(true)
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Failed to create live stream in Firestore: ${e.message}")
+                onComplete?.invoke(false)
+            }
+    }
+
+    fun endLiveStream(streamId: String, onComplete: ((Boolean) -> Unit)? = null) {
+        val db = firestore ?: run {
+            onComplete?.invoke(false)
+            return
+        }
+        val updates = mapOf<String, Any>(
+            "status" to "ended",
+            "endedAt" to System.currentTimeMillis()
+        )
+        db.collection(COL_LIVE_STREAMS).document(streamId).update(updates)
+            .addOnSuccessListener {
+                Log.d(TAG, "Live stream ended in Firestore: $streamId")
+                onComplete?.invoke(true)
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Failed to end live stream: ${e.message}")
+                onComplete?.invoke(false)
+            }
+    }
+
+    fun listenToActiveLiveStreams(onUpdate: (List<LiveStreamSession>) -> Unit): ListenerRegistration? {
+        val db = firestore ?: return null
+        return try {
+            db.collection(COL_LIVE_STREAMS)
+                .whereEqualTo("status", "live")
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e(TAG, "Error listening to active live streams: ${error.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null) {
+                        val activeStreams = mutableListOf<LiveStreamSession>()
+                        for (doc in snapshot.documents) {
+                            try {
+                                val d = doc.data ?: continue
+                                activeStreams.add(parseLiveStream(doc.id, d))
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error parsing live stream doc: ${e.message}")
+                            }
+                        }
+                        activeStreams.sortByDescending { it.createdAt }
+                        onUpdate(activeStreams)
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to listen to active live streams: ${e.message}")
+            null
+        }
+    }
+
+    fun listenToLiveStream(streamId: String, onUpdate: (LiveStreamSession?) -> Unit): ListenerRegistration? {
+        val db = firestore ?: return null
+        return try {
+            db.collection(COL_LIVE_STREAMS).document(streamId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e(TAG, "Error listening to live stream $streamId: ${error.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null && snapshot.exists()) {
+                        val session = snapshot.data?.let { parseLiveStream(snapshot.id, it) }
+                        onUpdate(session)
+                    } else {
+                        onUpdate(null)
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to listen to live stream: ${e.message}")
+            null
+        }
+    }
+
+    fun joinLiveStream(streamId: String, user: User) {
+        val db = firestore ?: return
+        val docRef = db.collection(COL_LIVE_STREAMS).document(streamId)
+        db.runTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            if (snapshot.exists()) {
+                val currentViewers = (snapshot.get("viewers") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+                val newViewers = (currentViewers + user.uid).distinct()
+                transaction.update(docRef, "viewers", newViewers)
+                transaction.update(docRef, "viewerCount", newViewers.size)
+            }
+        }.addOnSuccessListener {
+            // Post joined announcement
+            val joinComment = LiveStreamComment(
+                id = "join_${user.uid}_${System.currentTimeMillis()}",
+                streamId = streamId,
+                senderUid = user.uid,
+                senderName = user.displayName,
+                senderPhoto = user.photoUrl,
+                text = "joined the live stream",
+                type = "JOIN",
+                timestamp = System.currentTimeMillis()
+            )
+            sendLiveComment(joinComment)
+        }
+    }
+
+    fun leaveLiveStream(streamId: String, userUid: String) {
+        val db = firestore ?: return
+        val docRef = db.collection(COL_LIVE_STREAMS).document(streamId)
+        db.runTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            if (snapshot.exists()) {
+                val currentViewers = (snapshot.get("viewers") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+                val newViewers = currentViewers.filter { it != userUid }
+                transaction.update(docRef, "viewers", newViewers)
+                transaction.update(docRef, "viewerCount", maxOf(0, newViewers.size))
+            }
+        }
+    }
+
+    fun sendLiveHeart(streamId: String) {
+        val db = firestore ?: return
+        db.collection(COL_LIVE_STREAMS).document(streamId)
+            .update("likesCount", FieldValue.increment(1))
+            .addOnFailureListener { Log.w(TAG, "Could not send live heart: ${it.message}") }
+    }
+
+    fun sendLiveComment(comment: LiveStreamComment, onComplete: ((Boolean) -> Unit)? = null) {
+        val db = firestore ?: run {
+            onComplete?.invoke(false)
+            return
+        }
+        val map = liveCommentToMap(comment)
+        db.collection(COL_LIVE_MESSAGES).document(comment.id).set(map)
+            .addOnSuccessListener { onComplete?.invoke(true) }
+            .addOnFailureListener {
+                Log.e(TAG, "Failed to send live comment: ${it.message}")
+                onComplete?.invoke(false)
+            }
+    }
+
+    fun sendLiveGift(
+        streamId: String,
+        hostUid: String,
+        sender: User,
+        giftId: Int,
+        giftName: String,
+        giftIcon: String,
+        coins: Int,
+        onComplete: ((Boolean) -> Unit)? = null
+    ) {
+        val db = firestore ?: run {
+            onComplete?.invoke(false)
+            return
+        }
+
+        // 1. Deduct coins from sender in Firestore
+        val senderRef = db.collection(COL_USERS).document(sender.uid)
+        val newSenderBalance = maxOf(0, sender.starBalance - coins)
+        senderRef.update("starBalance", newSenderBalance)
+
+        // 2. Credit host in Firestore
+        if (hostUid.isNotBlank()) {
+            val hostRef = db.collection(COL_USERS).document(hostUid)
+            val etbEarning = coins * 0.12 // 0.12 ETB per coin creator share
+            hostRef.update(
+                "creatorGrossEarnings", FieldValue.increment(etbEarning),
+                "creatorNetBalance", FieldValue.increment(etbEarning)
+            )
+        }
+
+        // 3. Increment total coins on the live stream
+        db.collection(COL_LIVE_STREAMS).document(streamId)
+            .update("totalCoins", FieldValue.increment(coins.toLong()))
+
+        // 4. Broadcast live gift comment
+        val giftMsg = LiveStreamComment(
+            id = "gift_${sender.uid}_${System.currentTimeMillis()}",
+            streamId = streamId,
+            senderUid = sender.uid,
+            senderName = sender.displayName,
+            senderPhoto = sender.photoUrl,
+            text = "sent $giftName $giftIcon ($coins 🪙)",
+            type = "GIFT",
+            giftId = giftId,
+            giftName = giftName,
+            giftIcon = giftIcon,
+            giftCoins = coins,
+            timestamp = System.currentTimeMillis()
+        )
+        sendLiveComment(giftMsg, onComplete)
+    }
+
+    fun listenToLiveMessages(streamId: String, onMessages: (List<LiveStreamComment>) -> Unit): ListenerRegistration? {
+        val db = firestore ?: return null
+        return try {
+            db.collection(COL_LIVE_MESSAGES)
+                .whereEqualTo("streamId", streamId)
+                .orderBy("timestamp", Query.Direction.ASCENDING)
+                .limit(100)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e(TAG, "Error listening to live messages for $streamId: ${error.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null) {
+                        val messages = snapshot.documents.mapNotNull { doc ->
+                            doc.data?.let { parseLiveComment(doc.id, it) }
+                        }
+                        onMessages(messages)
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to attach live messages listener: ${e.message}")
+            null
+        }
+    }
+
+    private fun liveStreamToMap(s: LiveStreamSession): Map<String, Any?> = mapOf(
+        "id" to s.id,
+        "hostUid" to s.hostUid,
+        "hostName" to s.hostName,
+        "hostPhoto" to s.hostPhoto,
+        "title" to s.title,
+        "category" to s.category,
+        "status" to s.status,
+        "viewerCount" to s.viewerCount,
+        "viewers" to s.viewers,
+        "likesCount" to s.likesCount,
+        "totalCoins" to s.totalCoins,
+        "roomUrl" to s.roomUrl,
+        "createdAt" to s.createdAt,
+        "endedAt" to s.endedAt
+    )
+
+    private fun parseLiveStream(id: String, d: Map<String, Any?>): LiveStreamSession {
+        val rawViewers = (d["viewers"] as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+        return LiveStreamSession(
+            id = id,
+            hostUid = d["hostUid"] as? String ?: "",
+            hostName = d["hostName"] as? String ?: "Meskot Streamer",
+            hostPhoto = d["hostPhoto"] as? String ?: "",
+            title = d["title"] as? String ?: "Meskot Live",
+            category = d["category"] as? String ?: "Culture & Chat",
+            status = d["status"] as? String ?: "live",
+            viewerCount = (d["viewerCount"] as? Number)?.toInt() ?: maxOf(1, rawViewers.size),
+            viewers = rawViewers,
+            likesCount = (d["likesCount"] as? Number)?.toInt() ?: 0,
+            totalCoins = (d["totalCoins"] as? Number)?.toInt() ?: 0,
+            roomUrl = d["roomUrl"] as? String ?: "",
+            createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+            endedAt = (d["endedAt"] as? Number)?.toLong()
+        )
+    }
+
+    private fun liveCommentToMap(c: LiveStreamComment): Map<String, Any?> = mapOf(
+        "id" to c.id,
+        "streamId" to c.streamId,
+        "senderUid" to c.senderUid,
+        "senderName" to c.senderName,
+        "senderPhoto" to c.senderPhoto,
+        "text" to c.text,
+        "type" to c.type,
+        "giftId" to c.giftId,
+        "giftName" to c.giftName,
+        "giftIcon" to c.giftIcon,
+        "giftCoins" to c.giftCoins,
+        "timestamp" to c.timestamp
+    )
+
+    private fun parseLiveComment(id: String, d: Map<String, Any?>): LiveStreamComment {
+        return LiveStreamComment(
+            id = id,
+            streamId = d["streamId"] as? String ?: "",
+            senderUid = d["senderUid"] as? String ?: "",
+            senderName = d["senderName"] as? String ?: "Viewer",
+            senderPhoto = d["senderPhoto"] as? String ?: "",
+            text = d["text"] as? String ?: "",
+            type = d["type"] as? String ?: "CHAT",
+            giftId = (d["giftId"] as? Number)?.toInt(),
+            giftName = d["giftName"] as? String,
+            giftIcon = d["giftIcon"] as? String,
+            giftCoins = (d["giftCoins"] as? Number)?.toInt(),
+            timestamp = (d["timestamp"] as? Number)?.toLong() ?: System.currentTimeMillis()
         )
     }
 }
