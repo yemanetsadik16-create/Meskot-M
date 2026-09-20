@@ -393,13 +393,13 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                     }
 
                     ScreenTab.LIVE -> {
+                        val friendsList = users.filter { friendsSet.contains(it.uid) }
                         FeedScreen(
                             viewModel = viewModel,
                             currentUser = currentUser,
                             feedPosts = feedPosts,
-                            currentLanguage = currentLanguage,
-                            allUsers = users,
-                            stories = stories
+                            friends = friendsList,
+                            currentLanguage = currentLanguage
                         )
                         LaunchedEffect(Unit) {
                             viewModel.openLiveStream()

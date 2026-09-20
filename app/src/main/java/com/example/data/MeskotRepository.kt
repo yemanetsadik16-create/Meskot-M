@@ -568,6 +568,16 @@ class MeskotRepository(
         FirebaseManager.saveUser(updated)
     }
 
+    fun updateUserProfile(user: User) {
+        _currentUser.value = user
+        _users.value = _users.value.map { if (it.uid == user.uid) user else it }
+        userRepository.setCurrentUser(user)
+        repoScope.launch {
+            userRepository.saveUser(user)
+        }
+        FirebaseManager.saveUser(user)
+    }
+
     fun updateCurrentUserLastSeen() {
         val curr = _currentUser.value ?: return
         val now = System.currentTimeMillis()
