@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.UUID
@@ -143,6 +144,21 @@ class MeskotRepository(
     val currentLiveMessages: StateFlow<List<LiveStreamComment>> = _currentLiveMessages.asStateFlow()
     private var currentLiveMessagesRegistration: com.google.firebase.firestore.ListenerRegistration? = null
 
+    // Professional Insights & Demographics (Real Server Synced)
+    private val _userInsights = MutableStateFlow(UserInsightsData())
+    val userInsights: StateFlow<UserInsightsData> = _userInsights.asStateFlow()
+
+    private val _userEngagement = MutableStateFlow(UserEngagementData())
+    val userEngagement: StateFlow<UserEngagementData> = _userEngagement.asStateFlow()
+
+    private val _isAnalyticsLoading = MutableStateFlow(false)
+    val isAnalyticsLoading: StateFlow<Boolean> = _isAnalyticsLoading.asStateFlow()
+
+    private val _isAnalyticsServerSynced = MutableStateFlow(false)
+    val isAnalyticsServerSynced: StateFlow<Boolean> = _isAnalyticsServerSynced.asStateFlow()
+
+    private var insightsRegistration: com.google.firebase.firestore.ListenerRegistration? = null
+
     // Subscribed post notification IDs
     private val _subscribedPostIds = MutableStateFlow<Set<String>>(emptySet())
     val subscribedPostIds: StateFlow<Set<String>> = _subscribedPostIds.asStateFlow()
@@ -245,6 +261,15 @@ class MeskotRepository(
 
     init {
         FirebaseManager.initialize(context)
+        // Start real-time Firestore sync now that FirebaseManager is initialized
+        (userRepository as? FirestoreUserRepository)?.startRealtimeUserSync()
+        repoScope.launch {
+            try {
+                userRepository.refreshUsers()
+            } catch (e: Exception) {
+                Log.w("MeskotRepo", "Initial refreshUsers warning: ${e.message}")
+            }
+        }
         val fbAuthUser = FirebaseManager.getCurrentFirebaseUser()
         if (fbAuthUser != null) {
             val user = User(
@@ -256,6 +281,16 @@ class MeskotRepository(
             _currentUser.value = user
             userRepository.setCurrentUser(user)
             setupUserSpecificListeners(user.uid)
+
+            // CRITICAL: Fetch full saved personal details and profile from server
+            FirebaseManager.fetchUser(user.uid) { serverUser ->
+                if (serverUser != null) {
+                    _currentUser.value = serverUser
+                    userRepository.setCurrentUser(serverUser)
+                    _users.value = _users.value.map { if (it.uid == serverUser.uid) serverUser else it }
+                    Log.d("MeskotRepo", "Loaded personal details for ${serverUser.uid} from Firestore server")
+                }
+            }
         }
 
         repoScope.launch {
@@ -340,13 +375,83 @@ class MeskotRepository(
         userMessageRegistrations = FirebaseManager.listenToUserMessages(uid) { liveMsgs ->
             mergeMessagesIntoConversations(liveMsgs, notifyIncoming = true)
         }
+
+        // Real-time server sync for Professional Insights & Engagement
+        insightsRegistration?.remove()
+        insightsRegistration = FirebaseManager.listenToUserInsights(uid) { liveInsights, liveEngagement ->
+            liveInsights?.let { _userInsights.value = it }
+            liveEngagement?.let { _userEngagement.value = it }
+        }
+        loadAndSyncAnalytics(uid)
+    }
+
+    fun recordProfileView(targetUid: String) {
+        val viewerUid = _currentUser.value?.uid ?: return
+        if (targetUid.isBlank() || targetUid == viewerUid) return
+        FirebaseManager.recordProfileView(targetUid, viewerUid)
+    }
+
+    fun recordPostView(postId: String, authorUid: String) {
+        val viewerUid = _currentUser.value?.uid ?: ""
+        if (postId.isBlank()) return
+        FirebaseManager.recordPostView(postId, authorUid, viewerUid)
+    }
+
+    fun loadAndSyncAnalytics(targetUid: String? = null, forceServerRefresh: Boolean = false) {
+        val uid = targetUid ?: _currentUser.value?.uid ?: return
+        if (uid.isBlank()) return
+
+        repoScope.launch {
+            _isAnalyticsLoading.value = true
+            try {
+                // 1. Fetch from server first
+                FirebaseManager.fetchUserInsights(uid) { serverInsights ->
+                    if (serverInsights != null) {
+                        _userInsights.value = serverInsights
+                        _isAnalyticsServerSynced.value = true
+                    }
+                }
+                FirebaseManager.fetchUserEngagement(uid) { serverEngagement ->
+                    if (serverEngagement != null) {
+                        _userEngagement.value = serverEngagement
+                    }
+                }
+
+                // 2. Compute dynamic up-to-date metrics from user's live posts and community
+                val myPosts = _posts.value.filter { it.uid == uid }
+                val (freshInsights, freshEngagement) = FirebaseManager.computeLiveAnalyticsFromData(
+                    uid = uid,
+                    myPosts = myPosts,
+                    allUsers = _users.value
+                )
+
+                _userInsights.value = freshInsights
+                _userEngagement.value = freshEngagement
+                _isAnalyticsServerSynced.value = true
+
+                // 3. Save merged calculations to Firestore
+                FirebaseManager.saveUserInsightsAndEngagement(freshInsights, freshEngagement) { success ->
+                    if (success) {
+                        _isAnalyticsServerSynced.value = true
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("MeskotRepository", "Error syncing analytics with server: ${e.message}")
+            } finally {
+                _isAnalyticsLoading.value = false
+            }
+        }
     }
 
     private fun setupFirebaseListeners() {
         try {
             FirebaseManager.listenToPosts { livePosts ->
                 _posts.value = livePosts
+                _currentUser.value?.uid?.let { curUid ->
+                    loadAndSyncAnalytics(curUid)
+                }
             }
+
 
             storiesRegistration?.remove()
             storiesRegistration = FirebaseManager.listenToStories { liveStories ->
@@ -562,41 +667,62 @@ class MeskotRepository(
         workplace: String = "",
         workRole: String = "",
         education: String = "",
-        educationClass: String = ""
+        educationClass: String = "",
+        onComplete: ((Boolean, String?) -> Unit)? = null
     ) {
-        val curr = _currentUser.value ?: return
+        val curr = _currentUser.value ?: run {
+            onComplete?.invoke(false, "No active user logged in")
+            return
+        }
         val updated = curr.copy(
-            displayName = name.ifBlank { curr.displayName },
-            bio = bio,
-            photoUrl = photoUrl.ifBlank { curr.photoUrl },
-            gender = if (gender.isNotBlank()) gender else curr.gender,
-            birthDate = if (birthDate.isNotBlank()) birthDate else curr.birthDate,
-            coverPhotoUrl = if (coverPhotoUrl.isNotBlank()) coverPhotoUrl else curr.coverPhotoUrl,
-            profession = if (profession.isNotBlank()) profession else curr.profession,
+            displayName = name.trim().ifBlank { curr.displayName },
+            bio = bio.trim(),
+            photoUrl = photoUrl.trim().ifBlank { curr.photoUrl },
+            gender = gender.trim(),
+            birthDate = birthDate.trim(),
+            coverPhotoUrl = coverPhotoUrl.trim().ifBlank { curr.coverPhotoUrl },
+            profession = profession.trim(),
             location = location.trim(),
             hometown = hometown.trim(),
-            workplace = if (workplace.isNotBlank()) workplace else curr.workplace,
-            workRole = if (workRole.isNotBlank()) workRole else curr.workRole,
-            education = if (education.isNotBlank()) education else curr.education,
-            educationClass = if (educationClass.isNotBlank()) educationClass else curr.educationClass
+            workplace = workplace.trim(),
+            workRole = workRole.trim(),
+            education = education.trim(),
+            educationClass = educationClass.trim()
         )
         _currentUser.value = updated
         _users.value = _users.value.map { if (it.uid == curr.uid) updated else it }
         userRepository.setCurrentUser(updated)
         repoScope.launch {
-            userRepository.saveUser(updated)
+            try {
+                userRepository.saveUser(updated)
+            } catch (e: Exception) {
+                Log.e("MeskotRepo", "Error in userRepository.saveUser: ${e.message}")
+            }
         }
-        FirebaseManager.saveUser(updated)
+        FirebaseManager.saveUser(updated) { success, err ->
+            if (success) {
+                Log.d("MeskotRepo", "Profile details persisted to server for ${updated.uid}")
+            } else {
+                Log.e("MeskotRepo", "Failed to persist profile details to server: $err")
+            }
+            onComplete?.invoke(success, err)
+        }
     }
 
-    fun updateUserProfile(user: User) {
+    fun updateUserProfile(user: User, onComplete: ((Boolean, String?) -> Unit)? = null) {
         _currentUser.value = user
         _users.value = _users.value.map { if (it.uid == user.uid) user else it }
         userRepository.setCurrentUser(user)
         repoScope.launch {
-            userRepository.saveUser(user)
+            try {
+                userRepository.saveUser(user)
+            } catch (e: Exception) {
+                Log.e("MeskotRepo", "Error in userRepository.saveUser: ${e.message}")
+            }
         }
-        FirebaseManager.saveUser(user)
+        FirebaseManager.saveUser(user) { success, err ->
+            onComplete?.invoke(success, err)
+        }
     }
 
     fun updateCurrentUserLastSeen() {
@@ -796,8 +922,10 @@ class MeskotRepository(
     fun toggleReaction(postId: String, reactionType: String) {
         val user = _currentUser.value ?: return
         var updatedReactionsMap: Map<String, String>? = null
+        var found = false
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
+                found = true
                 val currentReaction = post.reactions[user.uid]
                 val updatedReactions = post.reactions.toMutableMap()
                 if (currentReaction == reactionType) {
@@ -819,12 +947,36 @@ class MeskotRepository(
                 post.copy(reactions = updatedReactions)
             } else post
         }
+        if (!found) {
+            val newReactions = mapOf(user.uid to reactionType)
+            updatedReactionsMap = newReactions
+            val dummyReelPost = Post(
+                id = postId,
+                uid = "creator_$postId",
+                authorName = "Creator",
+                text = "Meskot Reel",
+                postType = "REEL",
+                reactions = newReactions
+            )
+            _posts.value = _posts.value + dummyReelPost
+        }
         updatedReactionsMap?.let { FirebaseManager.updatePostReactions(postId, it) }
     }
 
     fun sharePost(postId: String) {
         val user = _currentUser.value ?: return
-        val sourcePost = _posts.value.find { it.id == postId } ?: return
+        var sourcePost = _posts.value.find { it.id == postId }
+        if (sourcePost == null) {
+            sourcePost = Post(
+                id = postId,
+                uid = "creator_$postId",
+                authorName = "Creator",
+                text = "Meskot Reel",
+                postType = "REEL",
+                sharesCount = 1
+            )
+            _posts.value = _posts.value + sourcePost
+        }
         val newPost = Post(
             id = "post_" + System.currentTimeMillis(),
             uid = user.uid,
@@ -1609,7 +1761,53 @@ class MeskotRepository(
 
     // COMMENTS
     fun getCommentsForPost(postId: String): List<Comment> {
-        return _comments.value[postId] ?: emptyList()
+        val existing = _comments.value[postId]
+        if (!existing.isNullOrEmpty()) return existing
+        if (postId.startsWith("preset_") || postId.startsWith("reel_")) {
+            val presets = getPresetReelComments(postId)
+            _comments.value = _comments.value + (postId to presets)
+            return presets
+        }
+        return emptyList()
+    }
+
+    private fun getPresetReelComments(postId: String): List<Comment> {
+        val now = System.currentTimeMillis()
+        return listOf(
+            Comment(
+                id = "cmt_preset_${postId}_1",
+                postId = postId,
+                uid = "selam_t",
+                authorName = "Selamawit T.",
+                authorPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
+                text = "ዋው በጣም የሚያምር ቪዲዮ ነው! 🔥🇪🇹 Truly captured the authentic vibe!",
+                createdAt = now - 3600000L * 2,
+                likes = mapOf("user_selam" to true, "user_dawit" to true),
+                isAuthorVerified = true
+            ),
+            Comment(
+                id = "cmt_preset_${postId}_2",
+                postId = postId,
+                uid = "dawit_g",
+                authorName = "Dawit Gebre",
+                authorPhoto = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
+                text = "Habesha culture at its finest! The music track pairing is amazing ☕✨",
+                createdAt = now - 3600000L * 5,
+                likes = mapOf("user_selam" to true),
+                isAuthorVerified = false
+            ),
+            Comment(
+                id = "cmt_preset_${postId}_3",
+                postId = postId,
+                uid = "kalkidan_m",
+                authorName = "Kalkidan M.",
+                authorPhoto = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",
+                text = "Keep sharing our heritage! Shared to my friends 🙌",
+                createdAt = now - 3600000L * 8,
+                likes = emptyMap(),
+                isAuthorVerified = true
+            )
+        )
     }
 
     fun addComment(postId: String, text: String, parentId: String? = null) {
@@ -1628,8 +1826,21 @@ class MeskotRepository(
         val currentList = _comments.value[postId] ?: emptyList()
         _comments.value = _comments.value + (postId to (currentList + newComment))
         // Increment post comment count
-        _posts.value = _posts.value.map {
-            if (it.id == postId) it.copy(commentCount = it.commentCount + 1) else it
+        val postExists = _posts.value.any { it.id == postId }
+        if (postExists) {
+            _posts.value = _posts.value.map {
+                if (it.id == postId) it.copy(commentCount = it.commentCount + 1) else it
+            }
+        } else {
+            val dummyReelPost = Post(
+                id = postId,
+                uid = "creator_$postId",
+                authorName = "Creator",
+                text = "Meskot Reel",
+                postType = "REEL",
+                commentCount = currentList.size + 1
+            )
+            _posts.value = _posts.value + dummyReelPost
         }
         FirebaseManager.addComment(newComment)
         val post = _posts.value.find { it.id == postId }

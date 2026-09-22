@@ -59,7 +59,7 @@ import com.example.data.StoryItem
 import com.example.data.User
 import com.example.data.LiveStreamSession
 import com.example.ui.MeskotViewModel
-import com.example.ui.components.MeskotReelsRail
+import com.example.ui.components.FacebookStoriesRail
 import com.example.ui.components.PostCard
 import com.example.ui.components.StoryAvatarRingItem
 import com.example.ui.components.UserAvatar
@@ -435,12 +435,13 @@ fun FeedScreen(
             }
         }
 
-        // Trending Meskot Reels Showcase Rail
+        // Facebook-Style Stories Tray
         item {
-            MeskotReelsRail(
-                reels = feedPosts.filter { it.postType == "REEL" || it.videoUrl.isNotBlank() },
-                onReelClick = { viewModel.viewReel(it) },
-                onCreateReelClick = { viewModel.openCreateReel() }
+            FacebookStoriesRail(
+                currentUser = currentUser,
+                activeStories = activeStories,
+                onStoryClick = { story -> viewModel.viewStory(story) },
+                onCreateStoryClick = { viewModel.openCreateStory() }
             )
         }
 

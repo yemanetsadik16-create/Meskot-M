@@ -26,6 +26,8 @@ import com.example.data.ChapaGatewayConfig
 import com.example.data.ProgramStatus
 import com.example.data.LiveStreamSession
 import com.example.data.LiveStreamComment
+import com.example.data.UserInsightsData
+import com.example.data.UserEngagementData
 import com.example.util.CallAudioManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -91,6 +93,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     val conversations: StateFlow<Map<String, List<ChatMessage>>> = repository.conversations
     val savedPostIds: StateFlow<Set<String>> = repository.savedPostIds
     val subscribedPostIds: StateFlow<Set<String>> = repository.subscribedPostIds
+    val allComments: StateFlow<Map<String, List<Comment>>> = repository.comments
     val incomingCall: StateFlow<CallSession?> = repository.incomingCall
     val stories: StateFlow<List<StoryItem>> = repository.stories
 
@@ -122,6 +125,32 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     val contentFormatMetrics: StateFlow<List<ContentFormatMetric>> = repository.contentFormatMetrics
     val dailyEarnings: StateFlow<List<DailyEarningsMetric>> = repository.dailyEarnings
     val payoutAccounts: StateFlow<List<CreatorPayoutAccount>> = repository.payoutAccounts
+
+    // Professional Insights & Engagement (Firestore Server-Synced)
+    val userInsights: StateFlow<UserInsightsData> = repository.userInsights
+    val userEngagement: StateFlow<UserEngagementData> = repository.userEngagement
+    val isAnalyticsLoading: StateFlow<Boolean> = repository.isAnalyticsLoading
+    val isAnalyticsServerSynced: StateFlow<Boolean> = repository.isAnalyticsServerSynced
+
+    private val _insightsTimeRange = MutableStateFlow("Last 28 Days")
+    val insightsTimeRange: StateFlow<String> = _insightsTimeRange.asStateFlow()
+
+    fun setInsightsTimeRange(range: String) {
+        _insightsTimeRange.value = range
+    }
+
+    fun refreshAnalytics() {
+        val uid = currentUser.value?.uid ?: return
+        repository.loadAndSyncAnalytics(uid, forceServerRefresh = true)
+    }
+
+    fun recordProfileView(targetUid: String) {
+        repository.recordProfileView(targetUid)
+    }
+
+    fun recordPostView(postId: String, authorUid: String) {
+        repository.recordPostView(postId, authorUid)
+    }
 
     // Current screen navigation
     private val _currentTab = MutableStateFlow(ScreenTab.FEED)
@@ -336,6 +365,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
 
     fun viewReel(reelPost: Post) {
         _activeReelToView.value = reelPost
+        recordPostView(reelPost.id, reelPost.uid)
     }
 
     fun closeReelViewer() {
@@ -501,6 +531,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     fun openProfile(user: User) {
         _viewingUser.value = user
         _currentTab.value = ScreenTab.PROFILE
+        repository.recordProfileView(user.uid)
     }
 
     fun openProfileByUid(uid: String) {
@@ -1193,7 +1224,8 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         workplace: String = "",
         workRole: String = "",
         education: String = "",
-        educationClass: String = ""
+        educationClass: String = "",
+        onSaved: ((Boolean) -> Unit)? = null
     ) {
         repository.updateProfile(
             name = name,
@@ -1209,9 +1241,16 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
             workRole = workRole,
             education = education,
             educationClass = educationClass
-        )
+        ) { success, err ->
+            if (success) {
+                showMessage("Personal details saved to server")
+            } else if (err != null) {
+                showMessage("Saved locally ($err)")
+            }
+            onSaved?.invoke(success)
+        }
         closeEditProfile()
-        showMessage("Profile updated")
+        showMessage("Personal details updated")
     }
 
     // Language

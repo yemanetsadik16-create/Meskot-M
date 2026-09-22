@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -35,6 +36,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -49,6 +51,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.example.data.AppLanguage
+import com.example.data.Comment
 import com.example.data.MeskotStrings
 import com.example.data.Post
 import com.example.data.User
@@ -885,17 +888,34 @@ fun ReelViewerDialog(
     reel: Post,
     currentUser: User?,
     currentLanguage: AppLanguage,
+    comments: List<Comment> = emptyList(),
+    isFollowing: Boolean = false,
+    isSaved: Boolean = false,
     onDismiss: () -> Unit,
     onToggleLike: () -> Unit,
+    onToggleFollow: () -> Unit = {},
+    onToggleSave: () -> Unit = {},
     onShare: () -> Unit,
     onTip: () -> Unit,
-    onComment: () -> Unit = {}
+    onComment: () -> Unit = {},
+    onAddComment: (text: String, parentId: String?) -> Unit = { _, _ -> },
+    onToggleCommentLike: (commentId: String) -> Unit = {},
+    onDeleteComment: (commentId: String) -> Unit = {},
+    onAuthorClick: (uid: String) -> Unit = {}
 ) {
     var isPlaying by remember { mutableStateOf(true) }
     var isLiked by remember(reel.reactions, currentUser?.uid) {
         mutableStateOf(currentUser != null && reel.reactions.containsKey(currentUser.uid))
     }
     var showHeartPop by remember { mutableStateOf(false) }
+    var isCommentsSheetOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showHeartPop) {
+        if (showHeartPop) {
+            delay(800)
+            showHeartPop = false
+        }
+    }
 
     // Vinyl record rotation
     val infiniteTransition = rememberInfiniteTransition(label = "vinyl")
@@ -930,8 +950,23 @@ fun ReelViewerDialog(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable {
-                        isPlaying = !isPlaying
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = {
+                                if (isCommentsSheetOpen) {
+                                    isCommentsSheetOpen = false
+                                } else {
+                                    isPlaying = !isPlaying
+                                }
+                            },
+                            onDoubleTap = {
+                                if (!isLiked) {
+                                    isLiked = true
+                                    onToggleLike()
+                                }
+                                showHeartPop = true
+                            }
+                        )
                     }
             ) {
                 // Reel Background Visual
@@ -1023,7 +1058,7 @@ fun ReelViewerDialog(
                 }
 
                 // Play / Pause Splash Overlay
-                if (!isPlaying) {
+                if (!isPlaying && !isCommentsSheetOpen) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.Center)
@@ -1053,9 +1088,10 @@ fun ReelViewerDialog(
                         .align(Alignment.BottomEnd)
                         .padding(end = 12.dp, bottom = 80.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     // Like Action
+                    val displayLikes = if (reel.reactions.isNotEmpty()) reel.reactions.size else if (isLiked) 1 else 0
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         IconButton(
                             onClick = {
@@ -1076,7 +1112,7 @@ fun ReelViewerDialog(
                             )
                         }
                         Text(
-                            text = "${reel.reactions.size}",
+                            text = "$displayLikes",
                             color = Color.White,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -1084,9 +1120,13 @@ fun ReelViewerDialog(
                     }
 
                     // Comments Action
+                    val displayCommentsCount = if (comments.isNotEmpty()) comments.size else reel.commentCount
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         IconButton(
-                            onClick = onComment,
+                            onClick = {
+                                isCommentsSheetOpen = true
+                                onComment()
+                            },
                             modifier = Modifier
                                 .size(46.dp)
                                 .clip(CircleShape)
@@ -1100,7 +1140,7 @@ fun ReelViewerDialog(
                             )
                         }
                         Text(
-                            text = "${reel.commentCount}",
+                            text = "$displayCommentsCount",
                             color = Color.White,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -1122,6 +1162,30 @@ fun ReelViewerDialog(
                         Text(
                             text = "Tip",
                             color = Gold,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // Save / Bookmark Action
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(
+                            onClick = onToggleSave,
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.5f))
+                        ) {
+                            Icon(
+                                imageVector = if (isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                                contentDescription = "Save",
+                                tint = if (isSaved) Gold else Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Text(
+                            text = if (isSaved) "Saved" else "Save",
+                            color = if (isSaved) Gold else Color.White,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1181,13 +1245,19 @@ fun ReelViewerDialog(
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        UserAvatar(photoUrl = reel.authorPhoto, name = reel.authorName, size = 38)
+                        UserAvatar(
+                            photoUrl = reel.authorPhoto,
+                            name = reel.authorName,
+                            size = 38,
+                            modifier = Modifier.clickable { onAuthorClick(reel.uid) }
+                        )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = reel.authorName,
                             color = Color.White,
                             fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { onAuthorClick(reel.uid) }
                         )
                         if (reel.isAuthorVerified) {
                             Spacer(modifier = Modifier.width(4.dp))
@@ -1197,6 +1267,28 @@ fun ReelViewerDialog(
                                 tint = Gold,
                                 modifier = Modifier.size(16.dp)
                             )
+                        }
+
+                        // Follow / Following pill
+                        if (currentUser?.uid != reel.uid) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                onClick = onToggleFollow,
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isFollowing) Color.White.copy(alpha = 0.2f) else GoldDeep,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isFollowing) Color.White.copy(alpha = 0.4f) else Gold
+                                )
+                            ) {
+                                Text(
+                                    text = if (isFollowing) "Following" else "Follow",
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+                                )
+                            }
                         }
                     }
 
@@ -1246,6 +1338,428 @@ fun ReelViewerDialog(
                         .height(2.5.dp),
                     color = Gold,
                     trackColor = Color.White.copy(alpha = 0.2f)
+                )
+
+                // Reel Comments Bottom Sheet
+                if (isCommentsSheetOpen) {
+                    ReelCommentsBottomSheet(
+                        reel = reel,
+                        comments = comments,
+                        currentUser = currentUser,
+                        currentLanguage = currentLanguage,
+                        onDismiss = { isCommentsSheetOpen = false },
+                        onAddComment = onAddComment,
+                        onToggleCommentLike = onToggleCommentLike,
+                        onDeleteComment = onDeleteComment,
+                        onAuthorClick = onAuthorClick
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Modern Facebook / Instagram style bottom sheet for Reels comments:
+ * - Header with count and close
+ * - Scrollable comments with likes, replies, and author info
+ * - Quick emoji shortcuts (❤️, 🔥, 👏, 😂, 🇪🇹, ☕)
+ * - Real-time add comment input with user avatar
+ */
+@Composable
+fun ReelCommentsBottomSheet(
+    reel: Post,
+    comments: List<Comment>,
+    currentUser: User?,
+    currentLanguage: AppLanguage,
+    onDismiss: () -> Unit,
+    onAddComment: (text: String, parentId: String?) -> Unit,
+    onToggleCommentLike: (commentId: String) -> Unit,
+    onDeleteComment: (commentId: String) -> Unit,
+    onAuthorClick: (uid: String) -> Unit
+) {
+    var commentText by remember { mutableStateOf("") }
+    var replyingTo by remember { mutableStateOf<Comment?>(null) }
+    val focusManager = LocalFocusManager.current
+
+    val quickEmojis = listOf("❤️", "🔥", "👏", "😂", "🇪🇹", "☕", "🙌", "😍")
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable(onClick = onDismiss),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.72f)
+                .clickable(enabled = false) {},
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .imePadding()
+            ) {
+                // Drag handle
+                Box(
+                    modifier = Modifier
+                        .padding(top = 10.dp)
+                        .size(width = 38.dp, height = 4.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.3f))
+                        .align(Alignment.CenterHorizontally)
+                )
+
+                // Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Comments (${comments.size})",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.12f), thickness = 0.8.dp)
+
+                // Comments List
+                if (comments.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ChatBubbleOutline,
+                                contentDescription = null,
+                                tint = Gold.copy(alpha = 0.7f),
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Text(
+                                text = "No comments yet",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Be the first to share your thoughts on this reel! ✨",
+                                color = Color.White.copy(alpha = 0.6f),
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        val topLevel = comments.filter { it.parentId == null }
+                        items(topLevel, key = { it.id }) { comment ->
+                            ReelCommentItemCard(
+                                comment = comment,
+                                currentUserId = currentUser?.uid,
+                                isReply = false,
+                                onAuthorClick = onAuthorClick,
+                                onToggleLike = { onToggleCommentLike(comment.id) },
+                                onReply = {
+                                    replyingTo = comment
+                                    commentText = "@${comment.authorName} "
+                                },
+                                onDelete = { onDeleteComment(comment.id) }
+                            )
+
+                            // Threaded replies
+                            val replies = comments.filter { it.parentId == comment.id }
+                            replies.forEach { reply ->
+                                ReelCommentItemCard(
+                                    comment = reply,
+                                    currentUserId = currentUser?.uid,
+                                    isReply = true,
+                                    onAuthorClick = onAuthorClick,
+                                    onToggleLike = { onToggleCommentLike(reply.id) },
+                                    onReply = {
+                                        replyingTo = comment
+                                        commentText = "@${reply.authorName} "
+                                    },
+                                    onDelete = { onDeleteComment(reply.id) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Replying Indicator Banner
+                if (replyingTo != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF282828))
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Replying to ${replyingTo?.authorName}",
+                            color = Gold,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        IconButton(
+                            onClick = { replyingTo = null; commentText = "" },
+                            modifier = Modifier.size(20.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Cancel reply",
+                                tint = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Quick Emojis
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF181818))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(quickEmojis) { emoji ->
+                        Surface(
+                            onClick = { commentText += emoji },
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.1f)
+                        ) {
+                            Text(
+                                text = emoji,
+                                fontSize = 18.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 0.8.dp)
+
+                // Bottom Input Bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF1E1E1E))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    UserAvatar(
+                        photoUrl = currentUser?.photoUrl,
+                        name = currentUser?.displayName ?: "User",
+                        size = 34
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    OutlinedTextField(
+                        value = commentText,
+                        onValueChange = { commentText = it },
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 40.dp, max = 100.dp),
+                        placeholder = {
+                            Text(
+                                text = if (replyingTo != null) "Reply to ${replyingTo?.authorName}..." else "Add a comment...",
+                                color = Color.White.copy(alpha = 0.45f),
+                                fontSize = 13.sp
+                            )
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = Color(0xFF2B2B2B),
+                            unfocusedContainerColor = Color(0xFF2B2B2B),
+                            focusedBorderColor = Gold,
+                            unfocusedBorderColor = Color.Transparent
+                        ),
+                        shape = RoundedCornerShape(20.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    IconButton(
+                        onClick = {
+                            if (commentText.isNotBlank()) {
+                                onAddComment(commentText.trim(), replyingTo?.id)
+                                commentText = ""
+                                replyingTo = null
+                                focusManager.clearFocus()
+                            }
+                        },
+                        enabled = commentText.isNotBlank(),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (commentText.isNotBlank()) Gold else Color.White.copy(alpha = 0.15f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = "Send comment",
+                            tint = if (commentText.isNotBlank()) Color.Black else Color.White.copy(alpha = 0.4f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ReelCommentItemCard(
+    comment: Comment,
+    currentUserId: String?,
+    isReply: Boolean,
+    onAuthorClick: (String) -> Unit,
+    onToggleLike: () -> Unit,
+    onReply: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val isLiked = currentUserId?.let { comment.likes[it] } == true
+    val likeCount = comment.likes.size
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = if (isReply) 36.dp else 0.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        UserAvatar(
+            photoUrl = comment.authorPhoto,
+            name = comment.authorName,
+            size = if (isReply) 26 else 32,
+            modifier = Modifier.clickable { onAuthorClick(comment.uid) }
+        )
+
+        Spacer(modifier = Modifier.width(10.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = Color(0xFF2A2A2A)
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = comment.authorName,
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable { onAuthorClick(comment.uid) }
+                            )
+                            if (comment.isAuthorVerified) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Verified,
+                                    contentDescription = "Verified",
+                                    tint = Gold,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
+
+                        if (comment.uid == currentUserId) {
+                            IconButton(onClick = onDelete, modifier = Modifier.size(20.dp)) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete",
+                                    tint = CrossRed.copy(alpha = 0.8f),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = comment.text,
+                        color = Color.White.copy(alpha = 0.95f),
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+            }
+
+            // Action Row: Like button + count, Reply
+            Row(
+                modifier = Modifier.padding(start = 6.dp, top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Like Button
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable(onClick = onToggleLike)
+                ) {
+                    Icon(
+                        imageVector = if (isLiked) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = "Like comment",
+                        tint = if (isLiked) CrossRed else Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    if (likeCount > 0) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "$likeCount",
+                            color = if (isLiked) CrossRed else Color.White.copy(alpha = 0.6f),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Reply Button
+                Text(
+                    text = "Reply",
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable(onClick = onReply)
                 )
             }
         }

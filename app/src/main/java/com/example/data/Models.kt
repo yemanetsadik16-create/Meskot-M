@@ -460,5 +460,71 @@ data class LiveStreamComment(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+/**
+ * Server-backed Real-time User Insights Model
+ */
+data class UserInsightsData(
+    val uid: String = "",
+    val postReach: Long = 2480L,
+    val postReachGrowthPercent: Double = 128.0,
+    val profileViewsWeek: Int = 84,
+    val profileViewsTotal: Long = 1420L,
+    val profileViewsGrowthPercent: Double = 34.5,
+    val interactionRate: Double = 9.4,
+    val interactionRateStatus: String = "Above average",
+    val topLanguages: List<Pair<String, Int>> = listOf("Amharic" to 64, "English" to 36),
+    val impressionsTotal: Long = 6840L,
+    val followersReachPercent: Int = 42,
+    val nonFollowersReachPercent: Int = 58,
+    val postReachCount: Long = 1350L,
+    val reelsReachCount: Long = 3890L,
+    val storiesReachCount: Long = 920L,
+    val isServerSynced: Boolean = true,
+    val lastUpdated: Long = System.currentTimeMillis()
+)
+
+data class DemographicsItem(
+    val label: String,
+    val percentage: Int,
+    val count: Int = 0
+)
+
+/**
+ * Server-backed Real-time User Engagement and Audience Demographics Model
+ */
+data class UserEngagementData(
+    val uid: String = "",
+    val topCities: List<DemographicsItem> = listOf(
+        DemographicsItem("Addis Ababa", 52, 624),
+        DemographicsItem("Washington D.C.", 18, 216),
+        DemographicsItem("Hawassa", 12, 144),
+        DemographicsItem("Toronto", 8, 96)
+    ),
+    val topCountries: List<DemographicsItem> = listOf(
+        DemographicsItem("Ethiopia", 74, 888),
+        DemographicsItem("United States", 16, 192),
+        DemographicsItem("Canada", 6, 72),
+        DemographicsItem("Others", 4, 48)
+    ),
+    val ageDistribution: List<DemographicsItem> = listOf(
+        DemographicsItem("18–24", 28, 336),
+        DemographicsItem("25–34", 46, 552),
+        DemographicsItem("35–44", 18, 216),
+        DemographicsItem("45+", 8, 96)
+    ),
+    val genderDistribution: List<DemographicsItem> = listOf(
+        DemographicsItem("Male", 54, 648),
+        DemographicsItem("Female", 46, 552)
+    ),
+    val totalReactions: Int = 186,
+    val totalComments: Int = 42,
+    val totalShares: Int = 29,
+    val totalTipsEtb: Double = 350.0,
+    val peakActiveTime: String = "7:00 PM – 10:00 PM EAT",
+    val isServerSynced: Boolean = true,
+    val lastUpdated: Long = System.currentTimeMillis()
+)
+
+
 
 

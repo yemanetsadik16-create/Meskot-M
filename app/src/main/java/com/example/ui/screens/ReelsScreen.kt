@@ -6,6 +6,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,6 +28,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -65,6 +67,8 @@ fun ReelsScreen(
     val context = LocalContext.current
     var selectedFilterIndex by remember { mutableIntStateOf(0) }
     val followingUids by viewModel.followingUids.collectAsState()
+    val savedPostIds by viewModel.savedPostIds.collectAsState()
+    val allComments by viewModel.allComments.collectAsState()
 
     // Aggregate user-created reels + preset cultural reels
     val communityReels = remember(posts) {
@@ -72,10 +76,12 @@ fun ReelsScreen(
     }
 
     // Convert cultural presets into Post model for unified feed rendering
-    val presetReelPosts = remember {
+    val presetReelPosts = remember(posts) {
         PresetReelsCollection.mapIndexed { idx, preset ->
-            Post(
-                id = "preset_${preset.id}",
+            val presetId = "preset_${preset.id}"
+            val existing = posts.find { it.id == presetId }
+            existing ?: Post(
+                id = presetId,
                 uid = "meskot_culture_$idx",
                 authorName = when (preset.category) {
                     "Culture" -> "Addis Coffee House"
@@ -311,26 +317,34 @@ fun ReelsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 itemsIndexed(displayReels, key = { index, reel -> "fb_reel_${reel.id}_$index" }) { _, reel ->
+                    val liveReel = posts.find { it.id == reel.id } ?: reel
+                    val isSaved = savedPostIds.contains(liveReel.id)
+                    val commentCount = allComments[liveReel.id]?.size ?: liveReel.commentCount
                     FacebookReelItemCard(
-                        reel = reel,
+                        reel = liveReel,
                         currentUser = currentUser,
-                        isFollowing = followingUids.contains(reel.uid),
-                        onToggleFollow = { viewModel.toggleFollow(reel.uid) },
+                        isFollowing = followingUids.contains(liveReel.uid),
+                        isSaved = isSaved,
+                        commentCount = commentCount,
+                        onToggleFollow = { viewModel.toggleFollow(liveReel.uid) },
                         onToggleLike = {
-                            viewModel.toggleReaction(reel.id, "like")
+                            viewModel.toggleReaction(liveReel.id, "like")
+                        },
+                        onToggleSave = {
+                            viewModel.toggleSavePost(liveReel.id)
                         },
                         onCommentClick = {
-                            viewModel.viewReel(reel)
+                            viewModel.viewReel(liveReel)
                         },
                         onShareClick = {
-                            viewModel.sharePost(reel.id)
+                            viewModel.sharePost(liveReel.id)
                             Toast.makeText(context, "🔗 Reel link copied to clipboard!", Toast.LENGTH_SHORT).show()
                         },
                         onTipClick = {
-                            viewModel.openTipModal(reel)
+                            viewModel.openTipModal(liveReel)
                         },
                         onOpenFullViewer = {
-                            viewModel.viewReel(reel)
+                            viewModel.viewReel(liveReel)
                         }
                     )
                 }
@@ -355,8 +369,11 @@ fun FacebookReelItemCard(
     reel: Post,
     currentUser: User?,
     isFollowing: Boolean,
+    isSaved: Boolean,
+    commentCount: Int,
     onToggleFollow: () -> Unit,
     onToggleLike: () -> Unit,
+    onToggleSave: () -> Unit,
     onCommentClick: () -> Unit,
     onShareClick: () -> Unit,
     onTipClick: () -> Unit,
@@ -369,7 +386,14 @@ fun FacebookReelItemCard(
     var likesCount by remember(reel.reactions) {
         mutableIntStateOf(if (reel.reactions.isNotEmpty()) reel.reactions.size else 128)
     }
-    var isSaved by remember { mutableStateOf(false) }
+    var showHeartPop by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showHeartPop) {
+        if (showHeartPop) {
+            kotlinx.coroutines.delay(750)
+            showHeartPop = false
+        }
+    }
 
     // Vinyl record rotation
     val infiniteTransition = rememberInfiniteTransition(label = "disc_anim")
@@ -387,7 +411,7 @@ fun FacebookReelItemCard(
     var progress by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(isPlaying) {
         while (isPlaying) {
-            delay(120)
+            kotlinx.coroutines.delay(120)
             progress += 0.015f
             if (progress >= 1f) progress = 0f
         }
@@ -401,8 +425,18 @@ fun FacebookReelItemCard(
             .clip(RoundedCornerShape(18.dp))
             .background(Color.Black)
             .border(1.dp, Color(0xFF33291F), RoundedCornerShape(18.dp))
-            .clickable {
-                isPlaying = !isPlaying
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { isPlaying = !isPlaying },
+                    onDoubleTap = {
+                        if (!isLiked) {
+                            isLiked = true
+                            likesCount++
+                            onToggleLike()
+                        }
+                        showHeartPop = true
+                    }
+                )
             }
     ) {
         // Video / Visual Background
@@ -527,6 +561,21 @@ fun FacebookReelItemCard(
             }
         }
 
+        // Double tap Heart Pop
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showHeartPop,
+            enter = scaleIn(tween(250)) + fadeIn(),
+            exit = scaleOut(tween(250)) + fadeOut(),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Favorite,
+                contentDescription = null,
+                tint = Color(0xFFE53935),
+                modifier = Modifier.size(72.dp)
+            )
+        }
+
         // Right-side Facebook Floating Action Bar
         Column(
             modifier = Modifier
@@ -541,6 +590,7 @@ fun FacebookReelItemCard(
                     onClick = {
                         isLiked = !isLiked
                         likesCount += if (isLiked) 1 else -1
+                        if (isLiked) showHeartPop = true
                         onToggleLike()
                     },
                     modifier = Modifier
@@ -580,7 +630,7 @@ fun FacebookReelItemCard(
                     )
                 }
                 Text(
-                    text = "${reel.commentCount}",
+                    text = "$commentCount",
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -633,7 +683,7 @@ fun FacebookReelItemCard(
 
             // Save / Bookmark Button
             IconButton(
-                onClick = { isSaved = !isSaved },
+                onClick = onToggleSave,
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)

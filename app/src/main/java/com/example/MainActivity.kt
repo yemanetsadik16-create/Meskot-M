@@ -114,6 +114,8 @@ fun MeskotApp(viewModel: MeskotViewModel) {
     val notifications by viewModel.notifications.collectAsState()
     val savedPostIds by viewModel.savedPostIds.collectAsState()
     val subscribedPostIds by viewModel.subscribedPostIds.collectAsState()
+    val followingUids by viewModel.followingUids.collectAsState()
+    val allComments by viewModel.allComments.collectAsState()
     val feedPosts by viewModel.feedPosts.collectAsState()
 
     val unreadNotifsCount by viewModel.unreadNotifsCount.collectAsState()
@@ -476,19 +478,59 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                 }
 
                 activeReelToView?.let { reel ->
+                    val currentReel = feedPosts.find { it.id == reel.id } ?: reel
+                    val reelComments = allComments[currentReel.id] ?: viewModel.getComments(currentReel.id)
+                    val isFollowing = followingUids.contains(currentReel.uid)
+                    val isSaved = savedPostIds.contains(currentReel.id)
+
                     ReelViewerDialog(
-                        reel = reel,
+                        reel = currentReel,
                         currentUser = currentUser,
                         currentLanguage = currentLanguage,
+                        comments = reelComments,
+                        isFollowing = isFollowing,
+                        isSaved = isSaved,
                         onDismiss = { viewModel.closeReelViewer() },
                         onToggleLike = {
-                            viewModel.toggleReaction(reel.id, "heart")
+                            viewModel.toggleReaction(currentReel.id, "heart")
+                        },
+                        onToggleFollow = {
+                            viewModel.toggleFollow(currentReel.uid)
+                        },
+                        onToggleSave = {
+                            viewModel.toggleSavePost(currentReel.id)
                         },
                         onShare = {
-                            viewModel.sharePost(reel.id)
+                            viewModel.sharePost(currentReel.id)
+                            val sendIntent = android.content.Intent().apply {
+                                action = android.content.Intent.ACTION_SEND
+                                putExtra(android.content.Intent.EXTRA_TEXT, "Watch this reel by ${currentReel.authorName} on Meskot: ${currentReel.text}")
+                                type = "text/plain"
+                            }
+                            val shareIntent = android.content.Intent.createChooser(sendIntent, "Share Reel")
+                            context.startActivity(shareIntent)
                         },
                         onTip = {
-                            viewModel.openTipModal(reel)
+                            viewModel.openTipModal(currentReel)
+                        },
+                        onComment = {
+                            viewModel.getComments(currentReel.id)
+                        },
+                        onAddComment = { text, parentId ->
+                            viewModel.addComment(currentReel.id, text, parentId)
+                        },
+                        onToggleCommentLike = { commentId ->
+                            viewModel.toggleCommentLike(currentReel.id, commentId)
+                        },
+                        onDeleteComment = { commentId ->
+                            viewModel.deleteComment(currentReel.id, commentId)
+                        },
+                        onAuthorClick = { uid ->
+                            val user = users.find { it.uid == uid }
+                            if (user != null) {
+                                viewModel.closeReelViewer()
+                                viewModel.openProfile(user)
+                            }
                         }
                     )
                 }

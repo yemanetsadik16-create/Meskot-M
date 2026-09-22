@@ -1312,3 +1312,331 @@ fun StoryAvatarRingItem(
         )
     }
 }
+
+/**
+ * Inspiring Ethiopian community story samples for the Facebook story tray.
+ */
+val PresetCommunityStories = listOf(
+    StoryItem(
+        id = "preset_story_1",
+        uid = "community_selam",
+        authorName = "Selamawit T.",
+        authorPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
+        mediaUrl = "https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=800&q=80",
+        caption = "Addis skyline looking radiant today ✨",
+        filterName = "Sunset",
+        createdAt = System.currentTimeMillis() - 2 * 3600 * 1000L,
+        expiresAt = System.currentTimeMillis() + 22 * 3600 * 1000L
+    ),
+    StoryItem(
+        id = "preset_story_2",
+        uid = "community_meskot",
+        authorName = "Meskot Official",
+        authorPhoto = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
+        mediaUrl = "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=800&q=80",
+        caption = "Fresh roast traditional Buna ☕",
+        filterName = "Warm",
+        createdAt = System.currentTimeMillis() - 4 * 3600 * 1000L,
+        expiresAt = System.currentTimeMillis() + 20 * 3600 * 1000L
+    ),
+    StoryItem(
+        id = "preset_story_3",
+        uid = "community_dawit",
+        authorName = "Dawit Gebre",
+        authorPhoto = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
+        mediaUrl = "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80",
+        caption = "Sunset over the Ethiopian highlands 🌄",
+        filterName = "Vibrant",
+        createdAt = System.currentTimeMillis() - 6 * 3600 * 1000L,
+        expiresAt = System.currentTimeMillis() + 18 * 3600 * 1000L
+    ),
+    StoryItem(
+        id = "preset_story_4",
+        uid = "community_kalkidan",
+        authorName = "Kalkidan M.",
+        authorPhoto = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
+        mediaUrl = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80",
+        caption = "Serene lake breezes 🌿",
+        filterName = "Normal",
+        createdAt = System.currentTimeMillis() - 8 * 3600 * 1000L,
+        expiresAt = System.currentTimeMillis() + 16 * 3600 * 1000L
+    )
+)
+
+/**
+ * Facebook-style Stories Tray.
+ * Features the signature Facebook "Create story" card (user avatar taking top ~68%,
+ * overlapping circular blue + button, white bottom area) followed by vertical story cards
+ * with author avatar at top-left and name at bottom.
+ */
+@Composable
+fun FacebookStoriesRail(
+    currentUser: User?,
+    activeStories: List<StoryItem>,
+    onStoryClick: (StoryItem) -> Unit,
+    onCreateStoryClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val myActiveStories = remember(activeStories, currentUser?.uid) {
+        if (currentUser == null) emptyList()
+        else activeStories.filter { it.uid == currentUser.uid }
+    }
+
+    val displayStories = remember(activeStories, currentUser?.uid) {
+        val filtered = activeStories.filter { it.uid != currentUser?.uid }
+        if (filtered.isEmpty()) {
+            PresetCommunityStories
+        } else if (filtered.size < 4) {
+            filtered + PresetCommunityStories.take(4 - filtered.size)
+        } else {
+            filtered
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+    ) {
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // 1. Signature Facebook "Create story" Card
+            item(key = "fb_create_story_card") {
+                FacebookCreateStoryCard(
+                    currentUser = currentUser,
+                    onClick = onCreateStoryClick
+                )
+            }
+
+            // 2. User's Own Active Story (if published)
+            myActiveStories.firstOrNull()?.let { myStory ->
+                item(key = "my_active_story_${myStory.id}") {
+                    FacebookStoryCard(
+                        story = myStory,
+                        isMyStory = true,
+                        isViewed = false,
+                        onClick = { onStoryClick(myStory) }
+                    )
+                }
+            }
+
+            // 3. Friends & Community Stories
+            items(displayStories, key = { "fb_story_${it.id}" }) { story ->
+                val isViewed = currentUser?.uid?.let { story.viewers.contains(it) } ?: false
+                FacebookStoryCard(
+                    story = story,
+                    isMyStory = false,
+                    isViewed = isViewed,
+                    onClick = { onStoryClick(story) }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Facebook "Create story" card matching the iconic Facebook mobile app design.
+ */
+@Composable
+fun FacebookCreateStoryCard(
+    currentUser: User?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cardWidth = 106.dp
+    val cardHeight = 188.dp
+    val topImageHeight = 128.dp
+
+    Card(
+        modifier = modifier
+            .width(cardWidth)
+            .height(cardHeight)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { onClick() },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE4E6EB))
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Top ~68%: Logged-in User Profile Photo
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(topImageHeight)
+                        .background(Color(0xFFE4E6EB)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!currentUser?.photoUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = currentUser!!.photoUrl,
+                            contentDescription = "Your Profile",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(Color(0xFFEAEFF5), Color(0xFFD6E2EE))
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = Color(0xFF65676B),
+                                modifier = Modifier.size(54.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Bottom: Clean White surface with "Create story"
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .background(Color.White)
+                        .padding(top = 18.dp, start = 4.dp, end = 4.dp, bottom = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Create story",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF050505),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 14.sp
+                    )
+                }
+            }
+
+            // Facebook Blue Overlapping "+" Button
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(y = topImageHeight - 17.dp)
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF1877F2)) // Official Facebook Blue
+                    .border(3.dp, Color.White, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Create story",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Facebook Story Card for individual story previews.
+ */
+@Composable
+fun FacebookStoryCard(
+    story: StoryItem,
+    isMyStory: Boolean,
+    isViewed: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cardWidth = 106.dp
+    val cardHeight = 188.dp
+
+    Card(
+        modifier = modifier
+            .width(cardWidth)
+            .height(cardHeight)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { onClick() },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1E21)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE4E6EB).copy(alpha = 0.6f))
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Full-bleed Story Media Background
+            AsyncImage(
+                model = story.mediaUrl,
+                contentDescription = "Story from ${story.authorName}",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Scrim Gradients: Dark top for avatar readability, dark bottom for author name
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.0f to Color(0x66000000),
+                            0.3f to Color.Transparent,
+                            0.55f to Color.Transparent,
+                            1.0f to Color(0xB3000000)
+                        )
+                    )
+            )
+
+            // Top-left: Author Avatar with Facebook Blue ring
+            Box(
+                modifier = Modifier
+                    .padding(8.dp)
+                    .align(Alignment.TopStart)
+            ) {
+                val ringColor = if (isViewed) Color(0xFFB0B3B8) else Color(0xFF1877F2)
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(ringColor)
+                        .padding(2.5.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(Color.White)
+                            .padding(1.5.dp)
+                    ) {
+                        UserAvatar(
+                            photoUrl = story.authorPhoto,
+                            name = story.authorName,
+                            size = 30
+                        )
+                    }
+                }
+            }
+
+            // Bottom: Author Name
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = if (isMyStory) "Your story" else story.authorName,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 14.sp
+                )
+            }
+        }
+    }
+}
+

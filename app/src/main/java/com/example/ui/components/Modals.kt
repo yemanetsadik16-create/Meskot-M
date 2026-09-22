@@ -1632,18 +1632,18 @@ fun EditProfileDialog(
     ) -> Unit
 ) {
     var name by remember { mutableStateOf(currentUser.displayName) }
-    var bio by remember { mutableStateOf(if (currentUser.bio.trim().equals("Engineer is a problem solver", ignoreCase = true)) "" else currentUser.bio) }
+    var bio by remember { mutableStateOf(currentUser.bio) }
     var photoUrl by remember { mutableStateOf(currentUser.photoUrl) }
     var coverPhotoUrl by remember { mutableStateOf(currentUser.coverPhotoUrl) }
     var gender by remember { mutableStateOf(currentUser.gender) }
-    var birthDate by remember { mutableStateOf(if (currentUser.birthDate.trim().equals("May 11, 1994", ignoreCase = true)) "" else currentUser.birthDate) }
-    var profession by remember { mutableStateOf(if (currentUser.profession.trim().equals("Public figure", ignoreCase = true)) "" else currentUser.profession) }
+    var birthDate by remember { mutableStateOf(currentUser.birthDate) }
+    var profession by remember { mutableStateOf(currentUser.profession) }
     var location by remember { mutableStateOf(currentUser.location) }
     var hometown by remember { mutableStateOf(currentUser.hometown) }
-    var workplace by remember { mutableStateOf(if (currentUser.workplace.trim().equals("Adigrat university _Engineering Sciences", ignoreCase = true)) "" else currentUser.workplace) }
-    var workRole by remember { mutableStateOf(if (currentUser.workRole.trim().equals("Civil Engineering", ignoreCase = true)) "" else currentUser.workRole) }
-    var education by remember { mutableStateOf(if (currentUser.education.trim().equals("Adigrat University", ignoreCase = true)) "" else currentUser.education) }
-    var educationClass by remember { mutableStateOf(if (currentUser.educationClass.trim().equals("Class of 2018", ignoreCase = true)) "" else currentUser.educationClass) }
+    var workplace by remember { mutableStateOf(currentUser.workplace) }
+    var workRole by remember { mutableStateOf(currentUser.workRole) }
+    var education by remember { mutableStateOf(currentUser.education) }
+    var educationClass by remember { mutableStateOf(currentUser.educationClass) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(

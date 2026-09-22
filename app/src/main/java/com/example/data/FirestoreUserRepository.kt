@@ -57,7 +57,7 @@ class FirestoreUserRepository(
      * Attaches a real-time listener to Firestore's "users" collection to stream
      * actual user documents directly into [users].
      */
-    private fun startRealtimeUserSync() {
+    fun startRealtimeUserSync() {
         val db = firestoreProvider()
         if (db == null) {
             Log.w(TAG, "Firestore not initialized yet; will retry on explicit fetch or initialization")
@@ -305,6 +305,8 @@ class FirestoreUserRepository(
      * Extracts all 29 fields without fallback to mock profiles.
      */
     fun parseUserDocument(uid: String, d: Map<String, Any?>): User {
+        val verStatusStr = d["verificationStatus"] as? String ?: "NONE"
+        val verStatus = try { VerificationStatus.valueOf(verStatusStr) } catch (_: Exception) { VerificationStatus.NONE }
         return User(
             uid = uid,
             displayName = d["displayName"] as? String ?: "User",
@@ -339,6 +341,11 @@ class FirestoreUserRepository(
             policyStrikes = (d["policyStrikes"] as? Number)?.toInt() ?: 0,
             payoutDestinationAccount = d["payoutDestinationAccount"] as? String ?: "",
             isVerified = d["isVerified"] as? Boolean ?: false,
+            verificationStatus = verStatus,
+            verificationSubscribedAt = (d["verificationSubscribedAt"] as? Number)?.toLong(),
+            verificationExpiresAt = (d["verificationExpiresAt"] as? Number)?.toLong(),
+            verificationPlan = d["verificationPlan"] as? String ?: "MONTHLY_STANDARD",
+            verificationPaymentMethod = d["verificationPaymentMethod"] as? String ?: "",
             savedPostIds = (d["savedPostIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
             subscribedPostIds = (d["subscribedPostIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         )
@@ -379,6 +386,11 @@ class FirestoreUserRepository(
         "policyStrikes" to u.policyStrikes,
         "payoutDestinationAccount" to u.payoutDestinationAccount,
         "isVerified" to u.isVerified,
+        "verificationStatus" to u.verificationStatus.name,
+        "verificationSubscribedAt" to u.verificationSubscribedAt,
+        "verificationExpiresAt" to u.verificationExpiresAt,
+        "verificationPlan" to u.verificationPlan,
+        "verificationPaymentMethod" to u.verificationPaymentMethod,
         "savedPostIds" to u.savedPostIds,
         "subscribedPostIds" to u.subscribedPostIds
     )

@@ -1043,7 +1043,7 @@ fun ProfileScreen(
 
                     val cleanLocation = user.location.trim()
                     val cleanHometown = user.hometown.trim()
-                    val cleanBirthDate = if (user.birthDate.trim().equals("May 11, 1994", ignoreCase = true)) "" else user.birthDate.trim()
+                    val cleanBirthDate = user.birthDate.trim()
                     val cleanGender = user.gender.trim()
 
                     // 1. Current City / Location (Facebook style: "Lives in <City>")
@@ -1318,8 +1318,8 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val cleanWorkplace = if (user.workplace.trim().equals("Adigrat university _Engineering Sciences", ignoreCase = true)) "" else user.workplace.trim()
-                    val cleanWorkRole = if (user.workRole.trim().equals("Civil Engineering", ignoreCase = true)) "" else user.workRole.trim()
+                    val cleanWorkplace = user.workplace.trim()
+                    val cleanWorkRole = user.workRole.trim()
 
                     if (cleanWorkplace.isBlank() && cleanWorkRole.isBlank()) {
                         Text(
@@ -1426,8 +1426,8 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val cleanEdu = if (user.education.trim().equals("Adigrat University", ignoreCase = true)) "" else user.education.trim()
-                    val cleanEduClass = if (user.educationClass.trim().equals("Class of 2018", ignoreCase = true)) "" else user.educationClass.trim()
+                    val cleanEdu = user.education.trim()
+                    val cleanEduClass = user.educationClass.trim()
 
                     if (cleanEdu.isBlank() && cleanEduClass.isBlank()) {
                         Text(
@@ -2308,7 +2308,7 @@ fun ProfileScreen(
 
                     Text("Overview", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = fbTextGray)
                     Spacer(modifier = Modifier.height(6.dp))
-                    val catText = if (user.profession.equals("Public figure", ignoreCase = true)) "" else user.profession.trim()
+                    val catText = user.profession.trim()
                     if (catText.isNotBlank()) {
                         Text("• Category: $catText", fontSize = 14.sp, color = fbDark)
                     }
@@ -2320,7 +2320,7 @@ fun ProfileScreen(
                     if (homeText.isNotBlank()) {
                         Text("• From $homeText", fontSize = 14.sp, color = fbDark)
                     }
-                    val bdayText = if (user.birthDate.equals("May 11, 1994", ignoreCase = true)) "" else user.birthDate.trim()
+                    val bdayText = user.birthDate.trim()
                     if (bdayText.isNotBlank()) {
                         Text("• Birthday: $bdayText", fontSize = 14.sp, color = fbDark)
                     }
@@ -2331,10 +2331,10 @@ fun ProfileScreen(
                         Text("• No overview details provided yet", fontSize = 14.sp, color = fbTextGray)
                     }
 
-                    val workP = if (user.workplace.equals("Adigrat university _Engineering Sciences", ignoreCase = true)) "" else user.workplace.trim()
-                    val workR = if (user.workRole.equals("Civil Engineering", ignoreCase = true)) "" else user.workRole.trim()
-                    val eduU = if (user.education.equals("Adigrat University", ignoreCase = true)) "" else user.education.trim()
-                    val eduC = if (user.educationClass.equals("Class of 2018", ignoreCase = true)) "" else user.educationClass.trim()
+                    val workP = user.workplace.trim()
+                    val workR = user.workRole.trim()
+                    val eduU = user.education.trim()
+                    val eduC = user.educationClass.trim()
 
                     if (workP.isNotBlank() || workR.isNotBlank() || eduU.isNotBlank() || eduC.isNotBlank()) {
                         Spacer(modifier = Modifier.height(14.dp))
