@@ -93,6 +93,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     val albums: StateFlow<List<AlbumItem>> = repository.albums
     val notifications: StateFlow<List<NotificationItem>> = repository.notifications
     val conversations: StateFlow<Map<String, List<ChatMessage>>> = repository.conversations
+    val lastReadTimestamps: StateFlow<Map<String, Long>> = repository.lastReadTimestamps
     val savedPostIds: StateFlow<Set<String>> = repository.savedPostIds
     val subscribedPostIds: StateFlow<Set<String>> = repository.subscribedPostIds
     val allComments: StateFlow<Map<String, List<Comment>>> = repository.comments
@@ -1321,6 +1322,10 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     }
 
     // Notifications
+    fun markNotificationRead(notifId: String) {
+        repository.markNotificationRead(notifId)
+    }
+
     fun markAllNotifsRead() {
         repository.markAllNotificationsRead()
     }

@@ -122,7 +122,7 @@ class MeskotRepository(
     val conversations: StateFlow<Map<String, List<ChatMessage>>> = _conversations.asStateFlow()
 
     // Notifications
-    private val _notifications = MutableStateFlow<List<NotificationItem>>(emptyList())
+    private val _notifications = MutableStateFlow<List<NotificationItem>>(createInitialNotifications())
     val notifications: StateFlow<List<NotificationItem>> = _notifications.asStateFlow()
 
     // Saved post IDs
@@ -248,9 +248,31 @@ class MeskotRepository(
 
     // Unread tracking per sender
     private val _lastReadTimestamps = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val lastReadTimestamps: StateFlow<Map<String, Long>> = _lastReadTimestamps.asStateFlow()
 
     fun markConversationAsRead(otherUid: String) {
-        _lastReadTimestamps.value = _lastReadTimestamps.value + (otherUid to System.currentTimeMillis())
+        val now = System.currentTimeMillis()
+        _lastReadTimestamps.value = _lastReadTimestamps.value + (otherUid to now)
+        val currentConvos = _conversations.value.toMutableMap()
+        var changed = false
+        val directMsgs = currentConvos[otherUid]
+        if (directMsgs != null && directMsgs.any { !it.isSeen }) {
+            currentConvos[otherUid] = directMsgs.map { if (!it.isSeen) it.copy(isSeen = true) else it }
+            changed = true
+        }
+        val user = _currentUser.value
+        if (user != null) {
+            val comboKey = if (user.uid < otherUid) "${user.uid}_${otherUid}" else "${otherUid}_${user.uid}"
+            val comboMsgs = currentConvos[comboKey]
+            if (comboMsgs != null && comboMsgs.any { !it.isSeen }) {
+                currentConvos[comboKey] = comboMsgs.map { if (!it.isSeen) it.copy(isSeen = true) else it }
+                changed = true
+            }
+            FirebaseManager.markConversationMessagesSeen(user.uid, otherUid)
+        }
+        if (changed) {
+            _conversations.value = currentConvos
+        }
     }
 
     // Dynamic unread messages count
@@ -258,7 +280,7 @@ class MeskotRepository(
         if (user == null) return@combine 0
         val partnersWithUnread = convos.filterKeys { !it.contains("_") && it != user.uid }.count { (partnerUid, messages) ->
             val lastRead = readMap[partnerUid] ?: 0L
-            messages.any { it.toUid == user.uid && it.fromUid == partnerUid && it.createdAt > lastRead && !it.isCallLog }
+            messages.any { it.toUid == user.uid && it.fromUid == partnerUid && (!it.isSeen || it.createdAt > lastRead) && !it.isCallLog }
         }
         partnersWithUnread
     }.stateIn(kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default), kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), 0)
@@ -2325,8 +2347,19 @@ class MeskotRepository(
         _notifications.value = listOf(newNotif) + _notifications.value
     }
 
+    fun markNotificationRead(notifId: String) {
+        _notifications.value = _notifications.value.map {
+            if (it.id == notifId) it.copy(isRead = true) else it
+        }
+        FirebaseManager.markNotificationRead(notifId)
+    }
+
     fun markAllNotificationsRead() {
         _notifications.value = _notifications.value.map { it.copy(isRead = true) }
+        val user = _currentUser.value
+        if (user != null) {
+            FirebaseManager.markAllNotificationsRead(user.uid)
+        }
     }
 
     // ADMIN ACTIONS
@@ -2533,7 +2566,51 @@ class MeskotRepository(
         return mapOf(gebUid to messages)
     }
 
-    private fun createInitialNotifications(): List<NotificationItem> = emptyList()
+    private fun createInitialNotifications(): List<NotificationItem> {
+        val now = System.currentTimeMillis()
+        return listOf(
+            NotificationItem(
+                id = "notif_init_1",
+                fromUid = "user_gebreslassie",
+                fromName = "Gebreslassie Tsadik",
+                fromPhoto = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300",
+                type = "message",
+                text = "Gebreslassie Tsadik sent you a message: 'Hi'",
+                isRead = false,
+                createdAt = now - 14 * 60 * 1000L
+            ),
+            NotificationItem(
+                id = "notif_init_2",
+                fromUid = "user_sara",
+                fromName = "Sara Haile",
+                fromPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300",
+                type = "like",
+                text = "Sara Haile reacted ❤️ to your post",
+                isRead = false,
+                createdAt = now - 45 * 60 * 1000L
+            ),
+            NotificationItem(
+                id = "notif_init_3",
+                fromUid = "user_abebe",
+                fromName = "Abebe Bikila",
+                fromPhoto = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300",
+                type = "comment",
+                text = "Abebe Bikila commented: 'Great perspective on this!'",
+                isRead = true,
+                createdAt = now - 3 * 3600 * 1000L
+            ),
+            NotificationItem(
+                id = "notif_init_4",
+                fromUid = "system_meskot",
+                fromName = "Meskot Studio",
+                fromPhoto = "",
+                type = "monetization_approved",
+                text = "Meskot Creator Studio approved your monetization application",
+                isRead = true,
+                createdAt = now - 24 * 3600 * 1000L
+            )
+        )
+    }
 
     private fun createInitialAdCampaigns(): List<AdCampaign> {
         return listOf(

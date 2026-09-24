@@ -715,6 +715,37 @@ object FirebaseManager {
             .addOnFailureListener { Log.e(TAG, "Failed to mark notification as read: ${it.message}") }
     }
 
+    fun markAllNotificationsRead(userUid: String) {
+        val db = firestore ?: return
+        db.collection(COL_NOTIFICATIONS)
+            .whereEqualTo("toUid", userUid)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                for (doc in snapshot.documents) {
+                    if (doc.getBoolean("isRead") != true) {
+                        doc.reference.update("isRead", true)
+                    }
+                }
+            }
+            .addOnFailureListener { Log.e(TAG, "Failed to mark all notifications read: ${it.message}") }
+    }
+
+    fun markConversationMessagesSeen(userUid: String, otherUid: String) {
+        val db = firestore ?: return
+        db.collection(COL_MESSAGES)
+            .whereEqualTo("toUid", userUid)
+            .whereEqualTo("fromUid", otherUid)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                for (doc in snapshot.documents) {
+                    if (doc.getBoolean("isSeen") != true) {
+                        doc.reference.update("isSeen", true)
+                    }
+                }
+            }
+            .addOnFailureListener { Log.w(TAG, "Failed marking conversation messages seen: ${it.message}") }
+    }
+
     fun listenToNotifications(forUid: String, onNotificationsUpdated: (List<NotificationItem>) -> Unit): ListenerRegistration? {
         val db = firestore ?: return null
         return try {
@@ -973,7 +1004,8 @@ object FirebaseManager {
         "callStatus" to m.callStatus,
         "callDurationSec" to m.callDurationSec,
         "createdAt" to m.createdAt,
-        "editedAt" to m.editedAt
+        "editedAt" to m.editedAt,
+        "isSeen" to m.isSeen
     )
 
     private fun parseChatMessage(id: String, d: Map<String, Any?>): ChatMessage = ChatMessage(
@@ -991,7 +1023,8 @@ object FirebaseManager {
         callStatus = d["callStatus"] as? String ?: "completed",
         callDurationSec = (d["callDurationSec"] as? Number)?.toInt() ?: 0,
         createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-        editedAt = (d["editedAt"] as? Number)?.toLong()
+        editedAt = (d["editedAt"] as? Number)?.toLong(),
+        isSeen = d["isSeen"] as? Boolean ?: d["seen"] as? Boolean ?: false
     )
 
     private fun friendRequestToMap(r: FriendRequest): Map<String, Any?> = mapOf(

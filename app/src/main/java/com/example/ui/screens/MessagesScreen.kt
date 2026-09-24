@@ -150,6 +150,7 @@ fun MessagesScreen(
     currentLanguage: AppLanguage
 ) {
     val conversations by viewModel.conversations.collectAsState()
+    val lastReadTimestamps by viewModel.lastReadTimestamps.collectAsState()
     val nowMs by viewModel.tickerTimeMs.collectAsStateWithLifecycle()
     val friendsList = allUsers.filter { friendUids.contains(it.uid) }
 
@@ -292,7 +293,12 @@ fun MessagesScreen(
                         viewModel.getMessagesForUser(user.uid)
                     }
                     val lastMessage = messages.lastOrNull()
-                    val isLastFromPartner = lastMessage != null && lastMessage.fromUid == user.uid
+                    val lastRead = lastReadTimestamps[user.uid] ?: 0L
+                    val hasUnseen = remember(messages, lastRead, user.uid) {
+                        messages.any { msg ->
+                            msg.fromUid == user.uid && (!msg.isSeen || msg.createdAt > lastRead) && !msg.isCallLog
+                        }
+                    }
 
                     val isUserOnline = remember(user.lastSeen, nowMs) {
                         MeskotStrings.isOnline(user.lastSeen, nowMs)
@@ -307,8 +313,13 @@ fun MessagesScreen(
                             .padding(vertical = 6.dp)
                             .clickable { viewModel.openChat(user) },
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = CardBg),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder)
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (hasUnseen) Color(0xFFF0F7FF) else CardBg
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (hasUnseen) Color(0xFFC7E0FF) else LineBorder
+                        )
                     ) {
                         Row(
                             modifier = Modifier
@@ -337,7 +348,7 @@ fun MessagesScreen(
                                     Text(
                                         text = user.displayName,
                                         fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = if (hasUnseen) FontWeight.Bold else FontWeight.SemiBold,
                                         color = Ink
                                     )
                                     if (isUserOnline) {
@@ -363,8 +374,8 @@ fun MessagesScreen(
                                     fontSize = 13.sp,
                                     color = if (lastMessage == null) {
                                         if (isUserOnline) Color(0xFF31A24C) else MutedText
-                                    } else if (isLastFromPartner) Ink else MutedText,
-                                    fontWeight = if (isLastFromPartner) FontWeight.SemiBold else FontWeight.Normal,
+                                    } else if (hasUnseen) Ink else MutedText,
+                                    fontWeight = if (hasUnseen) FontWeight.Bold else FontWeight.Normal,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -375,13 +386,14 @@ fun MessagesScreen(
                                     Text(
                                         text = MeskotStrings.formatNotificationTime(lastMessage.createdAt, currentLanguage, nowMs),
                                         fontSize = 11.sp,
-                                        color = MutedText
+                                        color = if (hasUnseen) Color(0xFF0084FF) else MutedText,
+                                        fontWeight = if (hasUnseen) FontWeight.Bold else FontWeight.Normal
                                     )
-                                    if (isLastFromPartner) {
+                                    if (hasUnseen) {
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Box(
                                             modifier = Modifier
-                                                .size(8.dp)
+                                                .size(9.dp)
                                                 .clip(CircleShape)
                                                 .background(Color(0xFF0084FF))
                                         )
@@ -419,6 +431,16 @@ fun ChatScreen(
     val conversations by viewModel.conversations.collectAsState()
     val rawMessages = remember(conversations, recipient.uid, currentUser?.uid) {
         viewModel.getMessagesForUser(recipient.uid)
+    }
+
+    LaunchedEffect(recipient.uid) {
+        viewModel.markConversationAsRead(recipient.uid)
+    }
+
+    LaunchedEffect(rawMessages) {
+        if (rawMessages.any { it.fromUid == recipient.uid && !it.isSeen }) {
+            viewModel.markConversationAsRead(recipient.uid)
+        }
     }
 
     var textInput by remember { mutableStateOf("") }
@@ -1559,7 +1581,8 @@ fun EnhancedChatMessageRow(
                             text = msg.text,
                             color = if (isMine) Color.White else Color(0xFF050505),
                             fontSize = 15.sp,
-                            lineHeight = 20.sp
+                            lineHeight = 20.sp,
+                            fontWeight = if (!isMine && !msg.isSeen) FontWeight.Bold else FontWeight.Normal
                         )
                     }
 
@@ -1577,10 +1600,10 @@ fun EnhancedChatMessageRow(
                         if (isMine) {
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = "✓✓",
+                                text = if (msg.isSeen) "✓✓" else "✓",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White.copy(alpha = 0.85f)
+                                color = if (msg.isSeen) Color(0xFF0084FF) else Color.White.copy(alpha = 0.85f)
                             )
                         }
                     }

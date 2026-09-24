@@ -106,9 +106,16 @@ fun NotificationsScreen(
                         currentLanguage = currentLanguage,
                         nowMs = nowMs,
                         onClick = {
+                            viewModel.markNotificationRead(notif.id)
                             when (notif.type) {
-                                "friend_req" -> viewModel.navigateTo(ScreenTab.FRIENDS)
-                                "message" -> viewModel.navigateTo(ScreenTab.MESSAGES)
+                                "friend_req", "friend_request" -> viewModel.navigateTo(ScreenTab.FRIENDS)
+                                "message" -> {
+                                    if (!notif.fromUid.isNullOrBlank() && notif.fromUid != "system_meskot") {
+                                        viewModel.openChatByUid(notif.fromUid)
+                                    } else {
+                                        viewModel.navigateTo(ScreenTab.MESSAGES)
+                                    }
+                                }
                                 else -> viewModel.navigateTo(ScreenTab.FEED)
                             }
                         }
@@ -137,9 +144,12 @@ fun NotificationRow(
             .clickable { onClick() },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (notif.isRead) CardBg else com.example.ui.theme.GoldSurface
+            containerColor = if (notif.isRead) CardBg else Color(0xFFEBF5FF)
         ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, if (notif.isRead) LineBorder else com.example.ui.theme.GoldBorder)
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (notif.isRead) LineBorder else Color(0xFFC7E0FF)
+        )
     ) {
         Row(
             modifier = Modifier
@@ -154,9 +164,10 @@ fun NotificationRow(
                 val badgeEmoji = when (notif.type) {
                     "like" -> "❤️"
                     "comment" -> "💬"
-                    "friend_req" -> "👥"
+                    "friend_req", "friend_request", "friend_accept" -> "👥"
                     "tip" -> "💰"
                     "call" -> "📞"
+                    "message" -> "💬"
                     else -> "🔔"
                 }
 
@@ -181,12 +192,13 @@ fun NotificationRow(
                     fontSize = 14.sp,
                     color = Ink,
                     lineHeight = 18.sp,
-                    fontWeight = if (notif.isRead) FontWeight.Normal else FontWeight.SemiBold
+                    fontWeight = if (notif.isRead) FontWeight.Normal else FontWeight.Bold
                 )
                 Text(
                     text = MeskotStrings.formatNotificationTime(notif.createdAt, currentLanguage, nowMs),
                     fontSize = 11.sp,
-                    color = MutedText,
+                    color = if (notif.isRead) MutedText else Color(0xFF1877F2),
+                    fontWeight = if (notif.isRead) FontWeight.Normal else FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
@@ -195,9 +207,9 @@ fun NotificationRow(
                 Spacer(modifier = Modifier.width(8.dp))
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
+                        .size(10.dp)
                         .clip(CircleShape)
-                        .background(Gold)
+                        .background(Color(0xFF1877F2))
                 )
             }
         }
