@@ -61,6 +61,8 @@ import com.example.ui.screens.PhotosScreen
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.ReelsScreen
 import com.example.ui.screens.SavedScreen
+import com.example.ui.components.UserInterestAnalysisModal
+import com.example.recommendation.UserInterestTracker
 import com.example.ui.theme.MeskotTheme
 import com.example.ui.theme.Paper
 
@@ -117,6 +119,8 @@ fun MeskotApp(viewModel: MeskotViewModel) {
     val followingUids by viewModel.followingUids.collectAsState()
     val allComments by viewModel.allComments.collectAsState()
     val feedPosts by viewModel.feedPosts.collectAsState()
+    val allPosts by viewModel.posts.collectAsState()
+    val reelReactions by viewModel.reelReactions.collectAsState()
 
     val unreadNotifsCount by viewModel.unreadNotifsCount.collectAsState()
     val unreadMsgCount by viewModel.unreadMsgCount.collectAsState()
@@ -145,6 +149,7 @@ fun MeskotApp(viewModel: MeskotViewModel) {
     val isLiveStreamOpen by viewModel.isLiveStreamOpen.collectAsState()
     val currentLiveSession by viewModel.currentLiveSession.collectAsState()
     val currentLiveMessages by viewModel.currentLiveMessages.collectAsState()
+    val isInterestModalOpen by viewModel.isInterestModalOpen.collectAsState()
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as? android.app.Activity
@@ -478,10 +483,13 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                 }
 
                 activeReelToView?.let { reel ->
-                    val currentReel = feedPosts.find { it.id == reel.id } ?: reel
+                    val currentReel = allPosts.find { it.id == reel.id } ?: reel
                     val reelComments = allComments[currentReel.id] ?: viewModel.getComments(currentReel.id)
                     val isFollowing = followingUids.contains(currentReel.uid)
                     val isSaved = savedPostIds.contains(currentReel.id)
+                    val user = currentUser
+                    val isLiked = (user != null && currentReel.reactions.containsKey(user.uid)) ||
+                            (user != null && reelReactions[currentReel.id]?.containsKey(user.uid) == true)
 
                     ReelViewerDialog(
                         reel = currentReel,
@@ -490,6 +498,7 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         comments = reelComments,
                         isFollowing = isFollowing,
                         isSaved = isSaved,
+                        isLiked = isLiked,
                         onDismiss = { viewModel.closeReelViewer() },
                         onToggleLike = {
                             viewModel.toggleReaction(currentReel.id, "heart")
@@ -565,8 +574,28 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         onDelete = { viewModel.deletePost(post.id) },
                         onHide = { viewModel.hidePost(post.id) },
                         onReport = { viewModel.reportPost(post.id) },
-                        onInterested = { viewModel.showMessage("We'll tune your feed for more posts like this.") },
-                        onNotInterested = { viewModel.showMessage("We'll show fewer posts like this.") },
+                        onInterested = {
+                            UserInterestTracker.recordEvent(
+                                itemId = post.id,
+                                tags = post.effectiveTags(),
+                                watchPercentage = 0.95,
+                                dwellTimeSec = 15,
+                                action = "EXPLICIT_LIKE",
+                                userId = currentUser?.uid ?: "usr_current"
+                            )
+                            viewModel.showMessage("We'll tune your feed for more posts like this.")
+                        },
+                        onNotInterested = {
+                            UserInterestTracker.recordEvent(
+                                itemId = post.id,
+                                tags = post.effectiveTags(),
+                                watchPercentage = 0.05,
+                                dwellTimeSec = 1,
+                                action = "FAST_SKIP",
+                                userId = currentUser?.uid ?: "usr_current"
+                            )
+                            viewModel.showMessage("We'll show fewer posts like this.")
+                        },
                         onToggleNotifs = { viewModel.togglePostNotifications(post.id) },
                         onCopyText = {
                             clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(post.text))
@@ -675,6 +704,13 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                                 educationClass = educationClass
                             )
                         }
+                    )
+                }
+
+                if (isInterestModalOpen) {
+                    UserInterestAnalysisModal(
+                        userId = currentUser?.uid ?: "usr_7821",
+                        onDismiss = { viewModel.closeInterestEngine() }
                     )
                 }
 

@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Meskot"
+rootProject.name = "Meskot Global"
 
 include(":app")

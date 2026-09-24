@@ -28,6 +28,8 @@ import com.example.data.LiveStreamSession
 import com.example.data.LiveStreamComment
 import com.example.data.UserInsightsData
 import com.example.data.UserEngagementData
+import com.example.recommendation.UserInterestAnalysisResult
+import com.example.recommendation.UserInterestTracker
 import com.example.util.CallAudioManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -486,24 +488,50 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     // All unfiltered posts
     val posts: StateFlow<List<Post>> = repository.posts
 
-    // Filtered Feed posts with Algorithmic Boost Weighting
+    // Reactions specifically tracked on reels / cultural presets
+    val reelReactions: StateFlow<Map<String, Map<String, String>>> = repository.reelReactions
+
+    // Recommendation & Interest Profiling State
+    val userInterestProfile: StateFlow<UserInterestAnalysisResult?> = UserInterestTracker.activeProfile
+    private val _isInterestModalOpen = MutableStateFlow(false)
+    val isInterestModalOpen: StateFlow<Boolean> = _isInterestModalOpen.asStateFlow()
+
+    fun openInterestEngine() {
+        _isInterestModalOpen.value = true
+    }
+
+    fun closeInterestEngine() {
+        _isInterestModalOpen.value = false
+    }
+
+    // Filtered Feed posts with Algorithmic Boost Weighting & AI Interest Scoring
     val feedPosts: StateFlow<List<Post>> = combine(
-        repository.posts,
-        repository.hiddenPostIds,
-        repository.currentUser,
-        repository.friends
-    ) { posts, hidden, user, friendsSet ->
-        posts.filter { post ->
-            if (hidden.contains(post.id)) return@filter false
-            when (post.visibility) {
-                "public" -> true
-                "friends" -> post.uid == user?.uid || friendsSet.contains(post.uid)
-                "onlyme" -> post.uid == user?.uid
-                else -> true
+        combine(
+            repository.posts,
+            repository.hiddenPostIds,
+            repository.currentUser,
+            repository.friends
+        ) { posts, hidden, user, friendsSet ->
+            posts.filter { post ->
+                if (hidden.contains(post.id)) return@filter false
+                when (post.visibility) {
+                    "public" -> true
+                    "friends" -> post.uid == user?.uid || friendsSet.contains(post.uid)
+                    "onlyme" -> post.uid == user?.uid
+                    else -> true
+                }
             }
-        }.sortedWith(
+        },
+        UserInterestTracker.activeProfile,
+        UserInterestTracker.personalizationEnabled
+    ) { basePosts: List<Post>, _, personalizationOn: Boolean ->
+        basePosts.sortedWith(
             compareByDescending<Post> { if (it.isBoosted) 1 else 0 }
-                .thenByDescending { if (it.isBoosted) it.createdAt + (it.boostMultiplier * 3600000).toLong() else it.createdAt }
+                .thenByDescending { post ->
+                    val interestWeight = if (personalizationOn) UserInterestTracker.computePostRelevanceWeight(post) else 1.0
+                    val boostBonus = if (post.isBoosted) (post.boostMultiplier * 3600000).toLong() else 0L
+                    ((post.createdAt + boostBonus) * interestWeight).toLong()
+                }
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -603,17 +631,50 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     // Post Actions
     fun toggleReaction(postId: String, reactionType: String) {
         repository.toggleReaction(postId, reactionType)
+        val post = repository.posts.value.find { it.id == postId }
+        if (post != null) {
+            UserInterestTracker.recordEvent(
+                itemId = post.id,
+                tags = post.effectiveTags(),
+                watchPercentage = 0.9,
+                dwellTimeSec = 15,
+                action = "LIKE",
+                userId = currentUser.value?.uid ?: "usr_current"
+            )
+        }
     }
 
     fun sharePost(postId: String) {
         repository.sharePost(postId)
         showMessage("Post shared to your feed")
+        val post = repository.posts.value.find { it.id == postId }
+        if (post != null) {
+            UserInterestTracker.recordEvent(
+                itemId = post.id,
+                tags = post.effectiveTags(),
+                watchPercentage = 1.0,
+                dwellTimeSec = 30,
+                action = "SHARE",
+                userId = currentUser.value?.uid ?: "usr_current"
+            )
+        }
     }
 
     fun toggleSavePost(postId: String) {
         val wasSaved = repository.savedPostIds.value.contains(postId)
         repository.toggleSavePost(postId)
         showMessage(if (wasSaved) "Removed from Saved" else "Saved to your bookmarks")
+        val post = repository.posts.value.find { it.id == postId }
+        if (post != null) {
+            UserInterestTracker.recordEvent(
+                itemId = post.id,
+                tags = post.effectiveTags(),
+                watchPercentage = 0.95,
+                dwellTimeSec = 20,
+                action = "SAVE",
+                userId = currentUser.value?.uid ?: "usr_current"
+            )
+        }
     }
 
     fun togglePostNotifications(postId: String) {

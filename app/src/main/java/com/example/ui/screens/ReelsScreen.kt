@@ -45,8 +45,10 @@ import com.example.data.User
 import com.example.ui.MeskotViewModel
 import com.example.ui.components.EqualizerBarsAnimation
 import com.example.ui.components.PresetReelsCollection
+import com.example.ui.components.ReelCommentsBottomSheet
 import com.example.ui.components.UserAvatar
 import com.example.ui.theme.*
+import com.example.recommendation.UserInterestTracker
 import kotlinx.coroutines.delay
 
 /**
@@ -69,6 +71,8 @@ fun ReelsScreen(
     val followingUids by viewModel.followingUids.collectAsState()
     val savedPostIds by viewModel.savedPostIds.collectAsState()
     val allComments by viewModel.allComments.collectAsState()
+    val reelReactions by viewModel.reelReactions.collectAsState()
+    var activeCommentReel by remember { mutableStateOf<Post?>(null) }
 
     // Aggregate user-created reels + preset cultural reels
     val communityReels = remember(posts) {
@@ -80,6 +84,7 @@ fun ReelsScreen(
         PresetReelsCollection.mapIndexed { idx, preset ->
             val presetId = "preset_${preset.id}"
             val existing = posts.find { it.id == presetId }
+            val presetTags = listOf(preset.category.lowercase(), "culture", "ethiopia", "habesha", "music")
             existing ?: Post(
                 id = presetId,
                 uid = "meskot_culture_$idx",
@@ -96,19 +101,22 @@ fun ReelsScreen(
                 videoUrl = preset.mediaUrl,
                 audioTrackTitle = preset.audioTitle,
                 viewsCount = 14200 + (idx * 3150),
-                createdAt = System.currentTimeMillis() - (idx * 3600000L * 4)
+                createdAt = System.currentTimeMillis() - (idx * 3600000L * 4),
+                tags = presetTags
             )
         }
     }
 
-    val displayReels = remember(selectedFilterIndex, communityReels, currentUser?.uid) {
+    val activeInterestProfile by viewModel.userInterestProfile.collectAsState()
+
+    val displayReels = remember(selectedFilterIndex, communityReels, currentUser?.uid, activeInterestProfile) {
         when (selectedFilterIndex) {
             0 -> {
-                // "For You" - Combined feed of community reels + curated presets
-                val combined = mutableListOf<Post>()
-                combined.addAll(communityReels)
-                combined.addAll(presetReelPosts)
-                if (combined.isEmpty()) presetReelPosts else combined
+                // "For You" - Personalize by UserInterestTracker algorithm
+                val combined = (communityReels + presetReelPosts).distinctBy { it.id }
+                combined.sortedByDescending { reel ->
+                    UserInterestTracker.computePostRelevanceWeight(reel)
+                }
             }
             1 -> {
                 // "Habesha Heritage" - presets and culture-tagged reels
@@ -193,31 +201,52 @@ fun ReelsScreen(
                         }
                     }
 
-                    // "+ Create Reel" Quick Action Button
-                    Surface(
-                        onClick = { viewModel.openCreateReel() },
-                        shape = RoundedCornerShape(20.dp),
-                        color = GoldSurface,
-                        border = androidx.compose.foundation.BorderStroke(1.2.dp, GoldBorder),
-                        modifier = Modifier.testTag("create_reel_header_btn")
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        IconButton(
+                            onClick = { viewModel.openInterestEngine() },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(Color(0xFF29241E), CircleShape)
+                                .border(1.dp, GoldBorder.copy(alpha = 0.5f), CircleShape)
+                                .testTag("reels_ai_tuning_btn")
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Create Reel",
-                                tint = GoldDeep,
-                                modifier = Modifier.size(16.dp)
+                                imageVector = Icons.Default.Psychology,
+                                contentDescription = "AI Interest Tuning",
+                                tint = Gold,
+                                modifier = Modifier.size(20.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Create",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = GoldDeep
-                            )
+                        }
+
+                        // "+ Create Reel" Quick Action Button
+                        Surface(
+                            onClick = { viewModel.openCreateReel() },
+                            shape = RoundedCornerShape(20.dp),
+                            color = GoldSurface,
+                            border = androidx.compose.foundation.BorderStroke(1.2.dp, GoldBorder),
+                            modifier = Modifier.testTag("create_reel_header_btn")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Create Reel",
+                                    tint = GoldDeep,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Create",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = GoldDeep
+                                )
+                            }
                         }
                     }
                 }
@@ -320,25 +349,48 @@ fun ReelsScreen(
                     val liveReel = posts.find { it.id == reel.id } ?: reel
                     val isSaved = savedPostIds.contains(liveReel.id)
                     val commentCount = allComments[liveReel.id]?.size ?: liveReel.commentCount
+                    val isLiked = (currentUser != null && liveReel.reactions.containsKey(currentUser.uid)) ||
+                            (currentUser != null && reelReactions[liveReel.id]?.containsKey(currentUser.uid) == true)
+                    val likesCount = (liveReel.reactions.size + (reelReactions[liveReel.id]?.size ?: 0)).let {
+                        if (it > 0) it else 128
+                    }
+
                     FacebookReelItemCard(
                         reel = liveReel,
                         currentUser = currentUser,
+                        isLiked = isLiked,
+                        likesCount = likesCount,
                         isFollowing = followingUids.contains(liveReel.uid),
                         isSaved = isSaved,
                         commentCount = commentCount,
                         onToggleFollow = { viewModel.toggleFollow(liveReel.uid) },
                         onToggleLike = {
-                            viewModel.toggleReaction(liveReel.id, "like")
+                            viewModel.toggleReaction(liveReel.id, "heart")
                         },
                         onToggleSave = {
                             viewModel.toggleSavePost(liveReel.id)
+                            val msg = if (isSaved) "Removed from saved" else "Reel saved to bookmarks"
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         },
                         onCommentClick = {
-                            viewModel.viewReel(liveReel)
+                            activeCommentReel = liveReel
                         },
                         onShareClick = {
                             viewModel.sharePost(liveReel.id)
-                            Toast.makeText(context, "🔗 Reel link copied to clipboard!", Toast.LENGTH_SHORT).show()
+                            try {
+                                val sendIntent = android.content.Intent().apply {
+                                    action = android.content.Intent.ACTION_SEND
+                                    putExtra(
+                                        android.content.Intent.EXTRA_TEXT,
+                                        "Watch ${liveReel.authorName}'s reel on Meskot Global: ${liveReel.text.ifBlank { liveReel.audioTrackTitle }}"
+                                    )
+                                    type = "text/plain"
+                                }
+                                val shareIntent = android.content.Intent.createChooser(sendIntent, "Share Reel")
+                                context.startActivity(shareIntent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "🔗 Reel link copied to clipboard!", Toast.LENGTH_SHORT).show()
+                            }
                         },
                         onTipClick = {
                             viewModel.openTipModal(liveReel)
@@ -355,6 +407,30 @@ fun ReelsScreen(
             }
         }
     }
+
+    // Interactive Real-Time Comments Bottom Sheet for Reels
+    activeCommentReel?.let { activeReel ->
+        val currentComments = allComments[activeReel.id] ?: viewModel.getComments(activeReel.id)
+        ReelCommentsBottomSheet(
+            reel = activeReel,
+            comments = currentComments,
+            currentUser = currentUser,
+            currentLanguage = currentLanguage,
+            onDismiss = { activeCommentReel = null },
+            onAddComment = { text, parentId ->
+                viewModel.addComment(activeReel.id, text, parentId)
+            },
+            onToggleCommentLike = { commentId ->
+                viewModel.toggleCommentLike(activeReel.id, commentId)
+            },
+            onDeleteComment = { commentId ->
+                viewModel.deleteComment(activeReel.id, commentId)
+            },
+            onAuthorClick = { uid ->
+                viewModel.openProfileByUid(uid)
+            }
+        )
+    }
 }
 
 /**
@@ -368,6 +444,8 @@ fun ReelsScreen(
 fun FacebookReelItemCard(
     reel: Post,
     currentUser: User?,
+    isLiked: Boolean,
+    likesCount: Int,
     isFollowing: Boolean,
     isSaved: Boolean,
     commentCount: Int,
@@ -380,17 +458,20 @@ fun FacebookReelItemCard(
     onOpenFullViewer: () -> Unit
 ) {
     var isPlaying by remember { mutableStateOf(true) }
-    var isLiked by remember(reel.reactions, currentUser?.uid) {
-        mutableStateOf(currentUser != null && reel.reactions.containsKey(currentUser.uid))
-    }
-    var likesCount by remember(reel.reactions) {
-        mutableIntStateOf(if (reel.reactions.isNotEmpty()) reel.reactions.size else 128)
-    }
     var showHeartPop by remember { mutableStateOf(false) }
+    var dwellSeconds by remember { mutableIntStateOf(0) }
+    var maxWatchPct by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(isPlaying) {
+        while (isPlaying) {
+            delay(1000)
+            dwellSeconds++
+        }
+    }
 
     LaunchedEffect(showHeartPop) {
         if (showHeartPop) {
-            kotlinx.coroutines.delay(750)
+            delay(750)
             showHeartPop = false
         }
     }
@@ -411,9 +492,50 @@ fun FacebookReelItemCard(
     var progress by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(isPlaying) {
         while (isPlaying) {
-            kotlinx.coroutines.delay(120)
+            delay(120)
             progress += 0.015f
+            if (progress > maxWatchPct) maxWatchPct = progress
             if (progress >= 1f) progress = 0f
+        }
+    }
+
+    // Track Reel completion or fast skip on unmount
+    DisposableEffect(reel.id) {
+        val enterTime = System.currentTimeMillis()
+        onDispose {
+            val elapsedSec = ((System.currentTimeMillis() - enterTime) / 1000).toInt().coerceAtLeast(dwellSeconds)
+            val watchPct = maxWatchPct.toDouble()
+            val tags = reel.effectiveTags()
+
+            // If user skipped quickly: FAST_SKIP (-3.0)
+            if (elapsedSec < 2 || watchPct < 0.15) {
+                UserInterestTracker.recordEvent(
+                    itemId = reel.id,
+                    tags = tags,
+                    watchPercentage = watchPct,
+                    dwellTimeSec = elapsedSec,
+                    action = "FAST_SKIP",
+                    userId = currentUser?.uid ?: "usr_current"
+                )
+            } else if (watchPct >= 0.90) {
+                UserInterestTracker.recordEvent(
+                    itemId = reel.id,
+                    tags = tags,
+                    watchPercentage = watchPct,
+                    dwellTimeSec = elapsedSec,
+                    action = "FULL_WATCH",
+                    userId = currentUser?.uid ?: "usr_current"
+                )
+            } else if (elapsedSec >= 5) {
+                UserInterestTracker.recordEvent(
+                    itemId = reel.id,
+                    tags = tags,
+                    watchPercentage = watchPct,
+                    dwellTimeSec = elapsedSec,
+                    action = "DWELL",
+                    userId = currentUser?.uid ?: "usr_current"
+                )
+            }
         }
     }
 
@@ -430,11 +552,11 @@ fun FacebookReelItemCard(
                     onTap = { isPlaying = !isPlaying },
                     onDoubleTap = {
                         if (!isLiked) {
-                            isLiked = true
-                            likesCount++
+                            showHeartPop = true
                             onToggleLike()
+                        } else {
+                            showHeartPop = true
                         }
-                        showHeartPop = true
                     }
                 )
             }
@@ -588,9 +710,7 @@ fun FacebookReelItemCard(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 IconButton(
                     onClick = {
-                        isLiked = !isLiked
-                        likesCount += if (isLiked) 1 else -1
-                        if (isLiked) showHeartPop = true
+                        if (!isLiked) showHeartPop = true
                         onToggleLike()
                     },
                     modifier = Modifier

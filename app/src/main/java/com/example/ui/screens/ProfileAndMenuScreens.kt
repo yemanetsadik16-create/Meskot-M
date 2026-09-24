@@ -30,6 +30,28 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
@@ -134,6 +156,155 @@ import androidx.compose.ui.text.TextStyle
 import com.example.ui.theme.meskotTextFieldColors
 
 @Composable
+fun ProfileFollowButton(
+    isFollowing: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val coroutineScope = rememberCoroutineScope()
+    val scaleAnim = remember { Animatable(1f) }
+    var showBurst by remember { mutableStateOf(false) }
+
+    val bgColor by animateColorAsState(
+        targetValue = if (isFollowing) Color(0xFFE4E6EB) else Color(0xFF1877F2),
+        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+        label = "follow_bg_color"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (isFollowing) Color(0xFF050505) else Color.White,
+        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+        label = "follow_content_color"
+    )
+
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        if (showBurst) {
+            FollowBurstEffect(
+                onAnimationEnd = { showBurst = false }
+            )
+        }
+
+        Button(
+            onClick = {
+                val willFollow = !isFollowing
+                coroutineScope.launch {
+                    // Tactile bouncy spring animation
+                    scaleAnim.animateTo(
+                        targetValue = 0.88f,
+                        animationSpec = tween(durationMillis = 80, easing = LinearOutSlowInEasing)
+                    )
+                    scaleAnim.animateTo(
+                        targetValue = 1.08f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
+                    )
+                    scaleAnim.animateTo(
+                        targetValue = 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessHigh
+                        )
+                    )
+                }
+                if (willFollow) {
+                    showBurst = true
+                }
+                onToggle()
+            },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = bgColor,
+                contentColor = contentColor
+            ),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+            elevation = ButtonDefaults.buttonElevation(
+                defaultElevation = if (isFollowing) 0.dp else 1.5.dp,
+                pressedElevation = 0.dp
+            ),
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scaleAnim.value
+                    scaleY = scaleAnim.value
+                }
+                .testTag("profile_follow_button")
+        ) {
+            AnimatedContent(
+                targetState = isFollowing,
+                transitionSpec = {
+                    (slideInVertically { height -> height } + fadeIn(tween(180)))
+                        .togetherWith(slideOutVertically { height -> -height } + fadeOut(tween(150)))
+                },
+                label = "follow_button_content"
+            ) { following ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = if (following) Icons.Default.Check else Icons.Default.PersonAdd,
+                        contentDescription = if (following) "Following" else "Follow",
+                        tint = contentColor,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (following) "Following" else "Follow",
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = contentColor
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FollowBurstEffect(
+    onAnimationEnd: () -> Unit
+) {
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        progress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
+        )
+        onAnimationEnd()
+    }
+
+    val particleCount = 8
+    val colors = listOf(Color(0xFF1877F2), Color(0xFFFFD700), Color(0xFF00C853), Color(0xFFE41E3F))
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val centerX = size.width / 2f
+        val centerY = size.height / 2f
+        val currentP = progress.value
+        val alpha = (1f - currentP).coerceIn(0f, 1f)
+
+        for (i in 0 until particleCount) {
+            val angle = (i.toFloat() / particleCount) * (2f * Math.PI.toFloat())
+            val maxDistance = size.height * 0.9f
+            val distance = currentP * maxDistance
+            val px = centerX + (Math.cos(angle.toDouble()).toFloat() * distance)
+            val py = centerY + (Math.sin(angle.toDouble()).toFloat() * distance)
+            val particleRadius = (4.dp.toPx() * (1f - (currentP * 0.6f))).coerceAtLeast(1.dp.toPx())
+            val color = colors[i % colors.size].copy(alpha = alpha)
+
+            drawCircle(
+                color = color,
+                radius = particleRadius,
+                center = androidx.compose.ui.geometry.Offset(px, py)
+            )
+        }
+    }
+}
+
+@Composable
 fun ProfileScreen(
     viewModel: MeskotViewModel,
     user: User,
@@ -145,6 +316,8 @@ fun ProfileScreen(
 ) {
     val isMe = currentUser?.uid == user.uid
     val isFriend = friendUids.contains(user.uid)
+    val followingUids by viewModel.followingUids.collectAsState()
+    val isFollowing = followingUids.contains(user.uid)
 
     val fbBlue = Color(0xFF1877F2)
     val fbLightGray = Color(0xFFE4E6EB)
@@ -546,13 +719,14 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     // Stats: Followers · Following · Posts (Real Meskot metrics)
-                    val realFollowers = if (user.followersCount == 8500) {
+                    val baseFollowers = if (user.followersCount == 8500) {
                         if (isMe) friendUids.size else 0
                     } else if (user.followersCount > 0) {
                         user.followersCount
                     } else {
                         if (isMe) friendUids.size else 0
                     }
+                    val realFollowers = if (isFollowing && baseFollowers == 0) 1 else baseFollowers
                     val realFollowing = if (user.followingCount == 3700 || user.followingCount == 370) {
                         if (isMe) friendUids.size else 0
                     } else if (user.followingCount > 0) {
@@ -610,161 +784,212 @@ fun ProfileScreen(
 
             // PRIMARY ACTION BUTTONS
             item {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (isMe) {
-                        // Blue "Dashboard" Button
-                        Button(
-                            onClick = { viewModel.navigateTo(ScreenTab.DASHBOARD) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = fbBlue,
-                                contentColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(8.dp),
+                    // Top Row: Prominent Follow Button + Companion Action
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Prominent Follow Button with animation and state update
+                        ProfileFollowButton(
+                            isFollowing = isFollowing,
+                            onToggle = { viewModel.toggleFollow(user.uid) },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Assessment,
-                                contentDescription = "Dashboard",
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Dashboard",
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        )
 
-                        // Gray "Add to story" Button
-                        Button(
-                            onClick = { viewModel.openComposer() },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = fbLightGray,
-                                contentColor = fbDark
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Add to story",
-                                modifier = Modifier.size(18.dp),
-                                tint = fbDark
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Add to story",
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = fbDark
-                            )
+                        if (isMe) {
+                            // Blue "Dashboard" Button
+                            Button(
+                                onClick = { viewModel.navigateTo(ScreenTab.DASHBOARD) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = fbBlue,
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Assessment,
+                                    contentDescription = "Dashboard",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Dashboard",
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        } else {
+                            // Message Button
+                            Button(
+                                onClick = { viewModel.openChat(user) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = fbLightGray,
+                                    contentColor = fbDark
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Chat,
+                                    contentDescription = "Message",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = fbDark
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Message",
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = fbDark
+                                )
+                            }
                         }
+                    }
 
-                        // Gray 3-Dots Options Button
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(fbLightGray)
-                                .clickable { isMoreOptionsOpen = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More",
-                                tint = fbDark,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    } else {
-                        // Viewing other profile: Friend/Add Friend Button
-                        Button(
-                            onClick = {
-                                if (isFriend) viewModel.unfriend(user) else viewModel.sendFriendRequest(user)
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isFriend) fbLightGray else fbBlue,
-                                contentColor = if (isFriend) fbDark else Color.White
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(40.dp)
-                        ) {
-                            Text(
-                                text = if (isFriend) "✓ Friends" else "+ Add friend",
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                    // Bottom Row: Secondary Actions & Options
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isMe) {
+                            // Gray "Add to story" Button
+                            Button(
+                                onClick = { viewModel.openComposer() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = fbLightGray,
+                                    contentColor = fbDark
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Add to story",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = fbDark
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Add to story",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = fbDark
+                                )
+                            }
 
-                        // Message Button
-                        Button(
-                            onClick = { viewModel.openChat(user) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = fbLightGray,
-                                contentColor = fbDark
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Chat,
-                                contentDescription = "Message",
-                                modifier = Modifier.size(16.dp),
-                                tint = fbDark
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Message",
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = fbDark
-                            )
-                        }
+                            // Gray "Edit Profile" Button
+                            Button(
+                                onClick = { viewModel.openEditProfile() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = fbLightGray,
+                                    contentColor = fbDark
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit Profile",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = fbDark
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Edit Profile",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = fbDark
+                                )
+                            }
 
-                        // VIP Fan Club Button
-                        OutlinedButton(
-                            onClick = { viewModel.openSubscriptionModal(user) },
-                            shape = RoundedCornerShape(8.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, GoldDeep),
-                            modifier = Modifier.height(40.dp)
-                        ) {
-                            Text(
-                                text = "👑 VIP",
-                                color = GoldDeep,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
-                        }
+                            // Gray 3-Dots Options Button
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(fbLightGray)
+                                    .clickable { isMoreOptionsOpen = true },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "More",
+                                    tint = fbDark,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        } else {
+                            // Viewing other profile: Friend/Add Friend Button
+                            Button(
+                                onClick = {
+                                    if (isFriend) viewModel.unfriend(user) else viewModel.sendFriendRequest(user)
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isFriend) fbLightGray else fbBlue,
+                                    contentColor = if (isFriend) fbDark else Color.White
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                            ) {
+                                Text(
+                                    text = if (isFriend) "✓ Friends" else "+ Add friend",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
 
-                        // 3-Dots Button
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(fbLightGray)
-                                .clickable { isMoreOptionsOpen = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More",
-                                tint = fbDark,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            // VIP Fan Club Button
+                            OutlinedButton(
+                                onClick = { viewModel.openSubscriptionModal(user) },
+                                shape = RoundedCornerShape(8.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, GoldDeep),
+                                modifier = Modifier.height(40.dp)
+                            ) {
+                                Text(
+                                    text = "👑 VIP",
+                                    color = GoldDeep,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+
+                            // 3-Dots Button
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(fbLightGray)
+                                    .clickable { isMoreOptionsOpen = true },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "More",
+                                    tint = fbDark,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 }

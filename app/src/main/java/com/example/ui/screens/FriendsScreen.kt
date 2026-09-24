@@ -147,7 +147,7 @@ fun FriendsScreen(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = if (isUsersLoading) "Syncing with Firestore..." else "Firestore Live • ${allUsers.size} members",
+                    text = if (isUsersLoading) "Syncing..." else "${allUsers.size} members",
                     fontSize = 12.sp,
                     color = MutedText,
                     fontWeight = FontWeight.Medium
@@ -166,7 +166,7 @@ fun FriendsScreen(
                 } else {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh from Firestore",
+                        contentDescription = "Refresh members",
                         tint = Gold,
                         modifier = Modifier.size(18.dp)
                     )
@@ -215,7 +215,7 @@ fun FriendsScreen(
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    text = "Connecting to Firebase Firestore...",
+                                    text = "Loading members...",
                                     fontSize = 14.sp,
                                     color = MutedText
                                 )
@@ -238,7 +238,7 @@ fun FriendsScreen(
                                         .padding(vertical = 32.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    EmptyNotice(text = if (allUsers.isEmpty()) "No registered members found in Firestore yet" else MeskotStrings.get("noPeople", currentLanguage))
+                                    EmptyNotice(text = if (allUsers.isEmpty()) "No registered members found yet" else MeskotStrings.get("noPeople", currentLanguage))
                                     Spacer(modifier = Modifier.height(12.dp))
                                     OutlinedButton(
                                         onClick = { viewModel.refreshUsers() },
@@ -247,7 +247,7 @@ fun FriendsScreen(
                                     ) {
                                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Sync from Firestore", fontSize = 13.sp)
+                                        Text("Refresh members", fontSize = 13.sp)
                                     }
                                 }
                             }

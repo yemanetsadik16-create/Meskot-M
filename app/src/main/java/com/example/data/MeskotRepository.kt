@@ -129,6 +129,10 @@ class MeskotRepository(
     private val _savedPostIds = MutableStateFlow<Set<String>>(emptySet())
     val savedPostIds: StateFlow<Set<String>> = _savedPostIds.asStateFlow()
 
+    // Reel / preset reactions map: postId -> map of (uid -> reactionType)
+    private val _reelReactions = MutableStateFlow<Map<String, Map<String, String>>>(emptyMap())
+    val reelReactions: StateFlow<Map<String, Map<String, String>>> = _reelReactions.asStateFlow()
+
     // Real-time Live Streams & Sessions synchronized with Firebase Firestore
     private val _activeLiveStreams = MutableStateFlow<List<LiveStreamSession>>(emptyList())
     val activeLiveStreams: StateFlow<List<LiveStreamSession>> = _activeLiveStreams.asStateFlow()
@@ -948,35 +952,38 @@ class MeskotRepository(
             } else post
         }
         if (!found) {
-            val newReactions = mapOf(user.uid to reactionType)
-            updatedReactionsMap = newReactions
-            val dummyReelPost = Post(
-                id = postId,
-                uid = "creator_$postId",
-                authorName = "Creator",
-                text = "Meskot Reel",
-                postType = "REEL",
-                reactions = newReactions
-            )
-            _posts.value = _posts.value + dummyReelPost
+            val currentReelMap = _reelReactions.value[postId]?.toMutableMap() ?: mutableMapOf()
+            val existing = currentReelMap[user.uid]
+            if (existing == reactionType) {
+                currentReelMap.remove(user.uid)
+            } else {
+                currentReelMap[user.uid] = reactionType
+            }
+            val finalReelReactions = currentReelMap.toMap()
+            _reelReactions.value = _reelReactions.value + (postId to finalReelReactions)
+            updatedReactionsMap = finalReelReactions
         }
         updatedReactionsMap?.let { FirebaseManager.updatePostReactions(postId, it) }
     }
 
     fun sharePost(postId: String) {
         val user = _currentUser.value ?: return
-        var sourcePost = _posts.value.find { it.id == postId }
-        if (sourcePost == null) {
-            sourcePost = Post(
-                id = postId,
-                uid = "creator_$postId",
-                authorName = "Creator",
-                text = "Meskot Reel",
-                postType = "REEL",
-                sharesCount = 1
-            )
-            _posts.value = _posts.value + sourcePost
-        }
+        val sourcePost = _posts.value.find { it.id == postId }
+        val effectivePost = sourcePost ?: run {
+            val preset = com.example.ui.components.PresetReelsCollection.find { "preset_${it.id}" == postId }
+            if (preset != null) {
+                Post(
+                    id = postId,
+                    uid = "meskot_culture",
+                    authorName = preset.title,
+                    text = preset.description,
+                    postType = "REEL",
+                    videoUrl = preset.mediaUrl,
+                    audioTrackTitle = preset.audioTitle
+                )
+            } else null
+        } ?: return
+
         val newPost = Post(
             id = "post_" + System.currentTimeMillis(),
             uid = user.uid,
@@ -984,12 +991,12 @@ class MeskotRepository(
             authorPhoto = user.photoUrl,
             text = "",
             sharedPost = SharedPostPreview(
-                postId = sourcePost.id,
-                authorName = sourcePost.authorName,
-                authorPhoto = sourcePost.authorPhoto,
-                text = sourcePost.text,
-                mediaUrls = sourcePost.mediaUrls,
-                createdAt = sourcePost.createdAt
+                postId = effectivePost.id,
+                authorName = effectivePost.authorName,
+                authorPhoto = effectivePost.authorPhoto,
+                text = effectivePost.text,
+                mediaUrls = if (effectivePost.videoUrl.isNotBlank()) listOf(effectivePost.videoUrl) + effectivePost.mediaUrls else effectivePost.mediaUrls,
+                createdAt = effectivePost.createdAt
             ),
             createdAt = System.currentTimeMillis(),
             isAuthorVerified = user.isVerified
@@ -1002,7 +1009,7 @@ class MeskotRepository(
         // Increment shares count on source post in Firestore backend
         FirebaseManager.incrementPostShareCount(postId)
 
-        if (sourcePost.uid != user.uid) {
+        if (effectivePost.uid != user.uid) {
             addNotification(
                 fromUid = user.uid,
                 fromName = user.displayName,
@@ -1389,57 +1396,71 @@ class MeskotRepository(
 
     fun toggleFollow(targetUid: String) {
         val user = _currentUser.value ?: return
-        if (targetUid == user.uid) return
+        val isSelf = (targetUid == user.uid)
         val isCurrentlyFollowing = _followingUids.value.contains(targetUid)
         if (isCurrentlyFollowing) {
             _followingUids.value = _followingUids.value - targetUid
             val currentFollowing = if (user.followingCount == 3700 || user.followingCount == 370) _friends.value.size else user.followingCount
             val newFollowing = (currentFollowing - 1).coerceAtLeast(0)
-            val updatedUser = user.copy(followingCount = newFollowing)
+            val baseFollowers = if (user.followersCount == 8500) _friends.value.size else user.followersCount
+            val newFollowers = if (isSelf) (baseFollowers - 1).coerceAtLeast(0) else baseFollowers
+            val updatedUser = user.copy(
+                followingCount = newFollowing,
+                followersCount = newFollowers
+            )
             _currentUser.value = updatedUser
             userRepository.setCurrentUser(updatedUser)
             repoScope.launch { userRepository.saveUser(updatedUser) }
             FirebaseManager.saveUser(updatedUser)
 
-            // Decrement target user followers
-            val target = _users.value.find { it.uid == targetUid }
-            if (target != null) {
-                val baseFollowers = if (target.followersCount == 8500) 0 else target.followersCount
-                val newTargetFollowers = (baseFollowers - 1).coerceAtLeast(0)
-                val updatedTarget = target.copy(followersCount = newTargetFollowers)
-                _users.value = _users.value.map { if (it.uid == targetUid) updatedTarget else it }
-                repoScope.launch { userRepository.saveUser(updatedTarget) }
-                FirebaseManager.saveUser(updatedTarget)
+            if (!isSelf) {
+                // Decrement target user followers
+                val target = _users.value.find { it.uid == targetUid }
+                if (target != null) {
+                    val targetBaseFollowers = if (target.followersCount == 8500) 0 else target.followersCount
+                    val newTargetFollowers = (targetBaseFollowers - 1).coerceAtLeast(0)
+                    val updatedTarget = target.copy(followersCount = newTargetFollowers)
+                    _users.value = _users.value.map { if (it.uid == targetUid) updatedTarget else it }
+                    repoScope.launch { userRepository.saveUser(updatedTarget) }
+                    FirebaseManager.saveUser(updatedTarget)
+                }
             }
         } else {
             _followingUids.value = _followingUids.value + targetUid
             val currentFollowing = if (user.followingCount == 3700 || user.followingCount == 370) _friends.value.size else user.followingCount
             val newFollowing = currentFollowing + 1
-            val updatedUser = user.copy(followingCount = newFollowing)
+            val baseFollowers = if (user.followersCount == 8500) _friends.value.size else user.followersCount
+            val newFollowers = if (isSelf) baseFollowers + 1 else baseFollowers
+            val updatedUser = user.copy(
+                followingCount = newFollowing,
+                followersCount = newFollowers
+            )
             _currentUser.value = updatedUser
             userRepository.setCurrentUser(updatedUser)
             repoScope.launch { userRepository.saveUser(updatedUser) }
             FirebaseManager.saveUser(updatedUser)
 
-            // Increment target user followers
-            val target = _users.value.find { it.uid == targetUid }
-            if (target != null) {
-                val baseFollowers = if (target.followersCount == 8500) 0 else target.followersCount
-                val newTargetFollowers = baseFollowers + 1
-                val updatedTarget = target.copy(followersCount = newTargetFollowers)
-                _users.value = _users.value.map { if (it.uid == targetUid) updatedTarget else it }
-                repoScope.launch { userRepository.saveUser(updatedTarget) }
-                FirebaseManager.saveUser(updatedTarget)
-            }
+            if (!isSelf) {
+                // Increment target user followers
+                val target = _users.value.find { it.uid == targetUid }
+                if (target != null) {
+                    val targetBaseFollowers = if (target.followersCount == 8500) 0 else target.followersCount
+                    val newTargetFollowers = targetBaseFollowers + 1
+                    val updatedTarget = target.copy(followersCount = newTargetFollowers)
+                    _users.value = _users.value.map { if (it.uid == targetUid) updatedTarget else it }
+                    repoScope.launch { userRepository.saveUser(updatedTarget) }
+                    FirebaseManager.saveUser(updatedTarget)
+                }
 
-            addNotification(
-                fromUid = user.uid,
-                fromName = user.displayName,
-                fromPhoto = user.photoUrl,
-                type = "follow",
-                targetId = targetUid,
-                customText = "${user.displayName} started following your profile and videos."
-            )
+                addNotification(
+                    fromUid = user.uid,
+                    fromName = user.displayName,
+                    fromPhoto = user.photoUrl,
+                    type = "follow",
+                    targetId = targetUid,
+                    customText = "${user.displayName} started following your profile and videos."
+                )
+            }
         }
     }
 
@@ -1831,16 +1852,6 @@ class MeskotRepository(
             _posts.value = _posts.value.map {
                 if (it.id == postId) it.copy(commentCount = it.commentCount + 1) else it
             }
-        } else {
-            val dummyReelPost = Post(
-                id = postId,
-                uid = "creator_$postId",
-                authorName = "Creator",
-                text = "Meskot Reel",
-                postType = "REEL",
-                commentCount = currentList.size + 1
-            )
-            _posts.value = _posts.value + dummyReelPost
         }
         FirebaseManager.addComment(newComment)
         val post = _posts.value.find { it.id == postId }

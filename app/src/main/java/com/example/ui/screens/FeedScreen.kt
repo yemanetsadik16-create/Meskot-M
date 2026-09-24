@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,7 +62,6 @@ import com.example.data.LiveStreamSession
 import com.example.ui.MeskotViewModel
 import com.example.ui.components.FacebookStoriesRail
 import com.example.ui.components.PostCard
-import com.example.ui.components.StoryAvatarRingItem
 import com.example.ui.components.UserAvatar
 import com.example.ui.theme.*
 
@@ -122,142 +122,18 @@ fun FeedScreen(
                 .fillMaxSize()
                 .testTag("feed_screen")
         ) {
-            // Top Stories Horizontal Rail
-            item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp, bottom = 6.dp)
-            ) {
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // 1. Current User's "Your Story" (Camera / Add Story / View My Story)
-                    if (currentUser != null) {
-                        item {
-                            StoryAvatarRingItem(
-                                user = currentUser,
-                                hasStory = myStories.isNotEmpty(),
-                                isCurrentUser = true,
-                                isStoryViewed = false,
-                                expirationText = myStories.firstOrNull()?.formattedRemaining(tickerTimeMs),
-                                onClick = {
-                                    if (myStories.isNotEmpty()) {
-                                        viewModel.viewStory(myStories.first())
-                                    } else {
-                                        viewModel.openCreateStory()
-                                    }
-                                }
-                            )
-                        }
-                    }
-
-                    // Active Live Broadcasts in Community (Firebase Firestore backed)
-                    liveStreamsList.forEach { liveStream ->
-                        item(key = "live_stream_${liveStream.id}") {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .clickable { viewModel.openLiveStream(liveStream) }
-                                    .width(72.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .border(
-                                            width = 2.5.dp,
-                                            brush = Brush.sweepGradient(
-                                                listOf(
-                                                    Color(0xFFE53935),
-                                                    Color(0xFFFED100),
-                                                    Color(0xFF009A44),
-                                                    Color(0xFFE53935)
-                                                )
-                                            ),
-                                            shape = CircleShape
-                                        )
-                                        .padding(3.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    UserAvatar(
-                                        photoUrl = liveStream.hostPhoto,
-                                        name = liveStream.hostName,
-                                        size = 56
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.BottomCenter)
-                                            .offset(y = 4.dp)
-                                            .background(Color(0xFFE53935), RoundedCornerShape(4.dp))
-                                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                                    ) {
-                                        Text(
-                                            text = "LIVE",
-                                            color = Color.White,
-                                            fontSize = 8.sp,
-                                            fontWeight = FontWeight.ExtraBold
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = liveStream.hostName,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Ink,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-
-                    // 2. Friends & Community Members with active stories
-                    otherStoriesByUser.forEach { (authorUid, userStories) ->
-                        val latestStory = userStories.first()
-                        val friendObj = friends.find { it.uid == authorUid } ?: User(
-                            uid = authorUid,
-                            displayName = latestStory.authorName,
-                            photoUrl = latestStory.authorPhoto
-                        )
-                        val isAllViewed = userStories.all { it.viewers.contains(currentUser?.uid) }
-
-                        item(key = "story_user_$authorUid") {
-                            StoryAvatarRingItem(
-                                user = friendObj,
-                                hasStory = true,
-                                isCurrentUser = false,
-                                isStoryViewed = isAllViewed,
-                                expirationText = latestStory.formattedRemaining(tickerTimeMs),
-                                onClick = { viewModel.viewStory(latestStory) }
-                            )
-                        }
-                    }
-
-                    // 3. Other online friends without active stories
-                    val friendsWithoutStories = friends.filterNot { otherStoriesByUser.containsKey(it.uid) }
-                    items(friendsWithoutStories, key = { "friend_${it.uid}" }) { friend ->
-                        StoryAvatarRingItem(
-                            user = friend,
-                            hasStory = false,
-                            isCurrentUser = false,
-                            onClick = { viewModel.openChat(friend) }
-                        )
-                    }
-                }
-
-                HorizontalDivider(
-                    color = LineBorder,
-                    modifier = Modifier.padding(top = 10.dp, start = 14.dp, end = 14.dp)
+            // Facebook-Style Stories Tray at Top of Feed
+            item(key = "facebook_stories_rail") {
+                FacebookStoriesRail(
+                    currentUser = currentUser,
+                    activeStories = activeStories,
+                    onStoryClick = { story -> viewModel.viewStory(story) },
+                    onCreateStoryClick = { viewModel.openCreateStory() },
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
                 )
             }
-        }
 
-        // Composer & Quick Story Trigger Cards
+            // Composer & Quick Story Trigger Cards
         if (currentUser != null) {
             item {
                 Card(
@@ -433,16 +309,6 @@ fun FeedScreen(
                     }
                 }
             }
-        }
-
-        // Facebook-Style Stories Tray
-        item {
-            FacebookStoriesRail(
-                currentUser = currentUser,
-                activeStories = activeStories,
-                onStoryClick = { story -> viewModel.viewStory(story) },
-                onCreateStoryClick = { viewModel.openCreateStory() }
-            )
         }
 
         // Posts List

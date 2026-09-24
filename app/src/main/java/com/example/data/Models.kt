@@ -119,8 +119,39 @@ data class Post(
     val postType: String = "POST", // "POST", "PHOTO", "REEL"
     val videoUrl: String = "",
     val audioTrackTitle: String = "",
-    val viewsCount: Int = 0
-)
+    val viewsCount: Int = 0,
+    val tags: List<String> = emptyList()
+) {
+    fun effectiveTags(): List<String> {
+        if (tags.isNotEmpty()) return tags
+        val regex = Regex("#(\\w+)")
+        val hashTags = regex.findAll(text).map { it.groupValues[1].lowercase() }.toList()
+        if (hashTags.isNotEmpty()) return hashTags
+        val derived = mutableListOf<String>()
+        val lowerText = text.lowercase()
+        if (postType == "REEL") derived.add("reels")
+        if (lowerText.contains("android") || lowerText.contains("kotlin") || lowerText.contains("jetpack")) {
+            derived.addAll(listOf("mobile_development", "kotlin", "android"))
+        }
+        if (lowerText.contains("coffee") || lowerText.contains("buna") || lowerText.contains("jebena")) {
+            derived.addAll(listOf("coffee", "culture", "ethiopia"))
+        }
+        if (lowerText.contains("dance") || lowerText.contains("eskista") || lowerText.contains("gondar")) {
+            derived.addAll(listOf("dance", "culture", "eskista"))
+        }
+        if (lowerText.contains("music") || audioTrackTitle.isNotBlank()) {
+            derived.add("music")
+        }
+        if (lowerText.contains("crypto") || lowerText.contains("trading") || lowerText.contains("bitcoin")) {
+            derived.addAll(listOf("crypto_trading", "finance"))
+        }
+        if (lowerText.contains("gossip") || lowerText.contains("celebrity")) {
+            derived.addAll(listOf("celebrity_gossip", "pop_culture"))
+        }
+        if (derived.isEmpty()) derived.add("general_community")
+        return derived.distinct()
+    }
+}
 
 data class StoryItem(
     val id: String,
@@ -206,7 +237,8 @@ data class ChatMessage(
     val callStatus: String = "completed", // "missed", "completed"
     val callDurationSec: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
-    val editedAt: Long? = null
+    val editedAt: Long? = null,
+    val isSeen: Boolean = false
 )
 
 data class FriendRequest(

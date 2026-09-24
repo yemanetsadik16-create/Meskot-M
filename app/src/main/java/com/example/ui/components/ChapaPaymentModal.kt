@@ -213,31 +213,36 @@ fun ChapaPaymentModal(
         </head>
         <body>
           <div class="header">
-            <h1>Meskot</h1>
-            <div class="badge-tag">Chapa Inline Checkout</div>
+            <h1>Meskot Global</h1>
+            <div class="badge-tag">Chapa Global & Visa Card Checkout</div>
           </div>
 
           <div class="amount-card">
             <div class="val">$formattedAmount ETB</div>
-            <div class="lbl">$title</div>
+            <div class="lbl">$title · Approx. $${String.format(java.util.Locale.US, "%.2f", amount / 125.0)} USD</div>
             <div class="methods-row">
+              <span class="method-chip" style="background:#1A1F71; color:white; font-weight:bold; border-color:#1A1F71;">💳 VISA</span>
+              <span class="method-chip" style="background:#EB001B; color:white; font-weight:bold; border-color:#EB001B;">💳 Mastercard</span>
               <span class="method-chip">📱 Telebirr</span>
               <span class="method-chip">🏦 CBE Birr</span>
               <span class="method-chip">💳 eBirr</span>
               <span class="method-chip">⚡ M-Pesa</span>
-              <span class="method-chip">💳 Card</span>
             </div>
+          </div>
+
+          <div style="background:#EEF2FF; border:1px solid #C7D2FE; border-radius:8px; padding:10px; margin-bottom:12px; font-size:12px; color:#3730A3;">
+            🌍 <strong>Meskot Global Diaspora:</strong> Worldwide Visa & Mastercard cards are accepted in ETB equivalent. Card transactions are encrypted via Chapa 3D-Secure.
           </div>
 
           <div id="chapa-inline-form"></div>
 
           <div class="fallback-container">
-            <div class="fallback-title">Completed via Telebirr / CBE app?</div>
+            <div class="fallback-title">Completed via Visa Card or Mobile Money?</div>
             <button class="btn-confirm-payment" onclick="notifySuccess('$txRef')">I Have Sent Payment (Verify)</button>
           </div>
 
           <div class="security-foot">
-            🔒 256-Bit SSL Encrypted · Authorized by National Bank of Ethiopia
+            🔒 256-Bit SSL Encrypted · Verified by Visa · Authorized by National Bank of Ethiopia
           </div>
 
           <script>
@@ -272,7 +277,7 @@ fun ChapaPaymentModal(
                 email: email,
                 first_name: first_name,
                 last_name: last_name,
-                availablePaymentMethods: ['telebirr', 'cbebirr', 'ebirr', 'mpesa', 'chapa'],
+                availablePaymentMethods: ['card', 'visa', 'mastercard', 'telebirr', 'cbebirr', 'ebirr', 'mpesa', 'chapa'],
                 customizations: {
                   buttonText: 'Pay ' + amount + ' ETB Now',
                   styles: `
@@ -332,7 +337,7 @@ fun ChapaPaymentModal(
                         Column {
                           Row(verticalAlignment = Alignment.CenterVertically) {
                               Text(
-                                  text = if (isLiveMode) "Chapa Live Pay" else "Chapa Pay",
+                                  text = if (isLiveMode) "Meskot Global Live Pay" else "Meskot Global Pay",
                                   fontSize = 17.sp,
                                   fontWeight = FontWeight.Bold,
                                   color = Ink
@@ -345,7 +350,7 @@ fun ChapaPaymentModal(
                                       .padding(horizontal = 6.dp, vertical = 2.dp)
                               ) {
                                   Text(
-                                      text = if (isLiveMode) "LIVE ETB" else "TEST GATEWAY",
+                                      text = if (isLiveMode) "VISA & ETB" else "VISA / ETB GATEWAY",
                                       fontSize = 9.sp,
                                       fontWeight = FontWeight.ExtraBold,
                                       color = if (isLiveMode) Color(0xFF2E7D32) else Color(0xFFB45309)
@@ -361,7 +366,7 @@ fun ChapaPaymentModal(
                               )
                               Spacer(modifier = Modifier.width(3.dp))
                               Text(
-                                  text = if (isLiveMode) "Real Money (ETB) · 256-Bit SSL" else "256-Bit SSL · Sandbox Mode",
+                                  text = if (isLiveMode) "Visa Card & Mobile · 256-Bit SSL" else "Visa · Telebirr · CBE Birr · 256-Bit SSL",
                                   fontSize = 11.sp,
                                   color = if (isLiveMode) Color(0xFF2E7D32) else MutedText
                               )

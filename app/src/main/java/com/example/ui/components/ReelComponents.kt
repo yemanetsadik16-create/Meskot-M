@@ -891,6 +891,7 @@ fun ReelViewerDialog(
     comments: List<Comment> = emptyList(),
     isFollowing: Boolean = false,
     isSaved: Boolean = false,
+    isLiked: Boolean = currentUser != null && reel.reactions.containsKey(currentUser.uid),
     onDismiss: () -> Unit,
     onToggleLike: () -> Unit,
     onToggleFollow: () -> Unit = {},
@@ -904,9 +905,6 @@ fun ReelViewerDialog(
     onAuthorClick: (uid: String) -> Unit = {}
 ) {
     var isPlaying by remember { mutableStateOf(true) }
-    var isLiked by remember(reel.reactions, currentUser?.uid) {
-        mutableStateOf(currentUser != null && reel.reactions.containsKey(currentUser.uid))
-    }
     var showHeartPop by remember { mutableStateOf(false) }
     var isCommentsSheetOpen by remember { mutableStateOf(false) }
 
@@ -961,10 +959,11 @@ fun ReelViewerDialog(
                             },
                             onDoubleTap = {
                                 if (!isLiked) {
-                                    isLiked = true
+                                    showHeartPop = true
                                     onToggleLike()
+                                } else {
+                                    showHeartPop = true
                                 }
-                                showHeartPop = true
                             }
                         )
                     }
@@ -1095,9 +1094,8 @@ fun ReelViewerDialog(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         IconButton(
                             onClick = {
+                                if (!isLiked) showHeartPop = true
                                 onToggleLike()
-                                isLiked = !isLiked
-                                if (isLiked) showHeartPop = true
                             },
                             modifier = Modifier
                                 .size(46.dp)

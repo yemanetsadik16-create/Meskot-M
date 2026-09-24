@@ -241,7 +241,7 @@ fun DashboardScreen(
                                         .background(Color(0xFF2E7D32))
                                 )
                                 Text(
-                                    text = if (isAnalyticsServerSynced) "Firestore Server Synced (Live)" else "Connecting to Server...",
+                                    text = if (isAnalyticsServerSynced) "Live Analytics" else "Connecting...",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = if (isAnalyticsServerSynced) Color(0xFF2E7D32) else MutedText
@@ -510,7 +510,7 @@ fun DashboardScreen(
                                         .background(Color(0xFF2E7D32))
                                 )
                                 Text(
-                                    text = if (isAnalyticsServerSynced) "Real Firestore Demographics (Live)" else "Syncing Server Demographics...",
+                                    text = if (isAnalyticsServerSynced) "Audience Demographics" else "Updating...",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = if (isAnalyticsServerSynced) Color(0xFF2E7D32) else MutedText

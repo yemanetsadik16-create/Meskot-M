@@ -1,6 +1,6 @@
 {
-  "name": "Meskot",
-  "description": "Habesha and Ethiopian community social network with posts, stories, real-time messaging, groups, and photo albums in English and Amharic.",
+  "name": "Meskot Global",
+  "description": "Global Habesha and worldwide social network like Facebook with live streaming, diaspora communities, stories, and international Visa & local mobile payments powered by Chapa.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
