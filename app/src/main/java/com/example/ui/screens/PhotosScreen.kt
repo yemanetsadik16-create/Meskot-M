@@ -207,7 +207,7 @@ fun AlbumDetailScreen(
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { viewModel.navigateTo(ScreenTab.PHOTOS) }) {
+            IconButton(onClick = { viewModel.navigateBack() }) {
                 Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back", tint = Ink)
             }
 

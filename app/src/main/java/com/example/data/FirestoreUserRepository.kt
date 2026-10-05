@@ -316,7 +316,7 @@ class FirestoreUserRepository(
             coverPhotoUrl = d["coverPhotoUrl"] as? String ?: "",
             isAdmin = d["isAdmin"] as? Boolean ?: false,
             isSuspended = d["isSuspended"] as? Boolean ?: false,
-            lastSeen = (d["lastSeen"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+            lastSeen = (d["lastSeen"] as? Number)?.toLong() ?: 0L,
             createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
             gender = d["gender"] as? String ?: "",
             birthDate = d["birthDate"] as? String ?: "",

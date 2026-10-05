@@ -552,14 +552,102 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         repository.markConversationAsRead(otherUid)
     }
 
+    // Navigation history stack (Facebook-style back navigation)
+    private val _navigationBackStack = MutableStateFlow<List<ScreenTab>>(emptyList())
+    val navigationBackStack: StateFlow<List<ScreenTab>> = _navigationBackStack.asStateFlow()
+
+    private val _feedScrollToTopTrigger = MutableStateFlow(0L)
+    val feedScrollToTopTrigger: StateFlow<Long> = _feedScrollToTopTrigger.asStateFlow()
+
+    fun triggerFeedScrollToTopAndRefresh() {
+        _feedScrollToTopTrigger.value = System.currentTimeMillis()
+        refreshFeed()
+    }
+
     // Navigation
-    fun navigateTo(tab: ScreenTab) {
+    fun navigateTo(tab: ScreenTab, recordHistory: Boolean = true) {
+        val current = _currentTab.value
+        if (current == tab) {
+            if (tab == ScreenTab.FEED) {
+                triggerFeedScrollToTopAndRefresh()
+            } else {
+                refreshFeed()
+            }
+            return
+        }
+        if (recordHistory) {
+            val updatedStack = (_navigationBackStack.value + current).takeLast(20)
+            _navigationBackStack.value = updatedStack
+        }
         _currentTab.value = tab
+    }
+
+    /**
+     * Facebook-style back navigation:
+     * 1. Closes any open overlay/dialog first.
+     * 2. Pops the previous screen from history (or falls back to the logical parent screen / FEED),
+     *    and refreshes the feed/data when returning.
+     * 3. If already on FEED with no backstack, scrolls to top & refreshes the feed so it never exits.
+     */
+    fun navigateBack() {
+        // 1. Dismiss any open modals or overlays first
+        when {
+            _isLiveStreamOpen.value -> { closeLiveStream(); return }
+            _activeReelToView.value != null -> { closeReelViewer(); return }
+            _activeStoryToView.value != null -> { closeStoryViewer(); return }
+            _isCreateReelOpen.value -> { closeCreateReel(); return }
+            _isCreateStoryOpen.value -> { closeCreateStory(); return }
+            _editingPost.value != null -> { cancelEditingPost(); return }
+            _isComposerOpen.value -> { closeComposer(); return }
+            _postMenuTarget.value != null -> { closePostMenu(); return }
+            _tippingPost.value != null -> { closeTipModal(); return }
+            _boostModalPost.value != null -> { closeBoostModal(); return }
+            _isChapaDepositOpen.value -> { closeChapaDeposit(); return }
+            _activeChapaSession.value != null -> { closeChapaPayment(); return }
+            _subscriptionModalCreator.value != null -> { closeSubscriptionModal(); return }
+            _isEditProfileOpen.value -> { closeEditProfile(); return }
+            _isInterestModalOpen.value -> { closeInterestEngine(); return }
+        }
+
+        // 2. If on a sub-screen or another tab, return to the previous screen in stack (or parent) and refresh
+        val current = _currentTab.value
+        val stack = _navigationBackStack.value
+        if (stack.isNotEmpty()) {
+            val previousTab = stack.last()
+            _navigationBackStack.value = stack.dropLast(1)
+            _currentTab.value = previousTab
+            if (previousTab == ScreenTab.FEED) {
+                triggerFeedScrollToTopAndRefresh()
+            } else {
+                refreshFeed()
+            }
+            return
+        }
+
+        // 3. Fallback if stack is empty
+        if (current != ScreenTab.FEED) {
+            val fallbackTab = when (current) {
+                ScreenTab.CHAT -> ScreenTab.MESSAGES
+                ScreenTab.GROUP_DETAIL -> ScreenTab.GROUPS
+                ScreenTab.ALBUM_DETAIL -> ScreenTab.PHOTOS
+                ScreenTab.ADS_MANAGER, ScreenTab.CREATOR_STUDIO -> ScreenTab.MENU
+                else -> ScreenTab.FEED
+            }
+            _currentTab.value = fallbackTab
+            if (fallbackTab == ScreenTab.FEED) {
+                triggerFeedScrollToTopAndRefresh()
+            } else {
+                refreshFeed()
+            }
+        } else {
+            // Already on FEED: refresh & scroll to top like Facebook instead of exiting the app
+            triggerFeedScrollToTopAndRefresh()
+        }
     }
 
     fun openProfile(user: User) {
         _viewingUser.value = user
-        _currentTab.value = ScreenTab.PROFILE
+        navigateTo(ScreenTab.PROFILE)
         repository.recordProfileView(user.uid)
     }
 
@@ -570,7 +658,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
 
     fun openChat(user: User) {
         _chattingWithUser.value = user
-        _currentTab.value = ScreenTab.CHAT
+        navigateTo(ScreenTab.CHAT)
         repository.markConversationAsRead(user.uid)
         clearIncomingMessageAlert()
     }
@@ -582,12 +670,12 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
 
     fun openGroupDetail(group: GroupItem) {
         _viewingGroup.value = group
-        _currentTab.value = ScreenTab.GROUP_DETAIL
+        navigateTo(ScreenTab.GROUP_DETAIL)
     }
 
     fun openAlbumDetail(album: AlbumItem) {
         _viewingAlbum.value = album
-        _currentTab.value = ScreenTab.ALBUM_DETAIL
+        navigateTo(ScreenTab.ALBUM_DETAIL)
     }
 
     // Composer
@@ -709,10 +797,22 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _editingPost.value = null
     }
 
-    fun savePostEdit(postId: String, newText: String) {
-        repository.editPost(postId, newText)
+    fun savePostEdit(
+        postId: String,
+        newText: String,
+        newMediaUrls: List<String>? = null,
+        newBgColorIndex: Int? = null,
+        newVisibility: String? = null
+    ) {
+        repository.editPost(
+            postId = postId,
+            newText = newText,
+            newMediaUrls = newMediaUrls,
+            newBgColorIndex = newBgColorIndex,
+            newVisibility = newVisibility
+        )
         _editingPost.value = null
-        showMessage("Post updated")
+        showMessage("✅ Post updated!")
     }
 
     fun deletePost(postId: String) {

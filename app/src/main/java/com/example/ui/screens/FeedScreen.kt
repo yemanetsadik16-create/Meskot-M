@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -99,6 +101,14 @@ fun FeedScreen(
     }
 
     val pullToRefreshState = rememberPullToRefreshState()
+    val listState = rememberLazyListState()
+    val feedScrollToTopTrigger by viewModel.feedScrollToTopTrigger.collectAsState()
+
+    LaunchedEffect(feedScrollToTopTrigger) {
+        if (feedScrollToTopTrigger > 0L) {
+            listState.animateScrollToItem(0)
+        }
+    }
 
     PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -118,6 +128,7 @@ fun FeedScreen(
         }
     ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("feed_screen")
@@ -383,15 +394,17 @@ fun StoryAvatarItem(
                 name = user.displayName,
                 size = 56
             )
-            // Green online badge
-            Box(
-                modifier = Modifier
-                    .size(14.dp)
-                    .clip(CircleShape)
-                    .background(ActiveGreen)
-                    .border(2.dp, Color.White, CircleShape)
-                    .align(Alignment.BottomEnd)
-            )
+            // Green online badge (only when user is genuinely active)
+            if (MeskotStrings.isOnline(user.lastSeen)) {
+                Box(
+                    modifier = Modifier
+                        .size(14.dp)
+                        .clip(CircleShape)
+                        .background(ActiveGreen)
+                        .border(2.dp, Color.White, CircleShape)
+                        .align(Alignment.BottomEnd)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(4.dp))

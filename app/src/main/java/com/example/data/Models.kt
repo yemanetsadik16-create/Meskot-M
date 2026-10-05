@@ -29,7 +29,7 @@ data class User(
     val coverPhotoUrl: String = "",
     val isAdmin: Boolean = false,
     val isSuspended: Boolean = false,
-    val lastSeen: Long = System.currentTimeMillis(),
+    val lastSeen: Long = 0L,
     val createdAt: Long = System.currentTimeMillis(),
     val gender: String = "",
     val birthDate: String = "",

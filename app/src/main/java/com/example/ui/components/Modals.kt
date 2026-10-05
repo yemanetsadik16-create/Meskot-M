@@ -102,14 +102,16 @@ fun ComposerDialog(
     currentLanguage: AppLanguage,
     onDismiss: () -> Unit,
     onSubmit: (text: String, mediaUrls: List<String>, bgColorIndex: Int, visibility: String) -> Unit,
-    onOpenCreateReel: (() -> Unit)? = null
+    onOpenCreateReel: (() -> Unit)? = null,
+    editingPost: Post? = null
 ) {
     val context = LocalContext.current
-    var text by remember { mutableStateOf("") }
-    var selectedBgIndex by remember { mutableStateOf(0) }
-    var selectedVisibility by remember { mutableStateOf("public") }
+    val isEditMode = editingPost != null
+    var text by remember(editingPost?.id) { mutableStateOf(editingPost?.text ?: "") }
+    var selectedBgIndex by remember(editingPost?.id) { mutableStateOf(editingPost?.bgColorIndex ?: 0) }
+    var selectedVisibility by remember(editingPost?.id) { mutableStateOf(editingPost?.visibility ?: "public") }
     var isPrivacyDropdownOpen by remember { mutableStateOf(false) }
-    var selectedMediaUrls by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedMediaUrls by remember(editingPost?.id) { mutableStateOf<List<String>>(editingPost?.mediaUrls ?: emptyList()) }
     var showUrlDialog by remember { mutableStateOf(false) }
     var customUrlInput by remember { mutableStateOf("") }
 
@@ -146,6 +148,11 @@ fun ComposerDialog(
         "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=800&auto=format&fit=crop&q=80"
     )
 
+    val canSubmit = text.isNotBlank() ||
+            selectedMediaUrls.isNotEmpty() ||
+            editingPost?.sharedPost != null ||
+            editingPost?.videoUrl?.isNotBlank() == true
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -170,7 +177,7 @@ fun ComposerDialog(
                     }
 
                     Text(
-                        text = MeskotStrings.get("createPost", currentLanguage),
+                        text = if (isEditMode) MeskotStrings.get("editPostAction", currentLanguage) else MeskotStrings.get("createPost", currentLanguage),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Serif,
@@ -179,16 +186,19 @@ fun ComposerDialog(
 
                     Button(
                         onClick = {
-                            if (text.isNotBlank() || selectedMediaUrls.isNotEmpty()) {
+                            if (canSubmit) {
                                 onSubmit(text, selectedMediaUrls, selectedBgIndex, selectedVisibility)
                             }
                         },
-                        enabled = text.isNotBlank() || selectedMediaUrls.isNotEmpty(),
+                        enabled = canSubmit,
                         colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.White),
                         shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.testTag("submit_post_btn")
+                        modifier = Modifier.testTag(if (isEditMode) "save_edit_post_btn" else "submit_post_btn")
                     ) {
-                        Text(text = MeskotStrings.get("post", currentLanguage), fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if (isEditMode) MeskotStrings.get("saveChanges", currentLanguage) else MeskotStrings.get("post", currentLanguage),
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
 
@@ -1631,6 +1641,7 @@ fun EditProfileDialog(
         educationClass: String
     ) -> Unit
 ) {
+    val context = LocalContext.current
     var name by remember { mutableStateOf(currentUser.displayName) }
     var bio by remember { mutableStateOf(currentUser.bio) }
     var photoUrl by remember { mutableStateOf(currentUser.photoUrl) }
@@ -1644,6 +1655,46 @@ fun EditProfileDialog(
     var workRole by remember { mutableStateOf(currentUser.workRole) }
     var education by remember { mutableStateOf(currentUser.education) }
     var educationClass by remember { mutableStateOf(currentUser.educationClass) }
+
+    val avatarPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            photoUrl = uri.toString()
+        }
+    }
+
+    val avatarCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            try {
+                photoUrl = saveStoryBitmapToCache(context, bitmap)
+            } catch (e: Exception) {
+                Toast.makeText(context, "Could not save photo: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val coverPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            coverPhotoUrl = uri.toString()
+        }
+    }
+
+    val coverCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            try {
+                coverPhotoUrl = saveStoryBitmapToCache(context, bitmap)
+            } catch (e: Exception) {
+                Toast.makeText(context, "Could not save cover photo: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -1665,6 +1716,97 @@ fun EditProfileDialog(
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
+
+                // Quick Visual Avatar & Cover Preview with Pickers
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "Profile Picture & Cover Photo",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Ink
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            UserAvatar(photoUrl = photoUrl, name = name, size = 54)
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Surface(
+                                        onClick = {
+                                            avatarPickerLauncher.launch(
+                                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                            )
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color(0xFFE7F3FF),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(vertical = 6.dp, horizontal = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = Color(0xFF1877F2), modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Avatar Photo", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1877F2))
+                                        }
+                                    }
+                                    Surface(
+                                        onClick = { avatarCameraLauncher.launch(null) },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color(0xFFE4E6EB)
+                                    ) {
+                                        Box(modifier = Modifier.padding(vertical = 6.dp, horizontal = 10.dp), contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Default.CameraAlt, contentDescription = "Take Avatar Photo", tint = Ink, modifier = Modifier.size(15.dp))
+                                        }
+                                    }
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Surface(
+                                        onClick = {
+                                            coverPickerLauncher.launch(
+                                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                            )
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = GoldSurface,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(vertical = 6.dp, horizontal = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = GoldDeep, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Cover Banner", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GoldDeep)
+                                        }
+                                    }
+                                    Surface(
+                                        onClick = { coverCameraLauncher.launch(null) },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color(0xFFE4E6EB)
+                                    ) {
+                                        Box(modifier = Modifier.padding(vertical = 6.dp, horizontal = 10.dp), contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Default.CameraAlt, contentDescription = "Take Cover Photo", tint = Ink, modifier = Modifier.size(15.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 OutlinedTextField(
                     value = name,

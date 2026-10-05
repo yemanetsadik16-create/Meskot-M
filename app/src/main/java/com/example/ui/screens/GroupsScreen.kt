@@ -291,7 +291,7 @@ fun GroupDetailScreen(
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { viewModel.navigateTo(ScreenTab.GROUPS) }) {
+                IconButton(onClick = { viewModel.navigateBack() }) {
                     Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back", tint = Ink)
                 }
                 Text(

@@ -59,6 +59,7 @@ fun NotificationsScreen(
     currentLanguage: AppLanguage
 ) {
     val nowMs by viewModel.tickerTimeMs.collectAsStateWithLifecycle()
+    val unreadCount = notifications.count { !it.isRead }
 
     Column(
         modifier = Modifier
@@ -72,21 +73,42 @@ fun NotificationsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = MeskotStrings.get("navNotifs", currentLanguage),
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Serif,
-                color = Ink
-            )
-
-            TextButton(onClick = { viewModel.markAllNotifsRead() }) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = MeskotStrings.get("markAllRead", currentLanguage),
-                    fontSize = 13.sp,
-                    color = GoldDeep,
-                    fontWeight = FontWeight.Bold
+                    text = MeskotStrings.get("notifications", currentLanguage),
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Serif,
+                    color = Ink
                 )
+                if (unreadCount > 0) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(CrossRed)
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = unreadCount.toString(),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            if (unreadCount > 0) {
+                TextButton(onClick = { viewModel.markAllNotifsRead() }) {
+                    Text(
+                        text = MeskotStrings.get("markAllRead", currentLanguage),
+                        fontSize = 13.sp,
+                        color = GoldDeep,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
 
@@ -190,7 +212,7 @@ fun NotificationRow(
                 Text(
                     text = notif.text,
                     fontSize = 14.sp,
-                    color = Ink,
+                    color = if (notif.isRead) MutedText else Ink,
                     lineHeight = 18.sp,
                     fontWeight = if (notif.isRead) FontWeight.Normal else FontWeight.Bold
                 )
@@ -198,7 +220,7 @@ fun NotificationRow(
                     text = MeskotStrings.formatNotificationTime(notif.createdAt, currentLanguage, nowMs),
                     fontSize = 11.sp,
                     color = if (notif.isRead) MutedText else Color(0xFF1877F2),
-                    fontWeight = if (notif.isRead) FontWeight.Normal else FontWeight.SemiBold,
+                    fontWeight = if (notif.isRead) FontWeight.Normal else FontWeight.Bold,
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }

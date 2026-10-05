@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -294,11 +295,12 @@ fun MessagesScreen(
                     }
                     val lastMessage = messages.lastOrNull()
                     val lastRead = lastReadTimestamps[user.uid] ?: 0L
-                    val hasUnseen = remember(messages, lastRead, user.uid) {
-                        messages.any { msg ->
-                            msg.fromUid == user.uid && (!msg.isSeen || msg.createdAt > lastRead) && !msg.isCallLog
+                    val unseenCount = remember(messages, lastRead, user.uid) {
+                        messages.count { msg ->
+                            msg.fromUid == user.uid && !msg.isCallLog && !msg.isSeen && (lastRead == 0L || msg.createdAt > lastRead)
                         }
                     }
+                    val hasUnseen = unseenCount > 0
 
                     val isUserOnline = remember(user.lastSeen, nowMs) {
                         MeskotStrings.isOnline(user.lastSeen, nowMs)
@@ -348,8 +350,8 @@ fun MessagesScreen(
                                     Text(
                                         text = user.displayName,
                                         fontSize = 15.sp,
-                                        fontWeight = if (hasUnseen) FontWeight.Bold else FontWeight.SemiBold,
-                                        color = Ink
+                                        fontWeight = if (hasUnseen) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (hasUnseen) Ink else Ink.copy(alpha = 0.88f)
                                     )
                                     if (isUserOnline) {
                                         Spacer(modifier = Modifier.width(6.dp))
@@ -393,10 +395,18 @@ fun MessagesScreen(
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Box(
                                             modifier = Modifier
-                                                .size(9.dp)
                                                 .clip(CircleShape)
                                                 .background(Color(0xFF0084FF))
-                                        )
+                                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = if (unseenCount > 99) "99+" else unseenCount.toString(),
+                                                color = Color.White,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
                                     }
                                 }
                             } else {
@@ -639,7 +649,7 @@ fun ChatScreen(
                             .weight(1f)
                             .clickable { showSettings = true }
                     ) {
-                        IconButton(onClick = { viewModel.navigateTo(ScreenTab.MESSAGES) }) {
+                        IconButton(onClick = { viewModel.navigateBack() }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
@@ -1448,14 +1458,21 @@ fun EnhancedChatMessageRow(
                     .clickable { showActionMenu = true }
             ) {
                 Column(modifier = Modifier.padding(10.dp)) {
-                    // 1. Photo / Image message
+                    // 1. Photo / Image message (Facebook Messenger natural aspect ratio)
                     if (msg.mediaType == "image" && !msg.mediaUrl.isNullOrBlank()) {
+                        var msgPhotoRatio by remember(msg.mediaUrl) { mutableStateOf(4f / 5f) }
                         AsyncImage(
                             model = msg.mediaUrl,
                             contentDescription = "Chat photo",
+                            onSuccess = { state ->
+                                val d = state.result.drawable
+                                if (d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
+                                    msgPhotoRatio = (d.intrinsicWidth.toFloat() / d.intrinsicHeight.toFloat()).coerceIn(0.75f, 1.91f)
+                                }
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(180.dp)
+                                .aspectRatio(msgPhotoRatio)
                                 .clip(RoundedCornerShape(12.dp))
                                 .clickable { onImageClick(msg.mediaUrl) },
                             contentScale = ContentScale.Crop
@@ -2186,7 +2203,8 @@ fun SharedMediaDialog(
                                     model = p.mediaUrl,
                                     contentDescription = "Shared photo",
                                     modifier = Modifier
-                                        .size(100.dp)
+                                        .fillMaxWidth()
+                                        .aspectRatio(1f)
                                         .clip(RoundedCornerShape(8.dp))
                                         .clickable { p.mediaUrl?.let { onImageClick(it) } },
                                     contentScale = ContentScale.Crop

@@ -246,43 +246,143 @@ class MeskotRepository(
         _incomingMessageAlert.value = null
     }
 
-    // Unread tracking per sender
-    private val _lastReadTimestamps = MutableStateFlow<Map<String, Long>>(emptyMap())
+    // Unread tracking per sender & local read persistence
+    private val _lastReadTimestamps = MutableStateFlow<Map<String, Long>>(loadLastReadTimestamps())
     val lastReadTimestamps: StateFlow<Map<String, Long>> = _lastReadTimestamps.asStateFlow()
+
+    private val _locallyReadNotifIds = MutableStateFlow<Set<String>>(loadLocallyReadNotifIds())
+    private val _locallySeenMsgIds = MutableStateFlow<Set<String>>(loadLocallySeenMsgIds())
+
+    private fun loadLastReadTimestamps(): Map<String, Long> {
+        return try {
+            val prefs = context.getSharedPreferences("meskot_read_state_prefs", Context.MODE_PRIVATE)
+            val result = mutableMapOf<String, Long>()
+            prefs.all.forEach { (k, v) ->
+                if (k.startsWith("read_ts_") && v is Long) {
+                    result[k.removePrefix("read_ts_")] = v
+                }
+            }
+            result
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun saveLastReadTimestamp(otherUid: String, ts: Long) {
+        try {
+            val prefs = context.getSharedPreferences("meskot_read_state_prefs", Context.MODE_PRIVATE)
+            prefs.edit().putLong("read_ts_$otherUid", ts).apply()
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+
+    private fun loadLocallyReadNotifIds(): Set<String> {
+        return try {
+            val prefs = context.getSharedPreferences("meskot_read_state_prefs", Context.MODE_PRIVATE)
+            prefs.getStringSet("read_notif_ids", emptySet()) ?: emptySet()
+        } catch (e: Exception) {
+            emptySet()
+        }
+    }
+
+    private fun saveLocallyReadNotifIds(ids: Set<String>) {
+        try {
+            val prefs = context.getSharedPreferences("meskot_read_state_prefs", Context.MODE_PRIVATE)
+            prefs.edit().putStringSet("read_notif_ids", ids).apply()
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+
+    private fun loadLocallySeenMsgIds(): Set<String> {
+        return try {
+            val prefs = context.getSharedPreferences("meskot_read_state_prefs", Context.MODE_PRIVATE)
+            prefs.getStringSet("seen_msg_ids", emptySet()) ?: emptySet()
+        } catch (e: Exception) {
+            emptySet()
+        }
+    }
+
+    private fun saveLocallySeenMsgIds(ids: Set<String>) {
+        try {
+            val prefs = context.getSharedPreferences("meskot_read_state_prefs", Context.MODE_PRIVATE)
+            prefs.edit().putStringSet("seen_msg_ids", ids).apply()
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
 
     fun markConversationAsRead(otherUid: String) {
         val now = System.currentTimeMillis()
         _lastReadTimestamps.value = _lastReadTimestamps.value + (otherUid to now)
+        saveLastReadTimestamp(otherUid, now)
+
         val currentConvos = _conversations.value.toMutableMap()
+        val newlySeenIds = mutableSetOf<String>()
         var changed = false
-        val directMsgs = currentConvos[otherUid]
-        if (directMsgs != null && directMsgs.any { !it.isSeen }) {
-            currentConvos[otherUid] = directMsgs.map { if (!it.isSeen) it.copy(isSeen = true) else it }
-            changed = true
-        }
-        val user = _currentUser.value
-        if (user != null) {
-            val comboKey = if (user.uid < otherUid) "${user.uid}_${otherUid}" else "${otherUid}_${user.uid}"
-            val comboMsgs = currentConvos[comboKey]
-            if (comboMsgs != null && comboMsgs.any { !it.isSeen }) {
-                currentConvos[comboKey] = comboMsgs.map { if (!it.isSeen) it.copy(isSeen = true) else it }
+
+        currentConvos.forEach { (key, list) ->
+            val hasPartnerMsgs = (key == otherUid || key.contains(otherUid)) &&
+                    list.any { it.fromUid == otherUid && !it.isSeen }
+            if (hasPartnerMsgs) {
+                currentConvos[key] = list.map { msg ->
+                    if (msg.fromUid == otherUid && !msg.isSeen) {
+                        newlySeenIds.add(msg.id)
+                        msg.copy(isSeen = true)
+                    } else msg
+                }
                 changed = true
             }
+        }
+
+        if (newlySeenIds.isNotEmpty()) {
+            val updatedSeenSet = _locallySeenMsgIds.value + newlySeenIds
+            _locallySeenMsgIds.value = updatedSeenSet
+            saveLocallySeenMsgIds(updatedSeenSet)
+        }
+
+        val user = _currentUser.value
+        if (user != null) {
             FirebaseManager.markConversationMessagesSeen(user.uid, otherUid)
         }
         if (changed) {
             _conversations.value = currentConvos
         }
+
+        // Also mark any unread "message" notifications from this sender as read so notification badge decreases too
+        val unreadMsgNotifs = _notifications.value.filter {
+            !it.isRead && it.type == "message" && it.fromUid == otherUid
+        }
+        if (unreadMsgNotifs.isNotEmpty()) {
+            val notifIdsToMark = unreadMsgNotifs.map { it.id }.toSet()
+            val updatedReadNotifs = _locallyReadNotifIds.value + notifIdsToMark
+            _locallyReadNotifIds.value = updatedReadNotifs
+            saveLocallyReadNotifIds(updatedReadNotifs)
+            _notifications.value = _notifications.value.map {
+                if (it.id in notifIdsToMark) it.copy(isRead = true) else it
+            }
+            notifIdsToMark.forEach { nid ->
+                FirebaseManager.markNotificationRead(nid)
+            }
+        }
     }
 
-    // Dynamic unread messages count
+    // Dynamic unread messages count (number of unread messages across all conversations)
     val unreadMsgCount: StateFlow<Int> = kotlinx.coroutines.flow.combine(_conversations, _lastReadTimestamps, _currentUser) { convos, readMap, user ->
-        if (user == null) return@combine 0
-        val partnersWithUnread = convos.filterKeys { !it.contains("_") && it != user.uid }.count { (partnerUid, messages) ->
-            val lastRead = readMap[partnerUid] ?: 0L
-            messages.any { it.toUid == user.uid && it.fromUid == partnerUid && (!it.isSeen || it.createdAt > lastRead) && !it.isCallLog }
+        val currentUid = user?.uid
+        val allMsgs = convos.values.flatten().distinctBy { it.id }
+        allMsgs.count { msg ->
+            if (msg.isCallLog) return@count false
+            val isIncoming = if (currentUid != null) {
+                msg.fromUid.isNotBlank() && msg.fromUid != currentUid && (msg.toUid == currentUid || msg.toUid == "user_0" || msg.toUid.isBlank())
+            } else {
+                msg.fromUid.isNotBlank() && msg.fromUid != "user_0"
+            }
+            if (!isIncoming) return@count false
+            val lastRead = readMap[msg.fromUid] ?: 0L
+            !msg.isSeen && (lastRead == 0L || msg.createdAt > lastRead)
         }
-        partnersWithUnread
     }.stateIn(kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default), kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), 0)
 
     init {
@@ -298,11 +398,13 @@ class MeskotRepository(
         }
         val fbAuthUser = FirebaseManager.getCurrentFirebaseUser()
         if (fbAuthUser != null) {
+            val now = System.currentTimeMillis()
             val user = User(
                 uid = fbAuthUser.uid,
                 displayName = fbAuthUser.displayName ?: fbAuthUser.email?.substringBefore("@") ?: "User",
                 email = fbAuthUser.email ?: "",
-                photoUrl = fbAuthUser.photoUrl?.toString() ?: ""
+                photoUrl = fbAuthUser.photoUrl?.toString() ?: "",
+                lastSeen = now
             )
             _currentUser.value = user
             userRepository.setCurrentUser(user)
@@ -311,10 +413,12 @@ class MeskotRepository(
             // CRITICAL: Fetch full saved personal details and profile from server
             FirebaseManager.fetchUser(user.uid) { serverUser ->
                 if (serverUser != null) {
-                    _currentUser.value = serverUser
-                    userRepository.setCurrentUser(serverUser)
-                    _users.value = _users.value.map { if (it.uid == serverUser.uid) serverUser else it }
-                    Log.d("MeskotRepo", "Loaded personal details for ${serverUser.uid} from Firestore server")
+                    val activeServerUser = serverUser.copy(lastSeen = System.currentTimeMillis())
+                    _currentUser.value = activeServerUser
+                    userRepository.setCurrentUser(activeServerUser)
+                    _users.value = _users.value.map { if (it.uid == activeServerUser.uid) activeServerUser else it }
+                    FirebaseManager.saveUser(activeServerUser)
+                    Log.d("MeskotRepo", "Loaded personal details for ${activeServerUser.uid} from Firestore server")
                 }
             }
         }
@@ -384,9 +488,17 @@ class MeskotRepository(
     private fun setupUserSpecificListeners(uid: String) {
         notifListenerRegistration?.remove()
         notifListenerRegistration = FirebaseManager.listenToNotifications(uid) { liveNotifs ->
-            val liveIds = liveNotifs.map { it.id }.toSet()
-            val remainingLocal = _notifications.value.filterNot { it.id in liveIds }
-            _notifications.value = (liveNotifs + remainingLocal).sortedByDescending { it.createdAt }
+            val localReadIds = _locallyReadNotifIds.value
+            val localNotifMap = _notifications.value.associateBy { it.id }
+            val mergedLive = liveNotifs.map { live ->
+                val wasReadLocally = localReadIds.contains(live.id) || (localNotifMap[live.id]?.isRead == true)
+                if (wasReadLocally && !live.isRead) live.copy(isRead = true) else live
+            }
+            val liveIds = mergedLive.map { it.id }.toSet()
+            val remainingLocal = _notifications.value.filterNot { it.id in liveIds }.map { loc ->
+                if (localReadIds.contains(loc.id) && !loc.isRead) loc.copy(isRead = true) else loc
+            }
+            _notifications.value = (mergedLive + remainingLocal).sortedByDescending { it.createdAt }
         }
 
         incomingCallsListenerRegistration?.remove()
@@ -651,16 +763,27 @@ class MeskotRepository(
     }
 
     fun switchUser(user: User) {
-        _currentUser.value = user
-        userRepository.setCurrentUser(user)
+        val activeUser = user.copy(lastSeen = System.currentTimeMillis())
+        _currentUser.value = activeUser
+        userRepository.setCurrentUser(activeUser)
         repoScope.launch {
-            userRepository.saveUser(user)
+            userRepository.saveUser(activeUser)
         }
-        setupUserSpecificListeners(user.uid)
+        setupUserSpecificListeners(activeUser.uid)
         setupFirebaseListeners()
     }
 
     fun logout() {
+        val curr = _currentUser.value
+        if (curr != null) {
+            val offlineUser = curr.copy(lastSeen = 0L)
+            _users.value = _users.value.map { if (it.uid == curr.uid) offlineUser else it }
+            repoScope.launch {
+                try {
+                    userRepository.updateUserFields(curr.uid, mapOf("lastSeen" to 0L))
+                } catch (_: Exception) {}
+            }
+        }
         notifListenerRegistration?.remove()
         notifListenerRegistration = null
         incomingCallsListenerRegistration?.remove()
@@ -873,11 +996,80 @@ class MeskotRepository(
         )
     }
 
-    fun editPost(postId: String, newText: String) {
-        _posts.value = _posts.value.map {
-            if (it.id == postId) it.copy(text = newText, editedAt = System.currentTimeMillis()) else it
+    fun editPost(
+        postId: String,
+        newText: String,
+        newMediaUrls: List<String>? = null,
+        newBgColorIndex: Int? = null,
+        newVisibility: String? = null
+    ) {
+        val now = System.currentTimeMillis()
+        var updatedPostRef: Post? = null
+
+        _posts.value = _posts.value.map { post ->
+            if (post.id == postId) {
+                val media = newMediaUrls ?: post.mediaUrls
+                val bgIdx = newBgColorIndex ?: post.bgColorIndex
+                val vis = newVisibility ?: post.visibility
+                val newType = when {
+                    post.postType == "REEL" || post.videoUrl.isNotBlank() -> "REEL"
+                    media.isNotEmpty() -> "PHOTO"
+                    else -> "POST"
+                }
+                val updated = post.copy(
+                    text = newText,
+                    mediaUrls = media,
+                    bgColorIndex = if (media.isNotEmpty()) 0 else bgIdx,
+                    visibility = vis,
+                    postType = newType,
+                    editedAt = now
+                )
+                updatedPostRef = updated
+                updated
+            } else post
         }
-        FirebaseManager.updatePostText(postId, newText)
+
+        // Also update in groupPosts if the post belongs to a group
+        if (_groupPosts.value.isNotEmpty()) {
+            _groupPosts.value = _groupPosts.value.mapValues { (_, list) ->
+                list.map { post ->
+                    if (post.id == postId) {
+                        val media = newMediaUrls ?: post.mediaUrls
+                        val bgIdx = newBgColorIndex ?: post.bgColorIndex
+                        val vis = newVisibility ?: post.visibility
+                        val newType = when {
+                            post.postType == "REEL" || post.videoUrl.isNotBlank() -> "REEL"
+                            media.isNotEmpty() -> "PHOTO"
+                            else -> "POST"
+                        }
+                        val updated = post.copy(
+                            text = newText,
+                            mediaUrls = media,
+                            bgColorIndex = if (media.isNotEmpty()) 0 else bgIdx,
+                            visibility = vis,
+                            postType = newType,
+                            editedAt = now
+                        )
+                        if (updatedPostRef == null) updatedPostRef = updated
+                        updated
+                    } else post
+                }
+            }
+        }
+
+        val target = updatedPostRef
+        if (target != null) {
+            FirebaseManager.updatePost(
+                postId = postId,
+                newText = target.text,
+                newMediaUrls = target.mediaUrls,
+                newBgColorIndex = target.bgColorIndex,
+                newVisibility = target.visibility,
+                newPostType = target.postType
+            )
+        } else {
+            FirebaseManager.updatePostText(postId, newText)
+        }
     }
 
     fun deletePost(postId: String) {
@@ -2004,13 +2196,22 @@ class MeskotRepository(
         var hasNewIncoming = false
         var latestIncomingMsg: ChatMessage? = null
 
-        liveMessages.forEach { msg ->
+        val seenIds = _locallySeenMsgIds.value
+        val readTimestamps = _lastReadTimestamps.value
+
+        liveMessages.forEach { rawMsg ->
+            val lastReadForSender = readTimestamps[rawMsg.fromUid] ?: 0L
+            val isAlreadySeenLocally = rawMsg.isSeen ||
+                    seenIds.contains(rawMsg.id) ||
+                    (lastReadForSender > 0L && rawMsg.createdAt <= lastReadForSender)
+            val msg = if (isAlreadySeenLocally && !rawMsg.isSeen) rawMsg.copy(isSeen = true) else rawMsg
+
             val convoId = if (msg.convoId.isNotBlank()) msg.convoId else {
                 if (msg.fromUid < msg.toUid) "${msg.fromUid}_${msg.toUid}" else "${msg.toUid}_${msg.fromUid}"
             }
 
             // Check if this is a newly arrived message addressed to current user
-            if (currentUid != null && msg.toUid == currentUid && msg.fromUid != currentUid && !msg.isCallLog) {
+            if (currentUid != null && msg.toUid == currentUid && msg.fromUid != currentUid && !msg.isCallLog && !msg.isSeen) {
                 val existingList = currentMap[msg.fromUid] ?: emptyList()
                 if (existingList.none { it.id == msg.id }) {
                     hasNewIncoming = true
@@ -2024,7 +2225,9 @@ class MeskotRepository(
                 val list = currentMap[key] ?: emptyList()
                 val idx = list.indexOfFirst { it.id == msg.id }
                 val updated = if (idx >= 0) {
-                    list.toMutableList().apply { set(idx, msg) }
+                    val existing = list[idx]
+                    val finalMsg = if (existing.isSeen && !msg.isSeen) msg.copy(isSeen = true) else msg
+                    list.toMutableList().apply { set(idx, finalMsg) }
                 } else {
                     (list + msg).sortedBy { it.createdAt }
                 }
@@ -2348,13 +2551,28 @@ class MeskotRepository(
     }
 
     fun markNotificationRead(notifId: String) {
+        val updatedReadSet = _locallyReadNotifIds.value + notifId
+        _locallyReadNotifIds.value = updatedReadSet
+        saveLocallyReadNotifIds(updatedReadSet)
+
+        val targetNotif = _notifications.value.find { it.id == notifId }
         _notifications.value = _notifications.value.map {
             if (it.id == notifId) it.copy(isRead = true) else it
         }
         FirebaseManager.markNotificationRead(notifId)
+
+        // If the notification is a message notification, also mark the sender's messages as read
+        if (targetNotif != null && targetNotif.type == "message" && targetNotif.fromUid.isNotBlank()) {
+            markConversationAsRead(targetNotif.fromUid)
+        }
     }
 
     fun markAllNotificationsRead() {
+        val allIds = _notifications.value.map { it.id }.toSet()
+        val updatedReadSet = _locallyReadNotifIds.value + allIds
+        _locallyReadNotifIds.value = updatedReadSet
+        saveLocallyReadNotifIds(updatedReadSet)
+
         _notifications.value = _notifications.value.map { it.copy(isRead = true) }
         val user = _currentUser.value
         if (user != null) {
@@ -2496,7 +2714,8 @@ class MeskotRepository(
                 fromUid = myUid,
                 toUid = gebUid,
                 text = "Chigir yeblun eshi kifelu trah",
-                createdAt = timeFor(8, 13, 40)
+                createdAt = timeFor(8, 13, 40),
+                isSeen = true
             ),
             ChatMessage(
                 id = "geb_msg_2",
@@ -2504,7 +2723,8 @@ class MeskotRepository(
                 fromUid = gebUid,
                 toUid = myUid,
                 text = "ብሰርዓት",
-                createdAt = timeFor(14, 7, 38)
+                createdAt = timeFor(14, 7, 38),
+                isSeen = true
             ),
             ChatMessage(
                 id = "geb_msg_3",
@@ -2512,7 +2732,8 @@ class MeskotRepository(
                 fromUid = myUid,
                 toUid = gebUid,
                 text = "Hi",
-                createdAt = timeFor(16, 9, 50)
+                createdAt = timeFor(16, 9, 50),
+                isSeen = true
             ),
             ChatMessage(
                 id = "geb_msg_4",
@@ -2520,7 +2741,8 @@ class MeskotRepository(
                 fromUid = myUid,
                 toUid = gebUid,
                 text = "Hishuka do",
-                createdAt = timeFor(16, 9, 50) + 1500L
+                createdAt = timeFor(16, 9, 50) + 1500L,
+                isSeen = true
             ),
             ChatMessage(
                 id = "geb_msg_5",
@@ -2528,7 +2750,8 @@ class MeskotRepository(
                 fromUid = gebUid,
                 toUid = myUid,
                 text = "Mnm lewti yelen",
-                createdAt = timeFor(16, 9, 52)
+                createdAt = timeFor(16, 9, 52),
+                isSeen = true
             ),
             ChatMessage(
                 id = "geb_msg_6",
@@ -2536,7 +2759,8 @@ class MeskotRepository(
                 fromUid = myUid,
                 toUid = gebUid,
                 text = "Hikmna kedka do",
-                createdAt = timeFor(16, 9, 53)
+                createdAt = timeFor(16, 9, 53),
+                isSeen = true
             ),
             ChatMessage(
                 id = "geb_msg_7",
@@ -2544,7 +2768,8 @@ class MeskotRepository(
                 fromUid = gebUid,
                 toUid = myUid,
                 text = "Aykedkun zeleku",
-                createdAt = timeFor(16, 9, 55)
+                createdAt = timeFor(16, 9, 55),
+                isSeen = true
             ),
             ChatMessage(
                 id = "geb_msg_8",
@@ -2552,7 +2777,8 @@ class MeskotRepository(
                 fromUid = myUid,
                 toUid = gebUid,
                 text = "Hi",
-                createdAt = timeFor(18, 12, 13)
+                createdAt = timeFor(18, 12, 13),
+                isSeen = true
             ),
             ChatMessage(
                 id = "geb_msg_9",
@@ -2560,14 +2786,23 @@ class MeskotRepository(
                 fromUid = gebUid,
                 toUid = myUid,
                 text = "Hi",
-                createdAt = timeFor(18, 12, 54)
+                createdAt = timeFor(18, 12, 54),
+                isSeen = false
             )
         )
-        return mapOf(gebUid to messages)
+        val seenIds = loadLocallySeenMsgIds()
+        val lastRead = loadLastReadTimestamps()[gebUid] ?: 0L
+        val hydrated = messages.map { msg ->
+            if (seenIds.contains(msg.id) || (lastRead > 0L && msg.createdAt <= lastRead)) {
+                msg.copy(isSeen = true)
+            } else msg
+        }
+        return mapOf(gebUid to hydrated)
     }
 
     private fun createInitialNotifications(): List<NotificationItem> {
         val now = System.currentTimeMillis()
+        val readIds = loadLocallyReadNotifIds()
         return listOf(
             NotificationItem(
                 id = "notif_init_1",
@@ -2576,7 +2811,7 @@ class MeskotRepository(
                 fromPhoto = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300",
                 type = "message",
                 text = "Gebreslassie Tsadik sent you a message: 'Hi'",
-                isRead = false,
+                isRead = readIds.contains("notif_init_1"),
                 createdAt = now - 14 * 60 * 1000L
             ),
             NotificationItem(
@@ -2586,7 +2821,7 @@ class MeskotRepository(
                 fromPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300",
                 type = "like",
                 text = "Sara Haile reacted ❤️ to your post",
-                isRead = false,
+                isRead = readIds.contains("notif_init_2"),
                 createdAt = now - 45 * 60 * 1000L
             ),
             NotificationItem(

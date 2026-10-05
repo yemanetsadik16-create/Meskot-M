@@ -542,8 +542,8 @@ fun FacebookReelItemCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(560.dp)
             .padding(horizontal = 8.dp)
+            .aspectRatio(9f / 16f)
             .clip(RoundedCornerShape(18.dp))
             .background(Color.Black)
             .border(1.dp, Color(0xFF33291F), RoundedCornerShape(18.dp))

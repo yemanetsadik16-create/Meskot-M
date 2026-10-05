@@ -141,6 +141,7 @@ fun MeskotApp(viewModel: MeskotViewModel) {
     val boostingPost by viewModel.boostingPost.collectAsState()
     val subscribingToCreator by viewModel.subscribingToCreator.collectAsState()
     val postMenuTarget by viewModel.postMenuTarget.collectAsState()
+    val editingPost by viewModel.editingPost.collectAsState()
     val isEditProfileOpen by viewModel.isEditProfileOpen.collectAsState()
     val isCreateStoryOpen by viewModel.isCreateStoryOpen.collectAsState()
     val activeStoryToView by viewModel.activeStoryToView.collectAsState()
@@ -184,16 +185,11 @@ fun MeskotApp(viewModel: MeskotViewModel) {
         }
     }
 
-    // Android back button handling for sub-screens
-    BackHandler(enabled = currentTab != ScreenTab.FEED) {
-        when (currentTab) {
-            ScreenTab.CHAT -> viewModel.navigateTo(ScreenTab.MESSAGES)
-            ScreenTab.GROUP_DETAIL -> viewModel.navigateTo(ScreenTab.GROUPS)
-            ScreenTab.ALBUM_DETAIL -> viewModel.navigateTo(ScreenTab.PHOTOS)
-            ScreenTab.ADS_MANAGER, ScreenTab.CREATOR_STUDIO -> viewModel.navigateTo(ScreenTab.MENU)
-            ScreenTab.PROFILE, ScreenTab.SAVED, ScreenTab.ADMIN, ScreenTab.DASHBOARD, ScreenTab.MENU -> viewModel.navigateTo(ScreenTab.FEED)
-            else -> viewModel.navigateTo(ScreenTab.FEED)
-        }
+    // Facebook-style Android system back navigation:
+    // Always enabled when logged in so pressing Back returns to the previous screen and refreshes,
+    // or scrolls to top & refreshes the Feed instead of exiting the app.
+    BackHandler(enabled = currentUser != null) {
+        viewModel.navigateBack()
     }
 
     if (currentUser == null) {
@@ -276,10 +272,11 @@ fun MeskotApp(viewModel: MeskotViewModel) {
 
                     ScreenTab.CHAT -> {
                         chattingWithUser?.let { other ->
+                            val liveRecipient = users.find { it.uid == other.uid } ?: other
                             ChatScreen(
                                 viewModel = viewModel,
                                 currentUser = currentUser,
-                                recipient = other,
+                                recipient = liveRecipient,
                                 currentLanguage = currentLanguage
                             )
                         } ?: viewModel.navigateTo(ScreenTab.MESSAGES)
@@ -371,7 +368,10 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                     }
 
                     ScreenTab.PROFILE -> {
-                        val targetUser = viewingUser ?: currentUser
+                        val baseTarget = viewingUser ?: currentUser
+                        val targetUser = baseTarget?.let { t ->
+                            if (t.uid == currentUser?.uid) currentUser else (users.find { it.uid == t.uid } ?: t)
+                        }
                         if (targetUser != null) {
                             val userPosts = feedPosts.filter { it.uid == targetUser.uid }
                             ProfileScreen(
@@ -400,14 +400,14 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                     ScreenTab.ADS_MANAGER -> {
                         AdsManagerScreen(
                             viewModel = viewModel,
-                            onBack = { viewModel.navigateTo(ScreenTab.MENU) }
+                            onBack = { viewModel.navigateBack() }
                         )
                     }
 
                     ScreenTab.CREATOR_STUDIO -> {
                         CreatorDashboardScreen(
                             viewModel = viewModel,
-                            onBack = { viewModel.navigateTo(ScreenTab.MENU) }
+                            onBack = { viewModel.navigateBack() }
                         )
                     }
 
@@ -556,6 +556,26 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                             viewModel.openCreateReel()
                         }
                     )
+                }
+
+                editingPost?.let { postToEdit ->
+                    if (currentUser != null) {
+                        ComposerDialog(
+                            currentUser = currentUser!!,
+                            currentLanguage = currentLanguage,
+                            editingPost = postToEdit,
+                            onDismiss = { viewModel.cancelEditingPost() },
+                            onSubmit = { text, media, bgIdx, vis ->
+                                viewModel.savePostEdit(
+                                    postId = postToEdit.id,
+                                    newText = text,
+                                    newMediaUrls = media,
+                                    newBgColorIndex = bgIdx,
+                                    newVisibility = vis
+                                )
+                            }
+                        )
+                    }
                 }
 
                 postMenuTarget?.let { post ->

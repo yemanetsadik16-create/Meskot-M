@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,6 +27,9 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
@@ -196,8 +201,15 @@ fun PostCard(
                                 }
                             }
                         }
+                        val visibilityIcon = when (post.visibility) {
+                            "friends" -> "👥"
+                            "onlyme" -> "🔒"
+                            else -> "🌐"
+                        }
                         Text(
-                            text = MeskotStrings.formatPostTime(post.createdAt, currentLanguage) + if (post.editedAt != null) " · edited" else "",
+                            text = MeskotStrings.formatPostTime(post.createdAt, currentLanguage) +
+                                    (if (post.editedAt != null) " · ${MeskotStrings.get("editedLabel", currentLanguage)}" else "") +
+                                    " · $visibilityIcon",
                             fontSize = 12.sp,
                             color = MutedText
                         )
@@ -800,31 +812,293 @@ fun CommentItemRow(
 
 @Composable
 fun MediaGrid(urls: List<String>) {
-    if (urls.size == 1) {
-        AsyncImage(
-            model = urls.first(),
-            contentDescription = "Media",
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(240.dp),
-            contentScale = ContentScale.Crop
-        )
-    } else {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            urls.take(2).forEach { url ->
+    var selectedImageIndex by remember { mutableStateOf<Int?>(null) }
+
+    when (urls.size) {
+        0 -> {}
+        1 -> {
+            // Single photo: Facebook natural aspect ratio clamped between 1.91:1 (landscape) and 4:5 (0.8f portrait)
+            val url = urls.first()
+            var imageAspectRatio by remember(url) { mutableStateOf(4f / 5f) }
+
+            AsyncImage(
+                model = url,
+                contentDescription = "Post Photo",
+                onSuccess = { state ->
+                    val drawable = state.result.drawable
+                    val w = drawable.intrinsicWidth
+                    val h = drawable.intrinsicHeight
+                    if (w > 0 && h > 0) {
+                        val rawRatio = w.toFloat() / h.toFloat()
+                        imageAspectRatio = rawRatio.coerceIn(0.8f, 1.91f)
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(imageAspectRatio)
+                    .background(Color(0xFFF0F2F5))
+                    .clickable { selectedImageIndex = 0 },
+                contentScale = ContentScale.Crop
+            )
+        }
+        2 -> {
+            // 2 photos: Facebook side-by-side 1:2 portrait split (combined 4:5 container)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(4f / 5f),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                urls.take(2).forEachIndexed { idx, url ->
+                    AsyncImage(
+                        model = url,
+                        contentDescription = "Post Photo ${idx + 1}",
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(Color(0xFFF0F2F5))
+                            .clickable { selectedImageIndex = idx },
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
+        }
+        3 -> {
+            // 3 photos: Facebook 1 large vertical photo on left, 2 stacked square photos on right
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
                 AsyncImage(
-                    model = url,
-                    contentDescription = "Media",
+                    model = urls[0],
+                    contentDescription = "Post Photo 1",
                     modifier = Modifier
                         .weight(1f)
-                        .height(180.dp),
+                        .fillMaxHeight()
+                        .background(Color(0xFFF0F2F5))
+                        .clickable { selectedImageIndex = 0 },
                     contentScale = ContentScale.Crop
                 )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    AsyncImage(
+                        model = urls[1],
+                        contentDescription = "Post Photo 2",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .background(Color(0xFFF0F2F5))
+                            .clickable { selectedImageIndex = 1 },
+                        contentScale = ContentScale.Crop
+                    )
+                    AsyncImage(
+                        model = urls[2],
+                        contentDescription = "Post Photo 3",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .background(Color(0xFFF0F2F5))
+                            .clickable { selectedImageIndex = 2 },
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
+        }
+        else -> {
+            // 4+ photos: Facebook 2x2 square grid with "+N" overlay on the 4th tile
+            val extraCount = urls.size - 4
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    AsyncImage(
+                        model = urls[0],
+                        contentDescription = "Post Photo 1",
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(Color(0xFFF0F2F5))
+                            .clickable { selectedImageIndex = 0 },
+                        contentScale = ContentScale.Crop
+                    )
+                    AsyncImage(
+                        model = urls[1],
+                        contentDescription = "Post Photo 2",
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(Color(0xFFF0F2F5))
+                            .clickable { selectedImageIndex = 1 },
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    AsyncImage(
+                        model = urls[2],
+                        contentDescription = "Post Photo 3",
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(Color(0xFFF0F2F5))
+                            .clickable { selectedImageIndex = 2 },
+                        contentScale = ContentScale.Crop
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(Color(0xFFF0F2F5))
+                            .clickable { selectedImageIndex = 3 },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = urls[3],
+                            contentDescription = "Post Photo 4",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                        if (extraCount > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.52f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "+$extraCount",
+                                    color = Color.White,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Full-screen Facebook Photo Lightbox Viewer when tapping any post image
+    if (selectedImageIndex != null) {
+        val currentIdx = selectedImageIndex!!.coerceIn(0, urls.lastIndex)
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { selectedImageIndex = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            ) {
+                AsyncImage(
+                    model = urls[currentIdx],
+                    contentDescription = "Full Photo",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .align(Alignment.Center),
+                    contentScale = ContentScale.Fit
+                )
+
+                // Top Bar with Close & Counter
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .padding(horizontal = 16.dp, vertical = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (urls.size > 1) {
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text(
+                                text = "${currentIdx + 1} / ${urls.size}",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.width(1.dp))
+                    }
+
+                    IconButton(
+                        onClick = { selectedImageIndex = null },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.6f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color.White
+                        )
+                    }
+                }
+
+                // Prev / Next buttons if multiple images
+                if (urls.size > 1) {
+                    IconButton(
+                        onClick = {
+                            selectedImageIndex = (currentIdx - 1 + urls.size) % urls.size
+                        },
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 12.dp)
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.55f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ChevronLeft,
+                            contentDescription = "Previous photo",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = {
+                            selectedImageIndex = (currentIdx + 1) % urls.size
+                        },
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 12.dp)
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.55f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = "Next photo",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -865,12 +1139,20 @@ fun SharedPostBox(
 
             if (shared.mediaUrls.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
+                val firstSharedUrl = shared.mediaUrls.first()
+                var sharedAspectRatio by remember(firstSharedUrl) { mutableStateOf(4f / 5f) }
                 AsyncImage(
-                    model = shared.mediaUrls.first(),
+                    model = firstSharedUrl,
                     contentDescription = "Shared Media",
+                    onSuccess = { state ->
+                        val d = state.result.drawable
+                        if (d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
+                            sharedAspectRatio = (d.intrinsicWidth.toFloat() / d.intrinsicHeight.toFloat()).coerceIn(0.8f, 1.91f)
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(160.dp)
+                        .aspectRatio(sharedAspectRatio)
                         .clip(RoundedCornerShape(8.dp)),
                     contentScale = ContentScale.Crop
                 )
@@ -885,20 +1167,28 @@ fun ReelMediaPreviewCard(
     onClick: () -> Unit
 ) {
     val mediaUrl = post.videoUrl.ifBlank { post.mediaUrls.firstOrNull() }
+    var videoAspectRatio by remember(mediaUrl) { mutableStateOf(4f / 5f) }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 6.dp)
-            .height(290.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .padding(vertical = 4.dp)
+            .aspectRatio(videoAspectRatio)
             .background(Color.Black)
-            .border(1.2.dp, Gold.copy(alpha = 0.55f), RoundedCornerShape(16.dp))
             .clickable { onClick() }
     ) {
         if (!mediaUrl.isNullOrBlank()) {
             AsyncImage(
                 model = mediaUrl,
                 contentDescription = "Reel Content",
+                onSuccess = { state ->
+                    val d = state.result.drawable
+                    if (d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
+                        // Facebook Feed Videos & Reels: clamp between 4:5 (0.8f vertical) and 16:9 (1.77f landscape)
+                        val raw = d.intrinsicWidth.toFloat() / d.intrinsicHeight.toFloat()
+                        videoAspectRatio = if (post.postType == "REEL") 0.8f else raw.coerceIn(0.8f, 1.78f)
+                    }
+                },
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )

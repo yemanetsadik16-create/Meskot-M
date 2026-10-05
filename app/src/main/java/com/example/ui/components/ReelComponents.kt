@@ -345,14 +345,19 @@ fun CreateReelDialog(
 
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(380.dp)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(Color.Black)
-                                .border(1.5.dp, GoldBorder.copy(alpha = 0.6f), RoundedCornerShape(18.dp))
-                                .clickable { isPlayingPreview = !isPlayingPreview },
+                                .fillMaxWidth(),
                             contentAlignment = Alignment.Center
                         ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(220.dp)
+                                    .aspectRatio(9f / 16f)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(Color.Black)
+                                    .border(1.5.dp, GoldBorder.copy(alpha = 0.6f), RoundedCornerShape(18.dp))
+                                    .clickable { isPlayingPreview = !isPlayingPreview },
+                                contentAlignment = Alignment.Center
+                            ) {
                             if (!selectedMediaUrl.isNullOrBlank()) {
                                 AsyncImage(
                                     model = selectedMediaUrl,
@@ -482,6 +487,7 @@ fun CreateReelDialog(
                                 }
                             }
                         }
+                        }
                     }
 
                     // Video Source Selectors: Camera / Device Gallery / Presets
@@ -582,7 +588,8 @@ fun CreateReelDialog(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(100.dp, 130.dp)
+                                            .width(100.dp)
+                                            .aspectRatio(9f / 16f)
                                             .clip(RoundedCornerShape(12.dp))
                                             .border(
                                                 width = if (isSelected) 2.5.dp else 0.8.dp,
@@ -968,15 +975,22 @@ fun ReelViewerDialog(
                         )
                     }
             ) {
-                // Reel Background Visual
+                // Reel Background Visual in Facebook 9:16 Vertical Frame
                 val mediaUrl = reel.videoUrl.ifBlank { reel.mediaUrls.firstOrNull() }
                 if (!mediaUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = mediaUrl,
-                        contentDescription = "Reel Content",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(9f / 16f)
+                            .align(Alignment.Center)
+                    ) {
+                        AsyncImage(
+                            model = mediaUrl,
+                            contentDescription = "Reel Content",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
                 } else {
                     Box(
                         modifier = Modifier
@@ -1859,12 +1873,12 @@ fun MeskotReelsRail(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // First Item: "+ Create Reel" Quick Action Card
+            // First Item: "+ Create Reel" Quick Action Card (9:16 Facebook Reel proportion)
             item {
                 Box(
                     modifier = Modifier
-                        .width(115.dp)
-                        .height(180.dp)
+                        .width(112.dp)
+                        .aspectRatio(9f / 16f)
                         .clip(RoundedCornerShape(14.dp))
                         .background(
                             Brush.verticalGradient(
@@ -1954,8 +1968,8 @@ fun ReelRailCard(
     val mediaUrl = reel.videoUrl.ifBlank { reel.mediaUrls.firstOrNull() }
     Box(
         modifier = Modifier
-            .width(115.dp)
-            .height(180.dp)
+            .width(112.dp)
+            .aspectRatio(9f / 16f)
             .clip(RoundedCornerShape(14.dp))
             .background(Color.Black)
             .border(1.dp, LineBorder.copy(alpha = 0.6f), RoundedCornerShape(14.dp))

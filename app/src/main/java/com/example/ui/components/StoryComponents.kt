@@ -248,11 +248,11 @@ fun CreateStoryDialog(
                         ) {
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            // Camera Viewfinder Box
+                            // Camera Viewfinder Box (9:16 vertical story proportion)
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(260.dp)
+                                    .width(200.dp)
+                                    .aspectRatio(9f / 16f)
                                     .clip(RoundedCornerShape(20.dp))
                                     .background(InkDark)
                                     .border(2.dp, Gold.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
@@ -463,88 +463,105 @@ fun CreateStoryDialog(
                                 .padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            // Image Preview Container with Filter
+                            // Image Preview Container with Filter (Facebook 9:16 vertical story frame)
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(280.dp)
-                                    .clip(RoundedCornerShape(18.dp))
-                                    .background(InkDark),
+                                    .height(340.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                val colorFilter = when (selectedFilter) {
-                                    "Noir" -> ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
-                                    "Warm" -> ColorFilter.tint(Color(0xFFFFA500).copy(alpha = 0.2f), androidx.compose.ui.graphics.BlendMode.Darken)
-                                    "Vibrant" -> ColorFilter.tint(Color(0xFF00AAFF).copy(alpha = 0.15f), androidx.compose.ui.graphics.BlendMode.Overlay)
-                                    else -> null
-                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .aspectRatio(9f / 16f)
+                                        .clip(RoundedCornerShape(18.dp))
+                                        .background(InkDark),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    val colorFilter = when (selectedFilter) {
+                                        "Noir" -> ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+                                        "Warm" -> ColorFilter.tint(Color(0xFFFFA500).copy(alpha = 0.2f), androidx.compose.ui.graphics.BlendMode.Darken)
+                                        "Vibrant" -> ColorFilter.tint(Color(0xFF00AAFF).copy(alpha = 0.15f), androidx.compose.ui.graphics.BlendMode.Overlay)
+                                        else -> null
+                                    }
 
-                                AsyncImage(
-                                    model = photoPathOrUrl,
-                                    contentDescription = "Story Media Preview",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop,
-                                    colorFilter = colorFilter
-                                )
+                                    // Blurred ambient backdrop for non-9:16 photos (Facebook style)
+                                    AsyncImage(
+                                        model = photoPathOrUrl,
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop,
+                                        alpha = 0.35f,
+                                        colorFilter = colorFilter
+                                    )
 
-                                if (selectedFilter == "Sunset") {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(
-                                                Brush.verticalGradient(
-                                                    listOf(
-                                                        Color(0xFFFF7E5F).copy(alpha = 0.28f),
-                                                        Color(0xFFFEB47B).copy(alpha = 0.15f)
+                                    AsyncImage(
+                                        model = photoPathOrUrl,
+                                        contentDescription = "Story Media Preview",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Fit,
+                                        colorFilter = colorFilter
+                                    )
+
+                                    if (selectedFilter == "Sunset") {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(
+                                                    Brush.verticalGradient(
+                                                        listOf(
+                                                            Color(0xFFFF7E5F).copy(alpha = 0.28f),
+                                                            Color(0xFFFEB47B).copy(alpha = 0.15f)
+                                                        )
                                                     )
                                                 )
-                                            )
-                                    )
-                                }
-
-                                // Retake / Change Button Floating on top
-                                Surface(
-                                    onClick = { photoPathOrUrl = null },
-                                    color = Color.Black.copy(alpha = 0.65f),
-                                    shape = CircleShape,
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(12.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Refresh,
-                                            contentDescription = "Retake",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Text(
-                                            text = "Retake",
-                                            color = Color.White,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
                                         )
                                     }
-                                }
 
-                                // Filter Badge on preview
-                                Surface(
-                                    color = Color.Black.copy(alpha = 0.55f),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier
-                                        .align(Alignment.BottomStart)
-                                        .padding(12.dp)
-                                ) {
-                                    Text(
-                                        text = "Filter: $selectedFilter",
-                                        color = Color.White,
-                                        fontSize = 11.sp,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
+                                    // Retake / Change Button Floating on top
+                                    Surface(
+                                        onClick = { photoPathOrUrl = null },
+                                        color = Color.Black.copy(alpha = 0.65f),
+                                        shape = CircleShape,
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Refresh,
+                                                contentDescription = "Retake",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = "Retake",
+                                                color = Color.White,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+
+                                    // Filter Badge on preview
+                                    Surface(
+                                        color = Color.Black.copy(alpha = 0.55f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier
+                                            .align(Alignment.BottomStart)
+                                            .padding(12.dp)
+                                    ) {
+                                        Text(
+                                            text = "Filter: $selectedFilter",
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
                                 }
                             }
 
@@ -790,7 +807,7 @@ fun StoryViewerDialog(
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            // Main Media Image
+            // Main Media Image in Facebook 9:16 Story Frame
             val colorFilter = when (story.filterName) {
                 "Noir" -> ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
                 "Warm" -> ColorFilter.tint(Color(0xFFFFA500).copy(alpha = 0.2f), androidx.compose.ui.graphics.BlendMode.Darken)
@@ -798,27 +815,46 @@ fun StoryViewerDialog(
                 else -> null
             }
 
-            AsyncImage(
-                model = story.mediaUrl,
-                contentDescription = "Story by ${story.authorName}",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                colorFilter = colorFilter
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(9f / 16f)
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF141414))
+            ) {
+                // Ambient backdrop fill so landscape/square photos look like Facebook Stories
+                AsyncImage(
+                    model = story.mediaUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    alpha = 0.32f,
+                    colorFilter = colorFilter
+                )
 
-            if (story.filterName == "Sunset") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color(0xFFFF7E5F).copy(alpha = 0.28f),
-                                    Color(0xFFFEB47B).copy(alpha = 0.15f)
+                AsyncImage(
+                    model = story.mediaUrl,
+                    contentDescription = "Story by ${story.authorName}",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                    colorFilter = colorFilter
+                )
+
+                if (story.filterName == "Sunset") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color(0xFFFF7E5F).copy(alpha = 0.28f),
+                                        Color(0xFFFEB47B).copy(alpha = 0.15f)
+                                    )
                                 )
                             )
-                        )
-                )
+                    )
+                }
             }
 
             // Top scrim shadow for legibility
@@ -1268,8 +1304,8 @@ fun StoryAvatarRingItem(
                         modifier = Modifier.size(14.dp)
                     )
                 }
-            } else if (!hasStory) {
-                // Green online presence dot
+            } else if (!hasStory && MeskotStrings.isOnline(user.lastSeen)) {
+                // Green online presence dot (only when user is genuinely active)
                 Box(
                     modifier = Modifier
                         .size(13.dp)
@@ -1446,14 +1482,12 @@ fun FacebookCreateStoryCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cardWidth = 106.dp
-    val cardHeight = 188.dp
-    val topImageHeight = 128.dp
+    val cardWidth = 108.dp
 
     Card(
         modifier = modifier
             .width(cardWidth)
-            .height(cardHeight)
+            .aspectRatio(9f / 16f)
             .clip(RoundedCornerShape(14.dp))
             .clickable { onClick() },
         shape = RoundedCornerShape(14.dp),
@@ -1467,7 +1501,7 @@ fun FacebookCreateStoryCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(topImageHeight)
+                        .height(130.dp)
                         .background(Color(0xFFE4E6EB)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1523,7 +1557,7 @@ fun FacebookCreateStoryCard(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .offset(y = topImageHeight - 17.dp)
+                    .offset(y = 113.dp)
                     .size(34.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF1877F2)) // Official Facebook Blue
@@ -1552,13 +1586,12 @@ fun FacebookStoryCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cardWidth = 106.dp
-    val cardHeight = 188.dp
+    val cardWidth = 108.dp
 
     Card(
         modifier = modifier
             .width(cardWidth)
-            .height(cardHeight)
+            .aspectRatio(9f / 16f)
             .clip(RoundedCornerShape(14.dp))
             .clickable { onClick() },
         shape = RoundedCornerShape(14.dp),

@@ -93,18 +93,21 @@ object FirebaseManager {
                 val fbUser = result.user
                 if (fbUser != null) {
                     val uid = fbUser.uid
+                    val now = System.currentTimeMillis()
                     // Fetch user document from Firestore
                     firestore?.collection(COL_USERS)?.document(uid)?.get()
                         ?.addOnSuccessListener { doc ->
                             if (doc != null && doc.exists()) {
-                                val user = parseUser(doc.id, doc.data ?: emptyMap())
+                                val user = parseUser(doc.id, doc.data ?: emptyMap()).copy(lastSeen = now)
+                                saveUser(user)
                                 onSuccess(user)
                             } else {
                                 val newUser = User(
                                     uid = uid,
                                     displayName = fbUser.displayName ?: email.substringBefore("@"),
                                     email = fbUser.email ?: email,
-                                    photoUrl = fbUser.photoUrl?.toString() ?: ""
+                                    photoUrl = fbUser.photoUrl?.toString() ?: "",
+                                    lastSeen = now
                                 )
                                 saveUser(newUser)
                                 onSuccess(newUser)
@@ -115,7 +118,8 @@ object FirebaseManager {
                                 uid = uid,
                                 displayName = fbUser.displayName ?: email.substringBefore("@"),
                                 email = fbUser.email ?: email,
-                                photoUrl = fbUser.photoUrl?.toString() ?: ""
+                                photoUrl = fbUser.photoUrl?.toString() ?: "",
+                                lastSeen = now
                             )
                             onSuccess(user)
                         }
@@ -159,6 +163,7 @@ object FirebaseManager {
                         email = fbUser.email ?: email.trim(),
                         bio = "Member of Meskot community",
                         photoUrl = "",
+                        lastSeen = System.currentTimeMillis(),
                         gender = gender,
                         birthDate = birthDate,
                         phoneNumber = phoneNumber
@@ -197,6 +202,10 @@ object FirebaseManager {
 
     fun signOut() {
         try {
+            val uid = auth?.currentUser?.uid
+            if (!uid.isNullOrBlank()) {
+                firestore?.collection(COL_USERS)?.document(uid)?.update("lastSeen", 0L)
+            }
             auth?.signOut()
         } catch (e: Exception) {
             Log.e(TAG, "Sign out error: ${e.message}")
@@ -278,6 +287,32 @@ object FirebaseManager {
         db.collection(COL_POSTS).document(postId).update(
             mapOf("text" to newText, "editedAt" to System.currentTimeMillis())
         ).addOnFailureListener { Log.e(TAG, "Failed to update post text: ${it.message}") }
+    }
+
+    fun updatePost(
+        postId: String,
+        newText: String,
+        newMediaUrls: List<String>,
+        newBgColorIndex: Int,
+        newVisibility: String,
+        newPostType: String,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        val db = firestore ?: run { onComplete(false); return }
+        val updates = mapOf(
+            "text" to newText,
+            "mediaUrls" to newMediaUrls,
+            "bgColorIndex" to newBgColorIndex,
+            "visibility" to newVisibility,
+            "postType" to newPostType,
+            "editedAt" to System.currentTimeMillis()
+        )
+        db.collection(COL_POSTS).document(postId).set(updates, SetOptions.merge())
+            .addOnSuccessListener { onComplete(true) }
+            .addOnFailureListener {
+                Log.e(TAG, "Failed to update post in Firestore: ${it.message}")
+                onComplete(false)
+            }
     }
 
     fun deletePost(postId: String) {
@@ -951,7 +986,7 @@ object FirebaseManager {
             coverPhotoUrl = d["coverPhotoUrl"] as? String ?: "",
             isAdmin = d["isAdmin"] as? Boolean ?: false,
             isSuspended = d["isSuspended"] as? Boolean ?: false,
-            lastSeen = (d["lastSeen"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+            lastSeen = (d["lastSeen"] as? Number)?.toLong() ?: 0L,
             createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
             gender = d["gender"] as? String ?: "",
             birthDate = d["birthDate"] as? String ?: "",

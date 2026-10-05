@@ -122,6 +122,8 @@ object MeskotStrings {
         "theirAlbums" to "Albums",
         "items" to "items",
         "notifications" to "Notifications",
+        "navNotifs" to "Notifications",
+        "markAllRead" to "Mark all as read",
         "noNotifs" to "No notifications yet.",
         "notifLikeSuffix" to "liked your post",
         "notifCommentSuffix" to "commented on your post",
@@ -212,6 +214,9 @@ object MeskotStrings {
         "copyMessage" to "Copy message",
         "paste" to "Paste",
         "editPostAction" to "Edit post",
+        "saveChanges" to "Save",
+        "postUpdated" to "Post updated.",
+        "editedLabel" to "Edited",
         "postHidden" to "You won't see this post again.",
         "reportSubmitted" to "Post reported. Thank you.",
         "audioCall" to "Audio call",
@@ -350,6 +355,8 @@ object MeskotStrings {
         "theirAlbums" to "አልበሞች",
         "items" to "ንጥሎች",
         "notifications" to "ማሳወቂያዎች",
+        "navNotifs" to "ማሳወቂያዎች",
+        "markAllRead" to "ሁሉንም እንደተነበበ ምልክት አድርግ",
         "noNotifs" to "እስካሁን ምንም ማሳወቂያ የለም።",
         "notifLikeSuffix" to "ልጥፍዎን ወድዷል",
         "notifCommentSuffix" to "በልጥፍዎ ላይ አስተያየት ሰጥቷል",
@@ -440,6 +447,9 @@ object MeskotStrings {
         "copyMessage" to "መልእክት ቅዳ",
         "paste" to "ለጥፍ",
         "editPostAction" to "ልጥፍ አርትዕ",
+        "saveChanges" to "አስቀምጥ",
+        "postUpdated" to "ልጥፉ ተሻሽሏል።",
+        "editedLabel" to "የተሻሻለ",
         "postHidden" to "ይህን ልጥፍ እንደገና አያዩትም።",
         "reportSubmitted" to "ልጥፉ ሪፖርት ተደርጓል። እናመሰግናለን።",
         "audioCall" to "የድምጽ ጥሪ",
@@ -476,8 +486,9 @@ object MeskotStrings {
 
     fun isOnline(lastSeenMs: Long, nowMs: Long = System.currentTimeMillis()): Boolean {
         if (lastSeenMs <= 0L) return false
-        val diffMs = (nowMs - lastSeenMs).coerceAtLeast(0L)
-        return diffMs < 3 * 60 * 1000L
+        val diffMs = nowMs - lastSeenMs
+        // User is considered actively online only if seen within the last 2 minutes
+        return diffMs in -60_000L..(120 * 1000L)
     }
 
     fun formatActiveStatus(lastSeenMs: Long, lang: AppLanguage, nowMs: Long = System.currentTimeMillis()): String {

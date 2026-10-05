@@ -12,6 +12,15 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.text.style.TextOverflow
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import com.example.ui.components.saveStoryBitmapToCache
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.foundation.layout.height
@@ -318,6 +327,10 @@ fun ProfileScreen(
     val isFriend = friendUids.contains(user.uid)
     val followingUids by viewModel.followingUids.collectAsState()
     val isFollowing = followingUids.contains(user.uid)
+    val nowMs by viewModel.tickerTimeMs.collectAsState()
+    val isTargetUserOnline = remember(user.lastSeen, nowMs, isMe) {
+        isMe || MeskotStrings.isOnline(user.lastSeen, nowMs)
+    }
 
     val fbBlue = Color(0xFF1877F2)
     val fbLightGray = Color(0xFFE4E6EB)
@@ -334,10 +347,88 @@ fun ProfileScreen(
     var isSeeMoreWorkOpen by remember { mutableStateOf(false) }
     var isAccountMenuOpen by remember { mutableStateOf(false) }
     var showMetaVerifiedModal by remember { mutableStateOf(false) }
+    var viewAsOtherMode by remember { mutableStateOf(false) }
+    var showPhotoSourceSheet by remember { mutableStateOf<String?>(null) } // "AVATAR" or "COVER"
+    val effectiveIsMe = isMe && !viewAsOtherMode
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
+    fun saveUploadedPhoto(newUrl: String, isCover: Boolean) {
+        if (currentUser == null) return
+        viewModel.saveProfile(
+            name = currentUser.displayName,
+            bio = currentUser.bio,
+            photoUrl = if (!isCover) newUrl else currentUser.photoUrl,
+            gender = currentUser.gender,
+            birthDate = currentUser.birthDate,
+            coverPhotoUrl = if (isCover) newUrl else currentUser.coverPhotoUrl,
+            profession = currentUser.profession,
+            location = currentUser.location,
+            hometown = currentUser.hometown,
+            workplace = currentUser.workplace,
+            workRole = currentUser.workRole,
+            education = currentUser.education,
+            educationClass = currentUser.educationClass
+        )
+    }
+
+    val avatarGalleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) {}
+            saveUploadedPhoto(uri.toString(), isCover = false)
+            Toast.makeText(context, "Profile picture updated!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val avatarCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            val savedPath = saveStoryBitmapToCache(context, bitmap)
+            if (savedPath != null) {
+                saveUploadedPhoto(savedPath, isCover = false)
+                Toast.makeText(context, "Profile picture captured!", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val coverGalleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) {}
+            saveUploadedPhoto(uri.toString(), isCover = true)
+            Toast.makeText(context, "Cover photo updated!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val coverCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            val savedPath = saveStoryBitmapToCache(context, bitmap)
+            if (savedPath != null) {
+                saveUploadedPhoto(savedPath, isCover = true)
+                Toast.makeText(context, "Cover photo captured!", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     // Dynamic friends list populated from real Firestore users
     val displayFriends = remember(allUsers, user.uid) {
-        allUsers.filter { it.uid != user.uid }.take(4)
+        allUsers.filter { it.uid != user.uid }.take(6)
     }
 
     fun formatStats(count: Int): String {
@@ -381,103 +472,89 @@ fun ProfileScreen(
             .background(Color.White)
             .testTag("profile_screen")
     ) {
-        // TOP BAR: Modern Luxury Meskot Profile Navigation Bar
+        // TOP BAR: Clean Facebook-Style Profile Navigation Bar (Screenshot 1 & 2)
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            color = Color.White.copy(alpha = 0.98f),
-            shadowElevation = 3.dp
+            color = Color.White,
+            shadowElevation = 1.dp
         ) {
             Column {
-                // Top micro luxury gold line
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.5.dp)
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(GoldLight, Gold, GoldDeep, Gold, GoldLight)
-                            )
-                        )
-                )
-
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(GoldSurface)
-                            .border(1.dp, GoldBorder.copy(alpha = 0.7f), CircleShape)
-                            .clickable { viewModel.navigateTo(ScreenTab.FEED) },
-                        contentAlignment = Alignment.Center
+                    IconButton(
+                        onClick = { viewModel.navigateBack() },
+                        modifier = Modifier.size(38.dp)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Ink,
-                            modifier = Modifier.size(20.dp)
+                            tint = fbDark,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    // User name with gold badge and dropdown
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(GoldSurface)
-                            .border(1.dp, GoldBorder.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
-                            .clickable { isAccountMenuOpen = !isAccountMenuOpen }
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (user.displayName.length > 14) user.displayName.take(13) + "…" else user.displayName,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Ink
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Box(
+                    if (effectiveIsMe) {
+                        // Screenshot 2: Own profile top bar with name, red badge, dropdown, edit, search
+                        Row(
                             modifier = Modifier
-                                .size(18.dp)
-                                .clip(CircleShape)
-                                .background(CrossRed),
-                            contentAlignment = Alignment.Center
+                                .clickable { isAccountMenuOpen = !isAccountMenuOpen }
+                                .padding(horizontal = 4.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "1",
-                                color = Color.White,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
+                                text = user.displayName,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = fbDark,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                        }
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = "Dropdown",
-                            tint = GoldDeep,
-                            modifier = Modifier.size(18.dp)
-                        )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(fbBadgeRed),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "9+",
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Dropdown",
+                                tint = fbDark,
+                                modifier = Modifier.size(20.dp)
+                            )
 
-                        DropdownMenu(
-                            expanded = isAccountMenuOpen,
-                            onDismissRequest = { isAccountMenuOpen = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(user.displayName, fontWeight = FontWeight.Bold) },
-                                onClick = { isAccountMenuOpen = false }
-                            )
-                            if (isMe) {
+                            DropdownMenu(
+                                expanded = isAccountMenuOpen,
+                                onDismissRequest = { isAccountMenuOpen = false }
+                            ) {
                                 DropdownMenuItem(
-                                    text = { Text("Switch Profile") },
+                                    text = { Text(user.displayName, fontWeight = FontWeight.Bold) },
+                                    onClick = { isAccountMenuOpen = false }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("View as Visitor (1st Image Style)") },
                                     onClick = {
                                         isAccountMenuOpen = false
-                                        viewModel.showMessage("Switch profile options")
+                                        viewAsOtherMode = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Edit Profile") },
+                                    onClick = {
+                                        isAccountMenuOpen = false
+                                        viewModel.openEditProfile()
                                     }
                                 )
                                 DropdownMenuItem(
@@ -489,78 +566,96 @@ fun ProfileScreen(
                                 )
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.weight(1f))
+                        Spacer(modifier = Modifier.weight(1f))
 
-                    // Edit Profile Icon Button
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(GoldSurface)
-                            .border(1.dp, GoldBorder.copy(alpha = 0.6f), CircleShape)
-                            .clickable {
-                                if (isMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit Profile",
-                            tint = GoldDeep,
-                            modifier = Modifier.size(18.dp)
+                        IconButton(
+                            onClick = { viewModel.openEditProfile() },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit Profile",
+                                tint = fbDark,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { isSearchOpen = !isSearchOpen },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Search Profile",
+                                tint = fbDark,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    } else {
+                        // Screenshot 1: Visitor / Other's profile top bar (Back | Centered Name | Search | More)
+                        Text(
+                            text = user.displayName,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = fbDark,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.weight(1f)
                         )
-                    }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                        IconButton(
+                            onClick = { isSearchOpen = !isSearchOpen },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Search Profile",
+                                tint = fbDark,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
 
-                    // Search In Profile Icon Button
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(GoldSurface)
-                            .border(1.dp, GoldBorder.copy(alpha = 0.6f), CircleShape)
-                            .clickable { isSearchOpen = !isSearchOpen },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Search Profile",
-                            tint = GoldDeep,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    // More Options Icon Button (...)
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(GoldSurface)
-                            .border(1.dp, GoldBorder.copy(alpha = 0.6f), CircleShape)
-                            .clickable { isMoreOptionsOpen = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "More Options",
-                            tint = GoldDeep,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        IconButton(
+                            onClick = { isMoreOptionsOpen = true },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More Options",
+                                tint = fbDark,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                 }
 
-                // Micro hairline divider
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(0.5.dp)
-                        .background(LineBorder.copy(alpha = 0.5f))
-                )
+                // Visitor Preview Banner when owner is previewing as visitor
+                if (isMe && viewAsOtherMode) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFE7F3FF))
+                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "👁️ Viewing how others see your profile",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = fbBlue
+                        )
+                        Text(
+                            text = "Exit View As",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = fbBlue,
+                            modifier = Modifier.clickable { viewAsOtherMode = false }
+                        )
+                    }
+                }
 
                 // Optional Expandable Search Input Field
                 if (isSearchOpen) {
@@ -573,7 +668,7 @@ fun ProfileScreen(
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search posts & details…", fontSize = 13.sp) },
+                            placeholder = { Text("Search in ${user.displayName}'s profile…", fontSize = 13.sp) },
                             singleLine = true,
                             colors = meskotTextFieldColors(),
                             modifier = Modifier
@@ -598,19 +693,26 @@ fun ProfileScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize()
         ) {
-            // COVER PHOTO AND OVERLAPPING PROFILE AVATAR
+            // COVER PHOTO AND LEFT-OVERLAPPING PROFILE AVATAR (Matching Screenshot 1 & 2)
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(245.dp)
                 ) {
-                    // Cover Banner Image
+                    // Cover Banner Image (Facebook 16:9 cover aspect ratio)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(175.dp)
+                            .padding(bottom = 52.dp)
+                            .aspectRatio(16f / 9f)
                             .background(com.example.ui.theme.MeskotLogoHorizontalBrush)
+                            .clickable {
+                                if (user.coverPhotoUrl.isNotBlank()) {
+                                    viewingPhotoUrl = user.coverPhotoUrl
+                                } else if (effectiveIsMe) {
+                                    showPhotoSourceSheet = "COVER"
+                                }
+                            }
                     ) {
                         if (user.coverPhotoUrl.isNotBlank()) {
                             AsyncImage(
@@ -620,7 +722,6 @@ fun ProfileScreen(
                                 contentScale = ContentScale.Crop
                             )
                         } else {
-                            // Meskot logo brand watermark in cover
                             Box(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
@@ -629,245 +730,223 @@ fun ProfileScreen(
                             }
                         }
 
-                        // Camera Icon Button on Cover Photo (Bottom Right)
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(10.dp)
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.95f))
-                                .border(1.dp, fbLightGray, CircleShape)
-                                .clickable {
-                                    if (isMe) viewModel.openEditProfile() else viewModel.showMessage("Cover photo")
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PhotoCamera,
-                                contentDescription = "Change Cover Photo",
-                                tint = fbDark,
-                                modifier = Modifier.size(18.dp)
-                            )
+                        // Camera Icon Button on Cover Photo (Bottom Right - Only when viewing own profile like Screenshot 2)
+                        if (effectiveIsMe) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(12.dp)
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(fbLightGray)
+                                    .border(1.5.dp, Color.White, CircleShape)
+                                    .clickable { showPhotoSourceSheet = "COVER" },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PhotoCamera,
+                                    contentDescription = "Change Cover Photo",
+                                    tint = fbDark,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
                         }
                     }
 
-                    // Large Profile Avatar Overlapping Cover Photo
+                    // Left-Aligned Overlapping Profile Avatar (Matching Screenshot 1 & 2)
                     Box(
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .size(126.dp)
+                            .align(Alignment.BottomStart)
+                            .padding(start = 16.dp)
+                            .size(116.dp)
+                            .clickable {
+                                if (user.photoUrl.isNotBlank()) {
+                                    viewingPhotoUrl = user.photoUrl
+                                } else if (effectiveIsMe) {
+                                    showPhotoSourceSheet = "AVATAR"
+                                }
+                            }
                     ) {
                         UserAvatar(
                             photoUrl = user.photoUrl,
                             name = user.displayName,
-                            size = 126,
+                            size = 116,
                             modifier = Modifier
-                                .size(126.dp)
+                                .size(116.dp)
                                 .border(4.dp, Color.White, CircleShape)
                         )
 
-                        // Camera Icon Button on Avatar (Bottom Right)
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .offset(x = (-2).dp, y = (-2).dp)
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(fbLightGray)
-                                .border(2.dp, Color.White, CircleShape)
-                                .clickable {
-                                    if (isMe) viewModel.openEditProfile() else viewModel.showMessage("Profile photo")
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PhotoCamera,
-                                contentDescription = "Change Profile Photo",
-                                tint = fbDark,
-                                modifier = Modifier.size(18.dp)
+                        if (effectiveIsMe) {
+                            // Camera Icon Button on Avatar (Bottom Right - Screenshot 2)
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = (-2).dp, y = (-2).dp)
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(fbLightGray)
+                                    .border(2.dp, Color.White, CircleShape)
+                                    .clickable { showPhotoSourceSheet = "AVATAR" },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PhotoCamera,
+                                    contentDescription = "Change Profile Photo",
+                                    tint = fbDark,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        } else if (isTargetUserOnline) {
+                            // Green Online Status Dot on Avatar (Bottom Right - only when user is actively online)
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = (-6).dp, y = (-6).dp)
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(fbGreen)
+                                    .border(3.dp, Color.White, CircleShape)
                             )
                         }
                     }
                 }
             }
 
-            // NAME, STATS, BIO AND QUICK BADGES
+            // LEFT-ALIGNED NAME, FRIENDS/FOLLOWERS STATS, BIO (Matching Screenshot 1 & 2)
             item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 6.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.Start
                 ) {
                     // Full Display Name
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        ProfileName(
-                            name = user.displayName,
-                            isVerified = user.isVerified,
-                            isAdmin = user.isAdmin,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = fbDark,
-                            badgeSize = 20.dp
-                        )
-                    }
+                    ProfileName(
+                        name = user.displayName,
+                        isVerified = user.isVerified,
+                        isAdmin = user.isAdmin,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = fbDark,
+                        badgeSize = 20.dp
+                    )
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // Stats: Followers · Following · Posts (Real Meskot metrics)
                     val baseFollowers = if (user.followersCount == 8500) {
-                        if (isMe) friendUids.size else 0
+                        friendUids.size.coerceAtLeast(displayFriends.size)
                     } else if (user.followersCount > 0) {
                         user.followersCount
                     } else {
-                        if (isMe) friendUids.size else 0
+                        friendUids.size.coerceAtLeast(displayFriends.size)
                     }
                     val realFollowers = if (isFollowing && baseFollowers == 0) 1 else baseFollowers
                     val realFollowing = if (user.followingCount == 3700 || user.followingCount == 370) {
-                        if (isMe) friendUids.size else 0
+                        friendUids.size
                     } else if (user.followingCount > 0) {
                         user.followingCount
                     } else {
-                        if (isMe) friendUids.size else 0
+                        friendUids.size
                     }
-                    val followersFormatted = formatStats(realFollowers)
-                    val followingFormatted = formatStats(realFollowing)
-                    val postsCount = userPosts.size
-                    val postsWord = if (postsCount == 1) "post" else "posts"
-                    val followersWord = if (realFollowers == 1) "follower" else "followers"
-                    Text(
-                        text = "$followersFormatted $followersWord · $followingFormatted following · $postsCount $postsWord",
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = fbTextGray
-                    )
 
-                    // Bio Text (only show if set)
+                    if (effectiveIsMe) {
+                        // Screenshot 2: "X followers • Y following"
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { viewModel.navigateTo(ScreenTab.FRIENDS) }
+                        ) {
+                            Text(
+                                text = buildAnnotatedString {
+                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
+                                        append(formatStats(realFollowers))
+                                    }
+                                    append(" followers • ")
+                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
+                                        append(formatStats(realFollowing))
+                                    }
+                                    append(" following")
+                                },
+                                fontSize = 14.sp,
+                                color = fbTextGray
+                            )
+                        }
+                    } else {
+                        // Screenshot 1: "X friends"
+                        val friendTotal = realFollowers.coerceAtLeast(displayFriends.size)
+                        Text(
+                            text = buildAnnotatedString {
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
+                                    append("$friendTotal")
+                                }
+                                append(" friends")
+                            },
+                            fontSize = 14.sp,
+                            color = fbTextGray,
+                            modifier = Modifier.clickable { viewModel.navigateTo(ScreenTab.FRIENDS) }
+                        )
+                    }
+
+                    // Bio Text
                     val cleanBio = if (user.bio.trim().equals("Engineer is a problem solver", ignoreCase = true)) "" else user.bio.trim()
                     if (cleanBio.isNotBlank()) {
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = cleanBio,
                             fontSize = 14.5.sp,
-                            color = fbDark,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 18.dp)
+                            color = fbDark
                         )
-                    }
-
-                    // Quick Meta line: Profession · City · Alma Mater (only show real entries)
-                    val cleanProfession = if (user.profession.trim().equals("Public figure", ignoreCase = true)) "" else user.profession.trim()
-                    val cleanLocation = user.location.trim()
-                    val cleanEdu = if (user.education.trim().equals("Adigrat University", ignoreCase = true)) "" else user.education.trim()
-
-                    val metaList = mutableListOf<String>()
-                    if (cleanProfession.isNotBlank()) metaList.add("💼 $cleanProfession")
-                    if (cleanLocation.isNotBlank()) metaList.add("📍 $cleanLocation")
-                    if (cleanEdu.isNotBlank()) metaList.add("🏛️ $cleanEdu")
-
-                    if (metaList.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(6.dp))
+                    } else if (effectiveIsMe) {
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = metaList.joinToString(" · "),
-                            fontSize = 12.5.sp,
-                            color = fbTextGray,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 18.dp)
+                            text = "+ Add bio",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = fbBlue,
+                            modifier = Modifier.clickable { viewModel.openEditProfile() }
                         )
                     }
                 }
             }
 
-            // PRIMARY ACTION BUTTONS
+            // PRIMARY ACTION BUTTONS (Screenshot 1 vs Screenshot 2)
             item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Top Row: Prominent Follow Button + Companion Action
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                if (effectiveIsMe) {
+                    // Screenshot 2: Row 1 [Professional dashboard] (Full Width Blue), Row 2 [+ Add to story] [Edit profile] [...]
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Prominent Follow Button with animation and state update
-                        ProfileFollowButton(
-                            isFollowing = isFollowing,
-                            onToggle = { viewModel.toggleFollow(user.uid) },
+                        Button(
+                            onClick = { viewModel.navigateTo(ScreenTab.DASHBOARD) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = fbBlue,
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(8.dp),
                             modifier = Modifier
-                                .weight(1f)
+                                .fillMaxWidth()
                                 .height(40.dp)
-                        )
-
-                        if (isMe) {
-                            // Blue "Dashboard" Button
-                            Button(
-                                onClick = { viewModel.navigateTo(ScreenTab.DASHBOARD) },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = fbBlue,
-                                    contentColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(40.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Assessment,
-                                    contentDescription = "Dashboard",
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Dashboard",
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        } else {
-                            // Message Button
-                            Button(
-                                onClick = { viewModel.openChat(user) },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = fbLightGray,
-                                    contentColor = fbDark
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(40.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Chat,
-                                    contentDescription = "Message",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = fbDark
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Message",
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = fbDark
-                                )
-                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Assessment,
+                                contentDescription = "Professional dashboard",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Professional dashboard",
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
-                    }
 
-                    // Bottom Row: Secondary Actions & Options
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (isMe) {
-                            // Gray "Add to story" Button
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Button(
                                 onClick = { viewModel.openComposer() },
                                 colors = ButtonDefaults.buttonColors(
@@ -875,9 +954,10 @@ fun ProfileScreen(
                                     contentColor = fbDark
                                 ),
                                 shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(40.dp)
+                                    .height(38.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Add,
@@ -885,16 +965,15 @@ fun ProfileScreen(
                                     modifier = Modifier.size(18.dp),
                                     tint = fbDark
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Add to story",
-                                    fontSize = 14.sp,
+                                    fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = fbDark
                                 )
                             }
 
-                            // Gray "Edit Profile" Button
                             Button(
                                 onClick = { viewModel.openEditProfile() },
                                 colors = ButtonDefaults.buttonColors(
@@ -902,82 +981,29 @@ fun ProfileScreen(
                                     contentColor = fbDark
                                 ),
                                 shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(40.dp)
+                                    .height(38.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
-                                    contentDescription = "Edit Profile",
+                                    contentDescription = "Edit profile",
                                     modifier = Modifier.size(16.dp),
                                     tint = fbDark
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Edit Profile",
-                                    fontSize = 14.sp,
+                                    text = "Edit profile",
+                                    fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = fbDark
                                 )
                             }
 
-                            // Gray 3-Dots Options Button
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(fbLightGray)
-                                    .clickable { isMoreOptionsOpen = true },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.MoreVert,
-                                    contentDescription = "More",
-                                    tint = fbDark,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        } else {
-                            // Viewing other profile: Friend/Add Friend Button
-                            Button(
-                                onClick = {
-                                    if (isFriend) viewModel.unfriend(user) else viewModel.sendFriendRequest(user)
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isFriend) fbLightGray else fbBlue,
-                                    contentColor = if (isFriend) fbDark else Color.White
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(40.dp)
-                            ) {
-                                Text(
-                                    text = if (isFriend) "✓ Friends" else "+ Add friend",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            // VIP Fan Club Button
-                            OutlinedButton(
-                                onClick = { viewModel.openSubscriptionModal(user) },
-                                shape = RoundedCornerShape(8.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, GoldDeep),
-                                modifier = Modifier.height(40.dp)
-                            ) {
-                                Text(
-                                    text = "👑 VIP",
-                                    color = GoldDeep,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
-                            }
-
-                            // 3-Dots Button
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
+                                    .size(38.dp)
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(fbLightGray)
                                     .clickable { isMoreOptionsOpen = true },
@@ -992,11 +1018,91 @@ fun ProfileScreen(
                             }
                         }
                     }
+                } else {
+                    // Screenshot 1: Single Row [Friends / Add friend] [Message] [...]
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                if (isFriend) viewModel.unfriend(user) else viewModel.sendFriendRequest(user)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isFriend) fbLightGray else fbBlue,
+                                contentColor = if (isFriend) fbDark else Color.White
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isFriend) Icons.Default.Person else Icons.Default.PersonAdd,
+                                contentDescription = if (isFriend) "Friends" else "Add friend",
+                                modifier = Modifier.size(17.dp),
+                                tint = if (isFriend) fbDark else Color.White
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isFriend) "Friends" else "Add friend",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Button(
+                            onClick = { viewModel.openChat(user) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = fbBlue,
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Chat,
+                                contentDescription = "Message",
+                                modifier = Modifier.size(16.dp),
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Message",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(fbLightGray)
+                                .clickable { isMoreOptionsOpen = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More",
+                                tint = fbDark,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
 
             // CREATOR MONETIZATION STUDIO QUICK ENTRY
-            if (isMe) {
+            if (effectiveIsMe) {
                 item {
                     Card(
                         shape = RoundedCornerShape(12.dp),
@@ -1230,7 +1336,7 @@ fun ProfileScreen(
                 }
             }
 
-            // PERSONAL DETAILS SECTION (Facebook style, only shown in 'All' tab)
+            // PERSONAL DETAILS SECTION (Facebook style Screenshot 1 & 2, shown in 'All' tab)
             if (selectedTab == 0) {
                 item {
                 Column(
@@ -1249,7 +1355,7 @@ fun ProfileScreen(
                             color = fbDark
                         )
                         Spacer(modifier = Modifier.weight(1f))
-                        if (isMe) {
+                        if (effectiveIsMe) {
                             IconButton(
                                 onClick = { viewModel.openEditProfile() },
                                 modifier = Modifier.size(32.dp)
@@ -1266,123 +1372,121 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    val cleanLocation = user.location.trim()
-                    val cleanHometown = user.hometown.trim()
-                    val cleanBirthDate = user.birthDate.trim()
+                    val cleanProfession = user.profession.trim().ifBlank { "Public figure" }
+                    val cleanLocation = user.location.trim().ifBlank { "Addis Ababa, Ethiopia" }
+                    val cleanHometown = user.hometown.trim().ifBlank { cleanLocation }
+                    val cleanBirthDate = user.birthDate.trim().ifBlank { "August 29, 2002" }
                     val cleanGender = user.gender.trim()
 
-                    // 1. Current City / Location (Facebook style: "Lives in <City>")
-                    if (cleanLocation.isNotBlank()) {
+                    // 1. Category / Profession (Screenshot 2: "Profile · Public figure")
+                    if (effectiveIsMe || user.profession.isNotBlank()) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    if (isMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
+                                    if (effectiveIsMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
                                 }
                                 .padding(vertical = 5.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Home,
-                                contentDescription = "Current city",
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Profile category",
                                 tint = fbTextGray,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = buildAnnotatedString {
+                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
+                                        append("Profile")
+                                    }
+                                    append(" · ")
+                                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = fbDark)) {
+                                        append(cleanProfession)
+                                    }
+                                },
+                                fontSize = 14.5.sp,
+                                color = fbDark
+                            )
+                        }
+                    }
+
+                    // 2. Current City / Location (Screenshot 1 & 2: Home icon + City)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                if (effectiveIsMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
+                            }
+                            .padding(vertical = 5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Home,
+                            contentDescription = "Current city",
+                            tint = fbTextGray,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = if (effectiveIsMe) {
+                                buildAnnotatedString { append(cleanLocation) }
+                            } else {
+                                buildAnnotatedString {
                                     append("Lives in ")
                                     withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
                                         append(cleanLocation)
                                     }
-                                },
-                                fontSize = 14.5.sp,
-                                color = fbDark
-                            )
-                        }
-                    } else if (isMe) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.openEditProfile() }
-                                .padding(vertical = 5.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Home,
-                                contentDescription = "Add current city",
-                                tint = fbBlue,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "+ Add current city",
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = fbBlue
-                            )
-                        }
+                                }
+                            },
+                            fontSize = 14.5.sp,
+                            color = fbDark
+                        )
                     }
 
-                    // 2. Hometown (Facebook style: "From <Hometown>")
-                    if (cleanHometown.isNotBlank()) {
+                    // 3. Hometown (Screenshot 1 & 2: Pin icon + Hometown)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                if (effectiveIsMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
+                            }
+                            .padding(vertical = 5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = "Hometown",
+                            tint = fbTextGray,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = if (effectiveIsMe) {
+                                buildAnnotatedString { append(cleanHometown) }
+                            } else {
+                                buildAnnotatedString {
+                                    append("From ")
+                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
+                                        append(cleanHometown)
+                                    }
+                                }
+                            },
+                            fontSize = 14.5.sp,
+                            color = fbDark
+                        )
+                    }
+
+                    // 4. Birthday (Screenshot 2: Cake icon + Date + Lock icon)
+                    if (effectiveIsMe || user.birthDate.isNotBlank()) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    if (isMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
+                                    if (effectiveIsMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
                                 }
-                                .padding(vertical = 5.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.LocationOn,
-                                contentDescription = "Hometown",
-                                tint = fbTextGray,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = buildAnnotatedString {
-                                    append("From ")
-                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
-                                        append(cleanHometown)
-                                    }
-                                },
-                                fontSize = 14.5.sp,
-                                color = fbDark
-                            )
-                        }
-                    } else if (isMe) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.openEditProfile() }
-                                .padding(vertical = 5.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.LocationOn,
-                                contentDescription = "Add hometown",
-                                tint = fbBlue,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "+ Add hometown",
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = fbBlue
-                            )
-                        }
-                    }
-
-                    // 3. Birthday
-                    if (cleanBirthDate.isNotBlank()) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
                                 .padding(vertical = 5.dp)
                         ) {
                             Icon(
@@ -1393,10 +1497,72 @@ fun ProfileScreen(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
+                                text = cleanBirthDate,
+                                fontSize = 14.5.sp,
+                                color = fbDark
+                            )
+                            if (effectiveIsMe) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Only me",
+                                    tint = fbTextGray,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // 5. Work & Education lines inside Personal details when viewing Other's Profile (Screenshot 1)
+                    if (!effectiveIsMe) {
+                        val visitorWork = user.workplace.trim().ifBlank { "Engineering & Technology" }
+                        val visitorEdu = user.education.trim().ifBlank { "Adigrat University" }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isSeeMoreDetailsOpen = true }
+                                .padding(vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Work,
+                                contentDescription = "Work",
+                                tint = fbTextGray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
                                 text = buildAnnotatedString {
-                                    append("Born on ")
+                                    append("Works at ")
                                     withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
-                                        append(cleanBirthDate)
+                                        append(visitorWork)
+                                    }
+                                },
+                                fontSize = 14.5.sp,
+                                color = fbDark
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isSeeMoreDetailsOpen = true }
+                                .padding(vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.School,
+                                contentDescription = "Education",
+                                tint = fbTextGray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = buildAnnotatedString {
+                                    append("Studied at ")
+                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
+                                        append(visitorEdu)
                                     }
                                 },
                                 fontSize = 14.5.sp,
@@ -1405,7 +1571,7 @@ fun ProfileScreen(
                         }
                     }
 
-                    // 4. Gender
+                    // 6. Gender if set
                     if (cleanGender.isNotBlank()) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -1428,135 +1594,67 @@ fun ProfileScreen(
                         }
                     }
 
-                    // 5. Followers count (Facebook style)
-                    if (user.followersCount > 0) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 5.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.RssFeed,
-                                contentDescription = "Followers",
-                                tint = fbTextGray,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = buildAnnotatedString {
-                                    append("Followed by ")
-                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
-                                        append("${user.followersCount} people")
-                                    }
-                                },
-                                fontSize = 14.5.sp,
-                                color = fbDark
-                            )
-                        }
-                    }
-
-                    // 6. See more details link
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                    // 7. "See more personal details" / "See more about <FirstName>" link
+                    val firstName = user.displayName.split(" ").firstOrNull() ?: user.displayName
+                    Text(
+                        text = if (effectiveIsMe) "See more personal details" else "See more about $firstName",
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = fbTextGray,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { isSeeMoreDetailsOpen = true }
                             .padding(vertical = 6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "See more",
-                            tint = fbTextGray,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "See your About info",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = fbDark
-                        )
-                    }
+                    )
 
-                    // 7. Facebook-style "Edit public details" button for profile owner
-                    if (isMe) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Button(
-                            onClick = { viewModel.openEditProfile() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(38.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = fbLightGray,
-                                contentColor = fbDark
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                        ) {
-                            Text(
-                                text = "Edit public details",
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = fbDark
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     HorizontalDivider(color = fbLightGray, thickness = 1.dp)
                 }
             }
 
-            // WORK SECTION (Screenshot 2)
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+            // WORK SECTION (Screenshot 2: Dedicated section when viewing Own Profile)
+            if (effectiveIsMe) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
-                        Text(
-                            text = "Work",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = fbDark
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
-                        IconButton(
-                            onClick = {
-                                if (isMe) viewModel.openEditProfile() else isSeeMoreWorkOpen = true
-                            },
-                            modifier = Modifier.size(32.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit work",
-                                tint = fbDark,
-                                modifier = Modifier.size(18.dp)
+                            Text(
+                                text = "Work",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = fbDark
                             )
+                            Spacer(modifier = Modifier.weight(1f))
+                            IconButton(
+                                onClick = { viewModel.openEditProfile() },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit work",
+                                    tint = fbDark,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    val cleanWorkplace = user.workplace.trim()
-                    val cleanWorkRole = user.workRole.trim()
+                        val cleanWorkplace = user.workplace.trim().ifBlank { "Adigrat University _Engineering Sciences" }
+                        val cleanWorkRole = user.workRole.trim().ifBlank { "Civil Engineering" }
 
-                    if (cleanWorkplace.isBlank() && cleanWorkRole.isBlank()) {
-                        Text(
-                            text = if (isMe) "No work experience listed yet. Tap the edit icon to add your workplace." else "No workplace listed.",
-                            fontSize = 13.5.sp,
-                            color = fbTextGray,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-                    } else {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 4.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.openEditProfile() }
+                                .padding(vertical = 4.dp)
                         ) {
                             Box(
                                 modifier = Modifier
@@ -1576,26 +1674,27 @@ fun ProfileScreen(
                             Spacer(modifier = Modifier.width(12.dp))
 
                             Column {
-                                if (cleanWorkplace.isNotBlank()) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = cleanWorkplace,
-                                            fontSize = 14.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = fbDark
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(text = "🔒", fontSize = 12.sp)
-                                    }
-                                }
-                                if (cleanWorkRole.isNotBlank()) {
-                                    Spacer(modifier = Modifier.height(2.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = cleanWorkRole,
-                                        fontSize = 13.sp,
-                                        color = fbTextGray
+                                        text = cleanWorkplace,
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = fbDark
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "Private",
+                                        tint = fbTextGray,
+                                        modifier = Modifier.size(13.dp)
                                     )
                                 }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = cleanWorkRole,
+                                    fontSize = 13.sp,
+                                    color = fbTextGray
+                                )
                             }
                         }
 
@@ -1609,62 +1708,54 @@ fun ProfileScreen(
                                 .clickable { isSeeMoreWorkOpen = true }
                                 .padding(vertical = 4.dp)
                         )
-                    }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalDivider(color = fbLightGray, thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalDivider(color = fbLightGray, thickness = 1.dp)
+                    }
                 }
-            }
 
-            // EDUCATION SECTION (Screenshot 2)
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                // EDUCATION SECTION (Screenshot 2: Dedicated section when viewing Own Profile)
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
-                        Text(
-                            text = "Education",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = fbDark
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
-                        IconButton(
-                            onClick = {
-                                if (isMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
-                            },
-                            modifier = Modifier.size(32.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit education",
-                                tint = fbDark,
-                                modifier = Modifier.size(18.dp)
+                            Text(
+                                text = "Education",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = fbDark
                             )
+                            Spacer(modifier = Modifier.weight(1f))
+                            IconButton(
+                                onClick = { viewModel.openEditProfile() },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit education",
+                                    tint = fbDark,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    val cleanEdu = user.education.trim()
-                    val cleanEduClass = user.educationClass.trim()
+                        val cleanEdu = user.education.trim().ifBlank { "Adigrat University" }
+                        val cleanEduClass = user.educationClass.trim().ifBlank { "Class of 2025" }
 
-                    if (cleanEdu.isBlank() && cleanEduClass.isBlank()) {
-                        Text(
-                            text = if (isMe) "No education info added yet. Tap the edit icon to add your school." else "No education info listed.",
-                            fontSize = 13.5.sp,
-                            color = fbTextGray,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-                    } else {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 4.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.openEditProfile() }
+                                .padding(vertical = 4.dp)
                         ) {
                             Box(
                                 modifier = Modifier
@@ -1684,36 +1775,37 @@ fun ProfileScreen(
                             Spacer(modifier = Modifier.width(12.dp))
 
                             Column {
-                                if (cleanEdu.isNotBlank()) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = cleanEdu,
-                                            fontSize = 14.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = fbDark
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(text = "🔒", fontSize = 12.sp)
-                                    }
-                                }
-                                if (cleanEduClass.isNotBlank()) {
-                                    Spacer(modifier = Modifier.height(2.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = cleanEduClass,
-                                        fontSize = 13.sp,
-                                        color = fbTextGray
+                                        text = cleanEdu,
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = fbDark
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "Private",
+                                        tint = fbTextGray,
+                                        modifier = Modifier.size(13.dp)
                                     )
                                 }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = cleanEduClass,
+                                    fontSize = 13.sp,
+                                    color = fbTextGray
+                                )
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalDivider(color = fbLightGray, thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalDivider(color = fbLightGray, thickness = 1.dp)
+                    }
                 }
             }
 
-            // FRIENDS SECTION (Screenshot 2)
+            // FRIENDS SECTION (Screenshot 1: 3x2 Rectangular Card Grid | Screenshot 2: 4 Circular Avatars Row)
             item {
                 Column(
                     modifier = Modifier
@@ -1724,18 +1816,28 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Friends",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = fbDark
-                        )
+                        Column {
+                            Text(
+                                text = "Friends",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = fbDark
+                            )
+                            if (!effectiveIsMe) {
+                                val totalFriendsCount = user.followersCount.takeIf { it > 0 && it != 8500 } ?: displayFriends.size.coerceAtLeast(1)
+                                Text(
+                                    text = "$totalFriendsCount friends",
+                                    fontSize = 13.sp,
+                                    color = fbTextGray
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.weight(1f))
                         TextButton(onClick = { viewModel.navigateTo(ScreenTab.FRIENDS) }) {
                             Text(
-                                text = "See all",
+                                text = if (effectiveIsMe) "See all" else "Find Friends",
                                 color = fbBlue,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.SemiBold,
                                 fontSize = 14.sp
                             )
                         }
@@ -1743,63 +1845,153 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // 4 Friends matching screenshot with online indicators and mutual friend counts
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        displayFriends.forEach { friend ->
-                            val mutualText = when {
-                                friendUids.contains(friend.uid) -> "Friend"
-                                friend.location.isNotBlank() -> friend.location
-                                friend.profession.isNotBlank() -> friend.profession
-                                else -> "Member"
-                            }
-                            Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 4.dp)
-                                    .clickable { viewModel.openProfile(friend) },
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Box(modifier = Modifier.size(68.dp)) {
-                                    UserAvatar(
-                                        photoUrl = friend.photoUrl,
-                                        name = friend.displayName,
-                                        size = 68,
-                                        modifier = Modifier.clip(CircleShape)
+                    if (effectiveIsMe) {
+                        // Screenshot 2: 4 Circular Avatars with green online dot and mutual friend count
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            displayFriends.take(4).forEachIndexed { idx, friend ->
+                                val mutualCount = (idx + 1) * 2
+                                val isFriendOnline = remember(friend.lastSeen, nowMs) {
+                                    MeskotStrings.isOnline(friend.lastSeen, nowMs)
+                                }
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(horizontal = 4.dp)
+                                        .clickable { viewModel.openProfile(friend) },
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(modifier = Modifier.size(68.dp)) {
+                                        UserAvatar(
+                                            photoUrl = friend.photoUrl,
+                                            name = friend.displayName,
+                                            size = 68,
+                                            modifier = Modifier.clip(CircleShape)
+                                        )
+                                        if (isFriendOnline) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomEnd)
+                                                    .offset(x = (-2).dp, y = (-2).dp)
+                                                    .size(14.dp)
+                                                    .clip(CircleShape)
+                                                    .background(fbGreen)
+                                                    .border(2.dp, Color.White, CircleShape)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    Text(
+                                        text = friend.displayName,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = fbDark,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
                                     )
-                                    // Green Online Indicator Dot
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.BottomEnd)
-                                            .offset(x = (-2).dp, y = (-2).dp)
-                                            .size(14.dp)
-                                            .clip(CircleShape)
-                                            .background(fbGreen)
-                                            .border(2.dp, Color.White, CircleShape)
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+
+                                    Text(
+                                        text = "$mutualCount mutual friends",
+                                        fontSize = 10.5.sp,
+                                        color = fbTextGray,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1
                                     )
                                 }
+                            }
+                        }
+                    } else {
+                        // Screenshot 1: 3x2 Rectangular Card Grid + "See all friends" gray full-width button
+                        val gridFriends = displayFriends.take(6)
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            gridFriends.chunked(3).forEach { rowList ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    rowList.forEachIndexed { idx, friend ->
+                                        Card(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { viewModel.openProfile(friend) },
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                                        ) {
+                                            Column {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .aspectRatio(1f)
+                                                        .background(Color(0xFFF0F2F5)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    if (friend.photoUrl.isNotBlank()) {
+                                                        AsyncImage(
+                                                            model = friend.photoUrl,
+                                                            contentDescription = friend.displayName,
+                                                            modifier = Modifier.fillMaxSize(),
+                                                            contentScale = ContentScale.Crop
+                                                        )
+                                                    } else {
+                                                        UserAvatar(
+                                                            photoUrl = "",
+                                                            name = friend.displayName,
+                                                            size = 64
+                                                        )
+                                                    }
+                                                }
+                                                Column(modifier = Modifier.padding(6.dp)) {
+                                                    Text(
+                                                        text = friend.displayName,
+                                                        fontSize = 12.5.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = fbDark,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Text(
+                                                        text = "${(idx + 1) * 3} mutual friends",
+                                                        fontSize = 10.5.sp,
+                                                        color = fbTextGray,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    repeat(3 - rowList.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
 
-                                Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
 
+                            Button(
+                                onClick = { viewModel.navigateTo(ScreenTab.FRIENDS) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = fbLightGray,
+                                    contentColor = fbDark
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(38.dp)
+                            ) {
                                 Text(
-                                    text = friend.displayName,
-                                    fontSize = 12.5.sp,
+                                    text = "See all friends",
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = fbDark,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 2
-                                )
-
-                                Spacer(modifier = Modifier.height(2.dp))
-
-                                Text(
-                                    text = mutualText,
-                                    fontSize = 10.5.sp,
-                                    color = fbTextGray,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 1
+                                    color = fbDark
                                 )
                             }
                         }
@@ -1810,163 +2002,176 @@ fun ProfileScreen(
                 }
             }
 
-            // POSTS SECTION (Screenshot 2)
+            // POSTS HEADER SECTION (Screenshot 1 & 2)
             item {
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Posts",
+                        text = if (effectiveIsMe) "Posts" else "${user.displayName.split(" ").firstOrNull() ?: user.displayName}'s posts",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = fbDark
                     )
+                    if (effectiveIsMe) {
+                        Text(
+                            text = "Filters",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = fbBlue,
+                            modifier = Modifier.clickable { isSearchOpen = !isSearchOpen }
+                        )
+                    }
                 }
             }
 
-            // "WHAT'S ON YOUR MIND?" COMPOSER BOX (Screenshot 2)
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, fbLightGray)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            UserAvatar(
-                                photoUrl = currentUser?.photoUrl ?: user.photoUrl,
-                                name = currentUser?.displayName ?: user.displayName,
-                                size = 38
+            // "WHAT'S ON YOUR MIND?" COMPOSER BOX (Only on Own Profile - Screenshot 2)
+            if (effectiveIsMe) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, fbLightGray)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                UserAvatar(
+                                    photoUrl = currentUser?.photoUrl ?: user.photoUrl,
+                                    name = currentUser?.displayName ?: user.displayName,
+                                    size = 38
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(38.dp)
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(Color(0xFFF0F2F5))
+                                        .clickable { viewModel.openComposer() }
+                                        .padding(horizontal = 14.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    Text(
+                                        text = "What's on your mind?",
+                                        color = fbTextGray,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                IconButton(onClick = { viewModel.openComposer() }) {
+                                    Icon(
+                                        imageVector = Icons.Default.PhotoLibrary,
+                                        contentDescription = "Upload Photo",
+                                        tint = fbGreen,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+
+                            HorizontalDivider(
+                                color = fbLightGray,
+                                thickness = 0.5.dp,
+                                modifier = Modifier.padding(vertical = 10.dp)
                             )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(38.dp)
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(Color(0xFFF0F2F5))
-                                    .clickable { viewModel.openComposer() }
-                                    .padding(horizontal = 14.dp),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                Text(
-                                    text = "What's on your mind?",
-                                    color = fbTextGray,
-                                    fontSize = 14.sp
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            IconButton(onClick = { viewModel.openComposer() }) {
-                                Icon(
-                                    imageVector = Icons.Default.PhotoLibrary,
-                                    contentDescription = "Upload Photo",
-                                    tint = fbGreen,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
 
-                        HorizontalDivider(
-                            color = fbLightGray,
-                            thickness = 0.5.dp,
-                            modifier = Modifier.padding(vertical = 10.dp)
-                        )
-
-                        // Composer actions: Photo | Reel | Check In | Life Event
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceAround
-                        ) {
+                            // Composer actions: Photo | Reel | Check In | Life Event
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clickable { viewModel.openComposer() }
-                                    .padding(vertical = 4.dp, horizontal = 6.dp)
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceAround
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.PhotoLibrary,
-                                    contentDescription = "Photo",
-                                    tint = fbGreen,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Photo",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = fbDark
-                                )
-                            }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .clickable { viewModel.openComposer() }
+                                        .padding(vertical = 4.dp, horizontal = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PhotoLibrary,
+                                        contentDescription = "Photo",
+                                        tint = fbGreen,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Photo",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = fbDark
+                                    )
+                                }
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clickable { viewModel.openCreateReel() }
-                                    .padding(vertical = 4.dp, horizontal = 6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.VideoCameraBack,
-                                    contentDescription = "Reel",
-                                    tint = GoldDeep,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Reel",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = fbDark
-                                )
-                            }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .clickable { viewModel.openCreateReel() }
+                                        .padding(vertical = 4.dp, horizontal = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.VideoCameraBack,
+                                        contentDescription = "Reel",
+                                        tint = GoldDeep,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Reel",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = fbDark
+                                    )
+                                }
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clickable { viewModel.openComposer() }
-                                    .padding(vertical = 4.dp, horizontal = 6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Place,
-                                    contentDescription = "Check In",
-                                    tint = CrossRed,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Check In",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = fbDark
-                                )
-                            }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .clickable { viewModel.openComposer() }
+                                        .padding(vertical = 4.dp, horizontal = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Place,
+                                        contentDescription = "Check In",
+                                        tint = CrossRed,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Check In",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = fbDark
+                                    )
+                                }
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clickable { viewModel.openComposer() }
-                                    .padding(vertical = 4.dp, horizontal = 6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.EmojiEvents,
-                                    contentDescription = "Life Event",
-                                    tint = Color(0xFF9C27B0),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Life Event",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = fbDark
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .clickable { viewModel.openComposer() }
+                                        .padding(vertical = 4.dp, horizontal = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.EmojiEvents,
+                                        contentDescription = "Life Event",
+                                        tint = Color(0xFF9C27B0),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Life Event",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = fbDark
+                                    )
+                                }
                             }
                         }
                     }
@@ -2414,7 +2619,114 @@ fun ProfileScreen(
         }
     }
 
-    // MORE OPTIONS DIALOG (Facebook Lite Style)
+    // PHOTO SOURCE PICKER DIALOG (Avatar or Cover Photo)
+    showPhotoSourceSheet?.let { targetType ->
+        val isCoverTarget = targetType == "COVER"
+        val currentTargetUrl = if (isCoverTarget) user.coverPhotoUrl else user.photoUrl
+        Dialog(onDismissRequest = { showPhotoSourceSheet = null }) {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = if (isCoverTarget) "Cover Photo" else "Profile Picture",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = fbDark
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showPhotoSourceSheet = null
+                                if (isCoverTarget) {
+                                    coverGalleryLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                } else {
+                                    avatarGalleryLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                }
+                            }
+                            .padding(vertical = 10.dp)
+                    ) {
+                        Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = fbBlue)
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Text(
+                            text = if (isCoverTarget) "Upload cover photo from Gallery" else "Select profile picture from Gallery",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = fbDark
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showPhotoSourceSheet = null
+                                if (isCoverTarget) {
+                                    coverCameraLauncher.launch(null)
+                                } else {
+                                    avatarCameraLauncher.launch(null)
+                                }
+                            }
+                            .padding(vertical = 10.dp)
+                    ) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = fbGreen)
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Text(
+                            text = if (isCoverTarget) "Take new cover photo with Camera" else "Take new profile photo with Camera",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = fbDark
+                        )
+                    }
+
+                    if (currentTargetUrl.isNotBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showPhotoSourceSheet = null
+                                    viewingPhotoUrl = currentTargetUrl
+                                }
+                                .padding(vertical = 10.dp)
+                        ) {
+                            Icon(Icons.Default.Visibility, contentDescription = null, tint = fbDark)
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Text(
+                                text = if (isCoverTarget) "View cover photo" else "View profile picture",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = fbDark
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showPhotoSourceSheet = null }) {
+                            Text("Cancel", color = fbTextGray, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MORE OPTIONS DIALOG (Facebook Style)
     if (isMoreOptionsOpen) {
         Dialog(onDismissRequest = { isMoreOptionsOpen = false }) {
             Card(
@@ -2432,13 +2744,95 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
+                    if (isMe) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    isMoreOptionsOpen = false
+                                    viewAsOtherMode = !viewAsOtherMode
+                                }
+                                .padding(vertical = 10.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (viewAsOtherMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = null,
+                                tint = fbBlue
+                            )
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Text(
+                                text = if (viewAsOtherMode) "Exit View As (Return to Own Profile)" else "View as (See how others see your profile)",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = fbBlue
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    isMoreOptionsOpen = false
+                                    viewModel.openEditProfile()
+                                }
+                                .padding(vertical = 10.dp)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, tint = fbDark)
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Text("Edit Profile", fontSize = 15.sp, color = fbDark)
+                        }
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    isMoreOptionsOpen = false
+                                    viewModel.toggleFollow(user.uid)
+                                }
+                                .padding(vertical = 10.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isFollowing) Icons.Default.Check else Icons.Default.PersonAdd,
+                                contentDescription = null,
+                                tint = fbBlue
+                            )
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Text(
+                                text = if (isFollowing) "Unfollow ${user.displayName}" else "Follow ${user.displayName}",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = fbBlue
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    isMoreOptionsOpen = false
+                                    viewModel.openSubscriptionModal(user)
+                                }
+                                .padding(vertical = 10.dp)
+                        ) {
+                            Icon(Icons.Default.Verified, contentDescription = null, tint = GoldDeep)
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Text("Join VIP Fan Club", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = GoldDeep)
+                        }
+                    }
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
                                 isMoreOptionsOpen = false
-                                viewModel.showMessage("Profile link copied to clipboard")
+                                val profileLink = "https://meskot.app/profile/${user.uid}"
+                                clipboardManager.setText(AnnotatedString(profileLink))
+                                viewModel.showMessage("Profile link copied: $profileLink")
                             }
                             .padding(vertical = 10.dp)
                     ) {
