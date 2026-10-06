@@ -39,6 +39,8 @@ object FirebaseManager {
     const val COL_LIVE_MESSAGES = "live_messages"
     const val COL_USER_INSIGHTS = "user_insights"
     const val COL_PROFILE_VIEWS = "profile_views"
+    const val COL_MARKETPLACE_LISTINGS = "marketplace_listings"
+    const val COL_MARKETPLACE_CHATS = "marketplace_chats"
 
     fun initialize(context: Context) {
         if (isInitialized) return
@@ -738,6 +740,8 @@ object FirebaseManager {
 
     // FIRESTORE: NOTIFICATIONS
     fun sendNotification(notif: NotificationItem) {
+        // Ensure recipient (toUid / post_author_id) is present and never equals the actor (fromUid / actor_id)
+        if (notif.toUid.isBlank() || notif.fromUid == notif.toUid) return
         val db = firestore ?: return
         val map = notificationToMap(notif)
         db.collection(COL_NOTIFICATIONS).document(notif.id).set(map, SetOptions.merge())
@@ -794,7 +798,8 @@ object FirebaseManager {
                     if (snapshot != null) {
                         val notifs = snapshot.documents.mapNotNull { doc ->
                             doc.data?.let { parseNotification(doc.id, it) }
-                        }.sortedByDescending { it.createdAt }
+                        }.filter { it.toUid == forUid && it.fromUid != forUid }
+                            .sortedByDescending { it.createdAt }
                         onNotificationsUpdated(notifs)
                     }
                 }
@@ -841,7 +846,10 @@ object FirebaseManager {
         "postType" to p.postType,
         "videoUrl" to p.videoUrl,
         "audioTrackTitle" to p.audioTrackTitle,
-        "viewsCount" to p.viewsCount
+        "viewsCount" to p.viewsCount,
+        "locationName" to p.locationName,
+        "latitude" to p.latitude,
+        "longitude" to p.longitude
     )
 
     private fun parsePost(id: String, d: Map<String, Any?>): Post {
@@ -900,7 +908,10 @@ object FirebaseManager {
             postType = pType,
             videoUrl = vidUrl,
             audioTrackTitle = audioTitle,
-            viewsCount = vCount
+            viewsCount = vCount,
+            locationName = d["locationName"] as? String ?: "",
+            latitude = (d["latitude"] as? Number)?.toDouble(),
+            longitude = (d["longitude"] as? Number)?.toDouble()
         )
     }
 
@@ -2074,6 +2085,156 @@ object FirebaseManager {
         )
 
         return Pair(insights, engagement)
+    }
+
+    // ========================================================================
+    // FIRESTORE: FACEBOOK MARKETPLACE ("TODAY'S PICKS" FEED & SELLER CHATS)
+    // ========================================================================
+
+    /**
+     * Fetches Marketplace "Today's picks" feed from Firestore ordered by proximity/distance
+     * and creation date, with optional category and search keyword filtering.
+     */
+    fun fetchMarketplaceListings(
+        categoryId: String? = null,
+        maxRadiusKm: Int = 65,
+        onComplete: (List<ListingItem>) -> Unit
+    ) {
+        val db = firestore ?: run { onComplete(emptyList()); return }
+        var query: Query = db.collection(COL_MARKETPLACE_LISTINGS)
+            .whereEqualTo("isAvailable", true)
+
+        if (!categoryId.isNullOrBlank() && categoryId != "all") {
+            query = query.whereEqualTo("categoryId", categoryId)
+        }
+
+        query.orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(60)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val items = snapshot.documents.mapNotNull { doc ->
+                    doc.data?.let { parseListingItem(doc.id, it) }
+                }.filter { it.distanceKm <= maxRadiusKm }
+                    .sortedWith(compareBy<ListingItem> { it.distanceKm }.thenByDescending { it.createdAt })
+                onComplete(items)
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "fetchMarketplaceListings error: ${e.message}")
+                onComplete(emptyList())
+            }
+    }
+
+    fun listenToMarketplaceListings(onUpdated: (List<ListingItem>) -> Unit): ListenerRegistration? {
+        val db = firestore ?: return null
+        return try {
+            db.collection(COL_MARKETPLACE_LISTINGS)
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .limit(60)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e(TAG, "listenToMarketplaceListings error: ${error.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null) {
+                        val items = snapshot.documents.mapNotNull { doc ->
+                            doc.data?.let { parseListingItem(doc.id, it) }
+                        }
+                        onUpdated(items)
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "listenToMarketplaceListings exception: ${e.message}")
+            null
+        }
+    }
+
+    fun createMarketplaceListing(item: ListingItem, onComplete: (Boolean) -> Unit = {}) {
+        val db = firestore ?: run { onComplete(false); return }
+        val data = mapOf(
+            "title" to item.title,
+            "price" to item.price,
+            "currency" to item.currency,
+            "imageUrls" to item.imageUrls,
+            "categoryId" to item.categoryId,
+            "locationName" to item.location.name,
+            "latitude" to item.location.latitude,
+            "longitude" to item.location.longitude,
+            "radiusKm" to item.location.radiusKm,
+            "distanceKm" to item.distanceKm,
+            "sellerId" to item.sellerId,
+            "sellerName" to item.sellerName,
+            "sellerPhoto" to item.sellerPhoto,
+            "sellerVerified" to item.sellerVerified,
+            "description" to item.description,
+            "condition" to item.condition,
+            "isAvailable" to item.isAvailable,
+            "viewsCount" to item.viewsCount,
+            "createdAt" to item.createdAt
+        )
+        db.collection(COL_MARKETPLACE_LISTINGS)
+            .document(item.id)
+            .set(data)
+            .addOnSuccessListener { onComplete(true) }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "createMarketplaceListing error: ${e.message}")
+                onComplete(false)
+            }
+    }
+
+    fun sendMarketplaceChatMessage(msg: MarketplaceChatMessage, onComplete: (Boolean) -> Unit = {}) {
+        val db = firestore ?: run { onComplete(false); return }
+        val data = mapOf(
+            "chatId" to msg.chatId,
+            "senderId" to msg.senderId,
+            "senderName" to msg.senderName,
+            "senderPhoto" to msg.senderPhoto,
+            "receiverId" to msg.receiverId,
+            "receiverName" to msg.receiverName,
+            "receiverPhoto" to msg.receiverPhoto,
+            "itemId" to msg.itemId,
+            "itemTitle" to msg.itemTitle,
+            "itemPriceLabel" to msg.itemPriceLabel,
+            "itemThumbUrl" to msg.itemThumbUrl,
+            "messageText" to msg.messageText,
+            "timestamp" to msg.timestamp
+        )
+        db.collection(COL_MARKETPLACE_CHATS)
+            .document(msg.chatId + "_" + msg.timestamp)
+            .set(data)
+            .addOnSuccessListener { onComplete(true) }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "sendMarketplaceChatMessage error: ${e.message}")
+                onComplete(false)
+            }
+    }
+
+    private fun parseListingItem(id: String, d: Map<String, Any?>): ListingItem {
+        val imgs = (d["imageUrls"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+        val loc = MarketplaceLocation(
+            latitude = (d["latitude"] as? Number)?.toDouble() ?: 9.0192,
+            longitude = (d["longitude"] as? Number)?.toDouble() ?: 38.7525,
+            name = d["locationName"] as? String ?: "Ariena",
+            radiusKm = (d["radiusKm"] as? Number)?.toInt() ?: 65
+        )
+        return ListingItem(
+            id = id,
+            title = d["title"] as? String ?: "",
+            price = (d["price"] as? Number)?.toDouble() ?: 0.0,
+            currency = d["currency"] as? String ?: "ETB",
+            imageUrls = imgs,
+            categoryId = d["categoryId"] as? String ?: "vehicles",
+            location = loc,
+            distanceKm = (d["distanceKm"] as? Number)?.toDouble() ?: 4.2,
+            sellerId = d["sellerId"] as? String ?: "",
+            sellerName = d["sellerName"] as? String ?: "Meskot Seller",
+            sellerPhoto = d["sellerPhoto"] as? String ?: "",
+            sellerVerified = d["sellerVerified"] as? Boolean ?: false,
+            description = d["description"] as? String ?: "",
+            condition = d["condition"] as? String ?: "Used - Like New",
+            isAvailable = d["isAvailable"] as? Boolean ?: true,
+            viewsCount = (d["viewsCount"] as? Number)?.toInt() ?: 0,
+            createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
+        )
     }
 
 }

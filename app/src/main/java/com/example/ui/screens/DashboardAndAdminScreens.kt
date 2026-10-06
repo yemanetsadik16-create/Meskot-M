@@ -53,8 +53,10 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.CloudDone
 import com.example.data.AppLanguage
+import com.example.data.ExchangeRateManager
 import com.example.data.GroupItem
 import com.example.data.MeskotStrings
+import com.example.data.PaymentCurrency
 import com.example.data.Post
 import com.example.data.User
 import com.example.data.UserInsightsData
@@ -480,7 +482,7 @@ fun DashboardScreen(
                                         Text(text = "❤️ ${post.reactions.size} reactions", fontSize = 11.sp, color = MutedText)
                                         Text(text = "💬 ${post.commentCount} comments", fontSize = 11.sp, color = MutedText)
                                         if (post.tipTotal > 0) {
-                                            Text(text = "💰 ${post.tipTotal.toInt()} ETB", fontSize = 11.sp, color = GoldDeep, fontWeight = FontWeight.Bold)
+                                            Text(text = "💰 ${PaymentCurrency.USD.formatFromEtb(post.tipTotal)} (${post.tipTotal.toInt()} ETB)", fontSize = 11.sp, color = GoldDeep, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }

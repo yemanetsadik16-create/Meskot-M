@@ -38,6 +38,8 @@ import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.outlined.OndemandVideo
+import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.filled.BarChart
@@ -312,6 +314,15 @@ fun IconNavBar(
                     isSelected = currentTab == ScreenTab.REELS,
                     onClick = { onTabSelected(ScreenTab.REELS) },
                     testTag = "tab_reels"
+                )
+
+                NavLuxuryItem(
+                    activeIcon = Icons.Filled.Storefront,
+                    inactiveIcon = Icons.Outlined.Storefront,
+                    label = "Market",
+                    isSelected = currentTab == ScreenTab.MARKETPLACE,
+                    onClick = { onTabSelected(ScreenTab.MARKETPLACE) },
+                    testTag = "tab_marketplace"
                 )
 
                 NavLuxuryItem(

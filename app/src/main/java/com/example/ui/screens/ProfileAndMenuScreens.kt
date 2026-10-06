@@ -78,6 +78,8 @@ import androidx.compose.material.icons.filled.Verified
 import com.example.ui.components.MetaVerifiedBottomSheetModal
 import com.example.ui.components.ProfileName
 import com.example.ui.components.VerifiedBadge
+import com.example.data.ExchangeRateManager
+import com.example.data.PaymentCurrency
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
@@ -1268,30 +1270,44 @@ fun ProfileScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column {
                                     Text(
-                                        text = "${user.starBalance} Stars Balance",
+                                        text = "${user.starBalance} Stars  •  ${PaymentCurrency.USD.formatFromEtb(user.creatorNetBalance)}",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = fbDark
                                     )
                                     Text(
-                                        text = "Send tips & support creators via Chapa",
-                                        fontSize = 11.sp,
+                                        text = "≈ ${String.format(java.util.Locale.US, "%,.0f", user.creatorNetBalance)} ETB (1 USD = ${ExchangeRateManager.formattedRate()} ETB NBE)",
+                                        fontSize = 10.5.sp,
                                         color = fbTextGray
                                     )
                                 }
                             }
 
-                            Button(
-                                onClick = { viewModel.buyStarsViaChapa(500, 200.0) },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    text = "+ Top Up (Chapa)",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Button(
+                                    onClick = { viewModel.buyStarsViaChapa(500, 200.0, "USD") },
+                                    colors = ButtonDefaults.buttonColors(containerColor = GoldDeep),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = "+ USD ($)",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Button(
+                                    onClick = { viewModel.buyStarsViaChapa(500, 200.0, "ETB") },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = "+ ETB",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
@@ -3226,6 +3242,7 @@ fun MenuScreen(
         // Grid Menu Options
         item {
             val menuItems = listOf(
+                Triple("🛍️", "Marketplace", ScreenTab.MARKETPLACE),
                 Triple("🏠", MeskotStrings.get("navFeed", currentLanguage), ScreenTab.FEED),
                 Triple("👥", MeskotStrings.get("navFriends", currentLanguage), ScreenTab.FRIENDS),
                 Triple("💬", MeskotStrings.get("navMessages", currentLanguage), ScreenTab.MESSAGES),

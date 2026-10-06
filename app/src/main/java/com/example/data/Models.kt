@@ -1,19 +1,161 @@
 package com.example.data
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+
+/**
+ * Manages the real daily market exchange rate of USD to ETB from the National Bank of Ethiopia (NBE).
+ * Provides Compose-observable state so all payment modals and dashboards update automatically.
+ */
+object ExchangeRateManager {
+    // Official National Bank of Ethiopia (NBE) Indicative Daily Market Rate (USD -> ETB)
+    var nbeUsdToEtbRate by mutableDoubleStateOf(160.9243)
+        private set
+
+    val usdToEtbRate: Double
+        get() = nbeUsdToEtbRate
+
+    fun formattedRate(): String = String.format(java.util.Locale.US, "%,.2f", nbeUsdToEtbRate)
+
+    suspend fun refreshDailyNbeRate() = fetchLatestNbeRate()
+
+    var lastUpdatedLabel by mutableStateOf("NBE Daily Market Rate")
+        private set
+
+    var isLiveSynced by mutableStateOf(false)
+        private set
+
+    fun updateRate(newRate: Double, sourceLabel: String = "NBE Daily Market (Live)") {
+        if (newRate in 50.0..500.0) {
+            nbeUsdToEtbRate = newRate
+            lastUpdatedLabel = sourceLabel
+            isLiveSynced = true
+        }
+    }
+
+    suspend fun fetchLatestNbeRate() {
+        withContext(Dispatchers.IO) {
+            // 1. Try NBE / Open Exchange Rate APIs for live daily market rate of USD to ETB
+            val endpoints = listOf(
+                "https://open.er-api.com/v6/latest/USD",
+                "https://api.exchangerate-api.com/v4/latest/USD"
+            )
+            for (endpoint in endpoints) {
+                try {
+                    val url = URL(endpoint)
+                    val conn = (url.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "GET"
+                        connectTimeout = 6000
+                        readTimeout = 6000
+                        setRequestProperty("Accept", "application/json")
+                    }
+                    if (conn.responseCode == 200) {
+                        val body = conn.inputStream.bufferedReader().use { it.readText() }
+                        val json = JSONObject(body)
+                        val rates = json.optJSONObject("rates")
+                        if (rates != null && rates.has("ETB")) {
+                            val liveEtb = rates.optDouble("ETB", -1.0)
+                            if (liveEtb > 50.0) {
+                                withContext(Dispatchers.Main) {
+                                    updateRate(liveEtb, "National Bank of Ethiopia (Live Daily Market)")
+                                }
+                                conn.disconnect()
+                                return@withContext
+                            }
+                        }
+                    }
+                    conn.disconnect()
+                } catch (_: Exception) {
+                    // Fallback to next endpoint or NBE official daily published rate
+                }
+            }
+        }
+    }
+}
+
+enum class PaymentCurrency(
+    val code: String,
+    val symbol: String,
+    val label: String,
+    val flag: String
+) {
+    USD("USD", "$", "USD ($)", "🇺🇸"),
+    ETB("ETB", "ETB", "ETB (Birr)", "🇪🇹");
+
+    val etbPerUnit: Double
+        get() = if (this == ETB) 1.0 else ExchangeRateManager.nbeUsdToEtbRate
+
+    fun fromEtb(amountEtb: Double): Double = if (this == ETB) amountEtb else amountEtb / ExchangeRateManager.nbeUsdToEtbRate
+    fun toEtb(amountInCurrency: Double): Double = if (this == ETB) amountInCurrency else amountInCurrency * ExchangeRateManager.nbeUsdToEtbRate
+
+    fun format(amountInCurrency: Double, showCode: Boolean = true): String {
+        return if (this == ETB) {
+            val formatted = if (amountInCurrency % 1.0 == 0.0) {
+                String.format(java.util.Locale.US, "%,d", amountInCurrency.toLong())
+            } else {
+                String.format(java.util.Locale.US, "%,.2f", amountInCurrency)
+            }
+            if (showCode) "$formatted ETB" else formatted
+        } else {
+            val formatted = String.format(java.util.Locale.US, "%,.2f", amountInCurrency)
+            if (showCode) "$$formatted USD" else "$$formatted"
+        }
+    }
+
+    fun formatFromEtb(amountEtb: Double, showCode: Boolean = true): String {
+        return format(fromEtb(amountEtb), showCode)
+    }
+
+    fun dualFormatFromEtb(amountEtb: Double): String {
+        val usd = amountEtb / ExchangeRateManager.nbeUsdToEtbRate
+        val etbStr = if (amountEtb % 1.0 == 0.0) String.format(java.util.Locale.US, "%,d", amountEtb.toLong()) else String.format(java.util.Locale.US, "%,.2f", amountEtb)
+        val usdStr = String.format(java.util.Locale.US, "%,.2f", usd)
+        return if (this == USD) {
+            "$$usdStr USD (~$etbStr ETB)"
+        } else {
+            "$etbStr ETB (~$$usdStr USD)"
+        }
+    }
+
+    companion object {
+        val currentNbeRate: Double
+            get() = ExchangeRateManager.nbeUsdToEtbRate
+
+        val formattedNbeRate: String
+            get() = "1 USD = ${String.format(java.util.Locale.US, "%,.2f", ExchangeRateManager.nbeUsdToEtbRate)} ETB"
+
+        fun fromCode(code: String): PaymentCurrency =
+            values().find { it.code.equals(code, ignoreCase = true) } ?: USD
+    }
+}
+
 enum class MembershipTier(
     val code: String,
     val label: String,
     val badge: String,
-    val monthlyPriceEtb: Int,
     val monthlyPriceUsd: Double,
     val perks: List<String>
 ) {
-    FREE("FREE", "Free Fan", "", 0, 0.0, listOf("Public posts", "Comments & likes")),
-    BRONZE("BRONZE", "Bronze VIP", "🥉", 150, 4.99, listOf("Bronze VIP Badge", "Exclusive VIP feed posts", "Supporter recognition")),
-    SILVER("SILVER", "Silver VIP", "🥈", 350, 9.99, listOf("All Bronze perks", "Silver VIP Badge", "Priority DM replies", "Monthly creator Q&A")),
-    GOLD("GOLD", "Gold VIP", "🥇", 800, 24.99, listOf("All Silver perks", "Gold VIP Crown Badge", "1-on-1 direct audio call", "Early access to videos"));
+    FREE("FREE", "Free Fan", "", 0.0, listOf("Public posts", "Comments & likes")),
+    BRONZE("BRONZE", "Bronze VIP", "🥉", 4.99, listOf("Bronze VIP Badge", "Exclusive VIP feed posts", "Supporter recognition")),
+    SILVER("SILVER", "Silver VIP", "🥈", 9.99, listOf("All Bronze perks", "Silver VIP Badge", "Priority DM replies", "Monthly creator Q&A")),
+    GOLD("GOLD", "Gold VIP", "🥇", 24.99, listOf("All Silver perks", "Gold VIP Crown Badge", "1-on-1 direct audio call", "Early access to videos"));
+
+    val monthlyPriceEtb: Int
+        get() = kotlin.math.round(monthlyPriceUsd * ExchangeRateManager.nbeUsdToEtbRate).toInt()
 
     val perksSummary: String get() = perks.joinToString(" • ")
+
+    fun formattedMonthlyPrice(currency: PaymentCurrency = PaymentCurrency.USD): String =
+        if (currency == PaymentCurrency.USD) "$${String.format(java.util.Locale.US, "%.2f", monthlyPriceUsd)} USD"
+        else "${String.format(java.util.Locale.US, "%,d", monthlyPriceEtb)} ETB"
 
     companion object {
         fun fromCode(code: String): MembershipTier = values().find { it.code.equals(code, ignoreCase = true) } ?: FREE
@@ -120,7 +262,10 @@ data class Post(
     val videoUrl: String = "",
     val audioTrackTitle: String = "",
     val viewsCount: Int = 0,
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    val locationName: String = "",
+    val latitude: Double? = null,
+    val longitude: Double? = null
 ) {
     fun effectiveTags(): List<String> {
         if (tags.isNotEmpty()) return tags
@@ -195,6 +340,36 @@ data class Comment(
     val isAuthorVerified: Boolean = false
 )
 
+enum class UserGroupRole {
+    ADMIN,
+    MODERATOR,
+    MEMBER,
+    NON_MEMBER
+}
+
+data class GroupUiState(
+    val group: GroupItem,
+    val userRole: UserGroupRole = UserGroupRole.MEMBER,
+    val isPrivate: Boolean = false,
+    val memberAvatars: List<User> = emptyList(),
+    val selectedCategory: String? = null,
+    val selectedFeedFilter: String = "Most relevant",
+    val canPost: Boolean = true,
+    val posts: List<Post> = emptyList(),
+    val pendingApprovalsCount: Int = 3,
+    val reportedContentCount: Int = 1,
+    val potentialSpamCount: Int = 2,
+    val moderationAlertsCount: Int = 0
+) {
+    val canManage: Boolean
+        get() = userRole == UserGroupRole.ADMIN || userRole == UserGroupRole.MODERATOR
+
+    val isMember: Boolean
+        get() = userRole == UserGroupRole.ADMIN ||
+            userRole == UserGroupRole.MODERATOR ||
+            userRole == UserGroupRole.MEMBER
+}
+
 data class GroupItem(
     val id: String,
     val name: String,
@@ -202,7 +377,14 @@ data class GroupItem(
     val createdBy: String,
     val memberCount: Int = 1,
     val isJoined: Boolean = false,
-    val coverColorHex: String = "#B8863A"
+    val coverColorHex: String = "#B8863A",
+    val coverImageUrl: String = "",
+    val isPrivate: Boolean = false,
+    val allowMemberPosts: Boolean = true,
+    val pendingApprovalsCount: Int = 3,
+    val reportedContentCount: Int = 1,
+    val potentialSpamCount: Int = 2,
+    val moderationAlertsCount: Int = 0
 )
 
 data class AlbumItem(
@@ -440,9 +622,9 @@ data class ChapaGatewayConfig(
     val secretKey: String = "",
     val isLiveMode: Boolean = false,
     val merchantName: String = "Meskot Media & Creator Studio",
-    val defaultCurrency: String = "ETB",
+    val defaultCurrency: String = "USD",
     val isConnected: Boolean = true,
-    val supportedMethods: List<String> = listOf("Telebirr", "CBE Birr", "eBirr", "M-Pesa", "Cards")
+    val supportedMethods: List<String> = listOf("Cards (USD)", "PayPal (USD)", "Telebirr (ETB)", "CBE Birr (ETB)", "eBirr", "M-Pesa")
 )
 
 /**
@@ -556,6 +738,103 @@ data class UserEngagementData(
     val isServerSynced: Boolean = true,
     val lastUpdated: Long = System.currentTimeMillis()
 )
+
+// ========================================================================
+// FACEBOOK MARKETPLACE DATA MODELS & TYPE DEFINITIONS
+// ========================================================================
+
+data class MarketplaceLocation(
+    val latitude: Double = 9.0192,
+    val longitude: Double = 38.7525,
+    val name: String = "Ariena",
+    val radiusKm: Int = 65
+) {
+    val badgeLabel: String
+        get() = "$name · $radiusKm km"
+}
+
+data class Category(
+    val id: String = "",
+    val name: String = "",
+    val icon: String = "🏷️"
+)
+
+data class ListingItem(
+    val id: String = "",
+    val title: String = "",
+    val price: Double = 0.0,
+    val currency: String = "USD", // "USD" or "ETB"
+    val imageUrls: List<String> = emptyList(),
+    val categoryId: String = "vehicles",
+    val location: MarketplaceLocation = MarketplaceLocation(),
+    val distanceKm: Double = 4.2,
+    val sellerId: String = "",
+    val sellerName: String = "",
+    val sellerPhoto: String = "",
+    val sellerVerified: Boolean = false,
+    val description: String = "",
+    val condition: String = "Used - Like New",
+    val isAvailable: Boolean = true,
+    val isSaved: Boolean = false,
+    val viewsCount: Int = 0,
+    val createdAt: Long = System.currentTimeMillis()
+) {
+    val primaryImageUrl: String
+        get() = imageUrls.firstOrNull() ?: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800"
+
+    /**
+     * Formatted currency string matching Facebook Marketplace style
+     * (e.g., "ETB 150,000", "$800", "ETB 25,000")
+     */
+    val formattedPrice: String
+        get() {
+            return if (currency.equals("USD", ignoreCase = true)) {
+                if (price % 1.0 == 0.0) {
+                    "$${String.format(java.util.Locale.US, "%,d", price.toLong())}"
+                } else {
+                    "$${String.format(java.util.Locale.US, "%,.2f", price)}"
+                }
+            } else {
+                if (price % 1.0 == 0.0) {
+                    "ETB ${String.format(java.util.Locale.US, "%,d", price.toLong())}"
+                } else {
+                    "ETB ${String.format(java.util.Locale.US, "%,.2f", price)}"
+                }
+            }
+        }
+
+    /**
+     * Secondary currency conversion using the real daily market exchange rate of USD in National Bank of Ethiopia (NBE)
+     */
+    val secondaryPriceFormatted: String
+        get() {
+            val nbeRate = ExchangeRateManager.usdToEtbRate
+            return if (currency.equals("USD", ignoreCase = true)) {
+                val etb = price * nbeRate
+                "≈ ETB ${String.format(java.util.Locale.US, "%,.0f", etb)}"
+            } else {
+                val usd = price / nbeRate
+                "≈ $${String.format(java.util.Locale.US, "%,.2f", usd)}"
+            }
+        }
+}
+
+data class MarketplaceChatMessage(
+    val chatId: String = "",
+    val senderId: String = "",
+    val senderName: String = "",
+    val senderPhoto: String = "",
+    val receiverId: String = "",
+    val receiverName: String = "",
+    val receiverPhoto: String = "",
+    val itemId: String = "",
+    val itemTitle: String = "",
+    val itemPriceLabel: String = "",
+    val itemThumbUrl: String = "",
+    val messageText: String = "",
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 
 
 

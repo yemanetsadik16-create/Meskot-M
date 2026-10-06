@@ -39,7 +39,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.data.ExchangeRateManager
 import com.example.data.MeskotStrings
+import com.example.data.PaymentCurrency
 import com.example.data.User
 import com.example.data.VerificationStatus
 import com.example.ui.theme.CardBg
@@ -278,6 +280,7 @@ fun MetaVerifiedBottomSheetModal(
     val coroutineScope = rememberCoroutineScope()
     var isProcessing by remember { mutableStateOf(false) }
     var selectedPaymentMethod by remember { mutableStateOf("GOOGLE_PLAY") } // "GOOGLE_PLAY", "APPLE_IAP", "CHAPA"
+    var selectedCurrency by remember { mutableStateOf("USD") } // "USD" or "ETB"
     var showSuccessCelebration by remember { mutableStateOf(false) }
 
     val isAlreadyVerified = currentUser?.isVerified == true || currentUser?.verificationStatus == VerificationStatus.VERIFIED
@@ -516,15 +519,63 @@ fun MetaVerifiedBottomSheetModal(
 
                         // PAYMENT GATEWAY / STORE SELECTION
                         if (!isAlreadyVerified && !isPending) {
-                            Text(
-                                text = "Choose Billing Gateway",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White,
-                                modifier = Modifier.align(Alignment.Start)
-                            )
+                            val priceUsd = 14.99
+                            val nbeRate = ExchangeRateManager.usdToEtbRate
+                            val priceEtb = kotlin.math.round(priceUsd * nbeRate).toInt()
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "Choose Currency & Billing Gateway",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "1 USD = ${ExchangeRateManager.formattedRate()} ETB (NBE Daily Rate)",
+                                        fontSize = 10.sp,
+                                        color = GoldLight
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MetaDarkCard)
+                                        .padding(2.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    listOf("USD" to "🇺🇸 USD", "ETB" to "🇪🇹 ETB").forEach { (code, label) ->
+                                        val isCurSelected = selectedCurrency == code
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(if (isCurSelected) Gold else Color.Transparent)
+                                                .clickable { selectedCurrency = code }
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isCurSelected) InkDark else Color.LightGray
+                                            )
+                                        }
+                                    }
+                                }
+                            }
 
                             Spacer(modifier = Modifier.height(8.dp))
+
+                            val displayPriceSubtitle = if (selectedCurrency == "USD") {
+                                "$$priceUsd / mo (≈ $priceEtb ETB)"
+                            } else {
+                                "$priceEtb ETB / mo (≈ $$priceUsd)"
+                            }
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -532,23 +583,23 @@ fun MetaVerifiedBottomSheetModal(
                             ) {
                                 PaymentOptionCard(
                                     title = "Google Play",
-                                    subtitle = "$14.99 / mo",
+                                    subtitle = displayPriceSubtitle,
                                     isSelected = selectedPaymentMethod == "GOOGLE_PLAY",
                                     onClick = { selectedPaymentMethod = "GOOGLE_PLAY" },
                                     modifier = Modifier.weight(1f)
                                 )
 
                                 PaymentOptionCard(
-                                    title = "Apple / Web",
-                                    subtitle = "$14.99 / mo",
+                                    title = "Card / Web",
+                                    subtitle = displayPriceSubtitle,
                                     isSelected = selectedPaymentMethod == "APPLE_IAP",
                                     onClick = { selectedPaymentMethod = "APPLE_IAP" },
                                     modifier = Modifier.weight(1f)
                                 )
 
                                 PaymentOptionCard(
-                                    title = "Chapa / Birr",
-                                    subtitle = "499 ETB / mo",
+                                    title = "Chapa Pay",
+                                    subtitle = displayPriceSubtitle,
                                     isSelected = selectedPaymentMethod == "CHAPA",
                                     onClick = { selectedPaymentMethod = "CHAPA" },
                                     modifier = Modifier.weight(1f)
@@ -559,8 +610,9 @@ fun MetaVerifiedBottomSheetModal(
                         }
 
                         // LEGAL DISCLAIMERS
+                        val disclaimerEtb = kotlin.math.round(14.99 * ExchangeRateManager.usdToEtbRate).toInt()
                         Text(
-                            text = "Subscriptions renew automatically each month unless cancelled at least 24 hours prior to the renewal date. Government ID verification is required to complete enrollment. Cancel anytime in Google Play Store subscriptions or Account Settings.",
+                            text = "Subscriptions renew automatically each month unless cancelled at least 24 hours prior to the renewal date. Available in USD ($14.99/mo primary) and ETB ($disclaimerEtb ETB/mo secondary at NBE daily market rate: 1 USD = ${ExchangeRateManager.formattedRate()} ETB). Government ID verification is required to complete enrollment.",
                             fontSize = 11.sp,
                             color = MetaDarkSecondary,
                             textAlign = TextAlign.Center,
@@ -641,9 +693,11 @@ fun MetaVerifiedBottomSheetModal(
                                 )
                             }
                         } else {
-                            val buttonText = when (selectedPaymentMethod) {
-                                "CHAPA" -> "Subscribe for 499 ETB / month"
-                                else -> "Subscribe for $14.99 / month"
+                            val ctaEtb = kotlin.math.round(14.99 * ExchangeRateManager.usdToEtbRate).toInt()
+                            val buttonText = if (selectedCurrency == "USD") {
+                                "Subscribe for $14.99 USD / mo (≈ $ctaEtb ETB)"
+                            } else {
+                                "Subscribe for $ctaEtb ETB / mo ($14.99 USD)"
                             }
 
                             Button(

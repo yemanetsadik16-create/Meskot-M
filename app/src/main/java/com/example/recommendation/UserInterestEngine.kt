@@ -19,7 +19,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Advanced Recommendation & User Interest Analysis Engine for Meskot Global.
+ * Advanced Recommendation & User Interest Analysis Engine for Meskot.
  * Implements the system prompt, signal weighting rules, recency decay, confidence rating,
  * and Gemini 3.5 Flash REST API + On-device deterministic execution.
  */

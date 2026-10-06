@@ -13,11 +13,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -41,8 +47,10 @@ import com.example.ui.components.TipModal
 import com.example.ui.components.ChapaDepositModal
 import com.example.ui.components.ChapaPaymentModal
 import com.example.ui.components.MeskotLiveStreamModal
+import com.example.ui.components.MeskotSplashScreen
 import com.example.ui.components.TopNavBar
 import com.example.util.CallAudioManager
+import com.example.ui.screens.AdminDashboardScreen
 import com.example.ui.screens.AdminScreen
 import com.example.ui.screens.AdsManagerScreen
 import com.example.ui.screens.AlbumDetailScreen
@@ -50,6 +58,7 @@ import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.ChatScreen
 import com.example.ui.screens.CreatorDashboardScreen
 import com.example.ui.screens.DashboardScreen
+import com.example.ui.screens.MarketplaceScreen
 import com.example.ui.screens.FeedScreen
 import com.example.ui.screens.FriendsScreen
 import com.example.ui.screens.GroupDetailScreen
@@ -192,6 +201,14 @@ fun MeskotApp(viewModel: MeskotViewModel) {
         viewModel.navigateBack()
     }
 
+    // Facebook-style startup splash animation when Meskot opens
+    var showStartupSplash by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(2200L)
+        showStartupSplash = false
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     if (currentUser == null) {
         AuthScreen(
             viewModel = viewModel,
@@ -202,7 +219,7 @@ fun MeskotApp(viewModel: MeskotViewModel) {
             modifier = Modifier.fillMaxSize(),
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                if (currentTab != ScreenTab.PROFILE && currentTab != ScreenTab.CHAT && currentTab != ScreenTab.ADS_MANAGER && currentTab != ScreenTab.CREATOR_STUDIO) {
+                if (currentTab != ScreenTab.PROFILE && currentTab != ScreenTab.CHAT && currentTab != ScreenTab.ADS_MANAGER && currentTab != ScreenTab.CREATOR_STUDIO && currentTab != ScreenTab.GROUP_DETAIL && currentTab != ScreenTab.GROUP_ADMIN_DASHBOARD && currentTab != ScreenTab.MARKETPLACE) {
                     Column {
                         TopNavBar(
                             currentUser = currentUser,
@@ -297,6 +314,17 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                                 group = group,
                                 currentUser = currentUser,
                                 currentLanguage = currentLanguage
+                            )
+                        } ?: viewModel.navigateTo(ScreenTab.GROUPS)
+                    }
+
+                    ScreenTab.GROUP_ADMIN_DASHBOARD -> {
+                        viewingGroup?.let { group ->
+                            AdminDashboardScreen(
+                                viewModel = viewModel,
+                                group = group,
+                                currentLanguage = currentLanguage,
+                                onBack = { viewModel.navigateBack() }
                             )
                         } ?: viewModel.navigateTo(ScreenTab.GROUPS)
                     }
@@ -406,6 +434,13 @@ fun MeskotApp(viewModel: MeskotViewModel) {
 
                     ScreenTab.CREATOR_STUDIO -> {
                         CreatorDashboardScreen(
+                            viewModel = viewModel,
+                            onBack = { viewModel.navigateBack() }
+                        )
+                    }
+
+                    ScreenTab.MARKETPLACE -> {
+                        MarketplaceScreen(
                             viewModel = viewModel,
                             onBack = { viewModel.navigateBack() }
                         )
@@ -549,8 +584,16 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         currentUser = currentUser!!,
                         currentLanguage = currentLanguage,
                         onDismiss = { viewModel.closeComposer() },
-                        onSubmit = { text, media, bgIdx, vis ->
-                            viewModel.submitPost(text, media, bgIdx, vis)
+                        onSubmit = { text, media, bgIdx, vis, locName, lat, lng ->
+                            viewModel.submitPost(
+                                text = text,
+                                mediaUrls = media,
+                                bgColorIndex = bgIdx,
+                                visibility = vis,
+                                locationName = locName,
+                                latitude = lat,
+                                longitude = lng
+                            )
                         },
                         onOpenCreateReel = {
                             viewModel.openCreateReel()
@@ -565,13 +608,16 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                             currentLanguage = currentLanguage,
                             editingPost = postToEdit,
                             onDismiss = { viewModel.cancelEditingPost() },
-                            onSubmit = { text, media, bgIdx, vis ->
+                            onSubmit = { text, media, bgIdx, vis, locName, lat, lng ->
                                 viewModel.savePostEdit(
                                     postId = postToEdit.id,
                                     newText = text,
                                     newMediaUrls = media,
                                     newBgColorIndex = bgIdx,
-                                    newVisibility = vis
+                                    newVisibility = vis,
+                                    newLocationName = locName,
+                                    newLatitude = lat,
+                                    newLongitude = lng
                                 )
                             }
                         )
@@ -635,7 +681,7 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         userBalance = currentUser?.creatorNetBalance ?: 0.0,
                         userStarBalance = currentUser?.starBalance ?: 0,
                         onDismiss = { viewModel.closeTipModal() },
-                        onConfirmTip = { amount, payFromBalance -> viewModel.confirmTip(amount, payFromBalance) },
+                        onConfirmTip = { amount, payFromBalance, currencyCode -> viewModel.confirmTip(amount, payFromBalance, currencyCode) },
                         onSendStars = { count, gift -> viewModel.sendStars(post.id, count, gift) },
                         onDepositClick = {
                             viewModel.closeTipModal()
@@ -665,8 +711,8 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         config = chapaConfig,
                         currentLanguage = currentLanguage,
                         onDismiss = { viewModel.closeChapaDeposit() },
-                        onProceed = { amount ->
-                            viewModel.depositViaChapa(amount)
+                        onProceed = { amount, currencyCode ->
+                            viewModel.depositViaChapa(amount, currencyCode)
                         }
                     )
                 }
@@ -677,8 +723,8 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         currentLanguage = currentLanguage,
                         currentUser = currentUser,
                         onDismiss = { viewModel.closeSubscriptionModal() },
-                        onSubscribe = { tier ->
-                            viewModel.subscribeToTier(creator.uid, tier)
+                        onSubscribe = { tier, currencyCode ->
+                            viewModel.subscribeToTier(creator.uid, tier, currencyCode)
                             viewModel.closeSubscriptionModal()
                         }
                     )
@@ -692,6 +738,7 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         email = session.email,
                         firstName = session.firstName,
                         lastName = session.lastName,
+                        initialCurrency = session.initialCurrency,
                         publicKey = session.publicKey,
                         isLiveMode = session.isLiveMode,
                         onDismiss = { viewModel.closeChapaPayment() },
@@ -792,5 +839,14 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                 }
             }
         }
+    }
+
+    AnimatedVisibility(
+        visible = showStartupSplash,
+        enter = fadeIn(animationSpec = tween(150)),
+        exit = fadeOut(animationSpec = tween(420))
+    ) {
+        MeskotSplashScreen()
+    }
     }
 }

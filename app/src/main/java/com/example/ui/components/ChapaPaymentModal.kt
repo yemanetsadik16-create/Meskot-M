@@ -8,6 +8,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.data.ExchangeRateManager
 import com.example.ui.theme.Gold
 import com.example.ui.theme.GoldDeep
 import com.example.ui.theme.Ink
@@ -72,7 +74,7 @@ class ChapaAndroidBridge(
 /**
  * Full-screen modal integrating the official Chapa Inline Checkout into Meskot.
  * Powered by public key CHAPUBK_TEST-1PW1FKvNMh2tx4k5hHPibEZA4A6GPpRc and supports
- * Telebirr, CBE Birr, eBirr, M-Pesa, and Cards.
+ * International USD Cards, PayPal, Telebirr, CBE Birr, eBirr, and M-Pesa.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -83,16 +85,38 @@ fun ChapaPaymentModal(
     email: String,
     firstName: String,
     lastName: String,
+    initialCurrency: String = "USD",
     publicKey: String = "CHAPUBK_TEST-1PW1FKvNMh2tx4k5hHPibEZA4A6GPpRc",
     isLiveMode: Boolean = false,
     onDismiss: () -> Unit,
     onPaymentSuccess: (txRef: String) -> Unit
 ) {
     var isLoading by remember { mutableStateOf(true) }
+    var selectedCurrency by remember(initialCurrency) {
+        mutableStateOf(if (initialCurrency.equals("ETB", ignoreCase = true)) "ETB" else "USD")
+    }
 
-    val formattedAmount = if (amount % 1.0 == 0.0) amount.toInt().toString() else "%.2f".format(amount)
+    val nbeRate = ExchangeRateManager.nbeUsdToEtbRate
+    val formattedRate = String.format(java.util.Locale.US, "%,.2f", nbeRate)
 
-    val htmlContent = remember(amount, txRef, email, firstName, lastName, publicKey) {
+    // `amount` is stored as the canonical ETB amount, compute both USD (primary) and ETB (secondary)
+    val amountEtb = amount
+    val amountUsd = (amountEtb / nbeRate).coerceAtLeast(0.50)
+
+    val displayAmount = if (selectedCurrency == "USD") {
+        String.format(java.util.Locale.US, "%.2f", amountUsd)
+    } else {
+        if (amountEtb % 1.0 == 0.0) amountEtb.toInt().toString() else String.format(java.util.Locale.US, "%.2f", amountEtb)
+    }
+
+    val secondaryEquivalentText = if (selectedCurrency == "USD") {
+        val etbStr = if (amountEtb % 1.0 == 0.0) String.format(java.util.Locale.US, "%,d", amountEtb.toLong()) else String.format(java.util.Locale.US, "%,.2f", amountEtb)
+        "Secondary: ~$etbStr ETB (NBE Rate: 1 USD = $formattedRate ETB)"
+    } else {
+        "Primary Equivalent: ~$${String.format(java.util.Locale.US, "%.2f", amountUsd)} USD (NBE Rate: 1 USD = $formattedRate ETB)"
+    }
+
+    val htmlContent = remember(amountEtb, selectedCurrency, nbeRate, txRef, email, firstName, lastName, publicKey) {
         """
         <!DOCTYPE html>
         <html>
@@ -127,6 +151,32 @@ fun ChapaPaymentModal(
               font-weight: 700;
               text-transform: uppercase;
               letter-spacing: 0.5px;
+            }
+            .currency-toggle {
+              display: flex;
+              justify-content: center;
+              gap: 8px;
+              margin: 0 auto 12px auto;
+              max-width: 260px;
+              background: #F1F5F9;
+              padding: 4px;
+              border-radius: 10px;
+            }
+            .curr-btn {
+              flex: 1;
+              border: none;
+              padding: 7px 10px;
+              border-radius: 7px;
+              font-size: 12px;
+              font-weight: 700;
+              cursor: pointer;
+              background: transparent;
+              color: #64748B;
+            }
+            .curr-btn.active {
+              background: #FFFFFF;
+              color: #1B2A22;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             }
             .amount-card {
               background: #FDFBF7;
@@ -213,40 +263,41 @@ fun ChapaPaymentModal(
         </head>
         <body>
           <div class="header">
-            <h1>Meskot Global</h1>
-            <div class="badge-tag">Chapa Global & Visa Card Checkout</div>
+            <h1>Meskot</h1>
+            <div class="badge-tag">USD Primary · ETB Secondary · NBE Daily Market Rate</div>
           </div>
 
           <div class="amount-card">
-            <div class="val">$formattedAmount ETB</div>
-            <div class="lbl">$title · Approx. $${String.format(java.util.Locale.US, "%.2f", amount / 125.0)} USD</div>
+            <div class="val">${if (selectedCurrency == "USD") "$$displayAmount USD" else "$displayAmount ETB"}</div>
+            <div class="lbl">$title · $secondaryEquivalentText</div>
             <div class="methods-row">
-              <span class="method-chip" style="background:#1A1F71; color:white; font-weight:bold; border-color:#1A1F71;">💳 VISA</span>
+              <span class="method-chip" style="background:#1A1F71; color:white; font-weight:bold; border-color:#1A1F71;">💳 VISA (USD/ETB)</span>
               <span class="method-chip" style="background:#EB001B; color:white; font-weight:bold; border-color:#EB001B;">💳 Mastercard</span>
-              <span class="method-chip">📱 Telebirr</span>
-              <span class="method-chip">🏦 CBE Birr</span>
+              <span class="method-chip">📱 Telebirr (ETB)</span>
+              <span class="method-chip">🏦 CBE Birr (ETB)</span>
               <span class="method-chip">💳 eBirr</span>
               <span class="method-chip">⚡ M-Pesa</span>
             </div>
           </div>
 
           <div style="background:#EEF2FF; border:1px solid #C7D2FE; border-radius:8px; padding:10px; margin-bottom:12px; font-size:12px; color:#3730A3;">
-            🌍 <strong>Meskot Global Diaspora:</strong> Worldwide Visa & Mastercard cards are accepted in ETB equivalent. Card transactions are encrypted via Chapa 3D-Secure.
+            🏦 <strong>National Bank of Ethiopia (NBE) Daily Rate:</strong> 1 USD = <strong>$formattedRate ETB</strong>. Pay in <strong>USD ($)</strong> as primary currency or switch to <strong>ETB (Birr)</strong> as a secondary option.
           </div>
 
           <div id="chapa-inline-form"></div>
 
           <div class="fallback-container">
-            <div class="fallback-title">Completed via Visa Card or Mobile Money?</div>
-            <button class="btn-confirm-payment" onclick="notifySuccess('$txRef')">I Have Sent Payment (Verify)</button>
+            <div class="fallback-title">Completed via USD Card or ETB Mobile Money?</div>
+            <button class="btn-confirm-payment" onclick="notifySuccess('$txRef')">I Have Sent Payment (${if (selectedCurrency == "USD") "$$displayAmount USD" else "$displayAmount ETB"})</button>
           </div>
 
           <div class="security-foot">
-            🔒 256-Bit SSL Encrypted · Verified by Visa · Authorized by National Bank of Ethiopia
+            🔒 256-Bit SSL Encrypted · USD Primary & ETB Secondary · National Bank of Ethiopia Daily Rate ($formattedRate ETB/USD)
           </div>
 
           <script>
-            const amount = '$formattedAmount';
+            const amount = '$displayAmount';
+            const currency = '$selectedCurrency';
             const tx_ref = '$txRef';
             const email = '$email';
             const first_name = '$firstName';
@@ -272,14 +323,14 @@ fun ChapaPaymentModal(
               const chapa = new ChapaCheckout({
                 publicKey: '$publicKey',
                 amount: amount,
-                currency: 'ETB',
+                currency: currency,
                 tx_ref: tx_ref,
                 email: email,
                 first_name: first_name,
                 last_name: last_name,
                 availablePaymentMethods: ['card', 'visa', 'mastercard', 'telebirr', 'cbebirr', 'ebirr', 'mpesa', 'chapa'],
                 customizations: {
-                  buttonText: 'Pay ' + amount + ' ETB Now',
+                  buttonText: 'Pay ' + (currency === 'USD' ? ('$' + amount + ' USD') : (amount + ' ETB')) + ' Now',
                   styles: `
                     .chapa-pay-button {
                       background-color: #4CAF50;
@@ -337,7 +388,7 @@ fun ChapaPaymentModal(
                         Column {
                           Row(verticalAlignment = Alignment.CenterVertically) {
                               Text(
-                                  text = if (isLiveMode) "Meskot Global Live Pay" else "Meskot Global Pay",
+                                  text = if (isLiveMode) "Meskot Live Pay" else "Meskot Pay",
                                   fontSize = 17.sp,
                                   fontWeight = FontWeight.Bold,
                                   color = Ink
@@ -350,7 +401,7 @@ fun ChapaPaymentModal(
                                       .padding(horizontal = 6.dp, vertical = 2.dp)
                               ) {
                                   Text(
-                                      text = if (isLiveMode) "VISA & ETB" else "VISA / ETB GATEWAY",
+                                      text = if (isLiveMode) "USD & ETB" else "USD / ETB GATEWAY",
                                       fontSize = 9.sp,
                                       fontWeight = FontWeight.ExtraBold,
                                       color = if (isLiveMode) Color(0xFF2E7D32) else Color(0xFFB45309)
@@ -366,7 +417,7 @@ fun ChapaPaymentModal(
                               )
                               Spacer(modifier = Modifier.width(3.dp))
                               Text(
-                                  text = if (isLiveMode) "Visa Card & Mobile · 256-Bit SSL" else "Visa · Telebirr · CBE Birr · 256-Bit SSL",
+                                  text = "NBE Daily Rate: 1 USD = $formattedRate ETB",
                                   fontSize = 11.sp,
                                   color = if (isLiveMode) Color(0xFF2E7D32) else MutedText
                               )
@@ -374,18 +425,51 @@ fun ChapaPaymentModal(
                         }
                     }
 
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(Color(0xFFF1F5F9), CircleShape)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = Ink,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        // Interactive Currency Switcher (USD Primary / ETB Secondary)
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFF1F5F9))
+                                .padding(3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            listOf("USD" to "🇺🇸 USD", "ETB" to "🇪🇹 ETB").forEach { (code, label) ->
+                                val isSel = selectedCurrency == code
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (isSel) GoldDeep else Color.Transparent)
+                                        .clickable { selectedCurrency = code }
+                                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSel) Color.White else Ink
+                                    )
+                                }
+                            }
+                        }
+
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(Color(0xFFF1F5F9), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = Ink,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
 

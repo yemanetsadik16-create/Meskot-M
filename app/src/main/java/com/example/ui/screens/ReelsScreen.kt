@@ -382,7 +382,7 @@ fun ReelsScreen(
                                     action = android.content.Intent.ACTION_SEND
                                     putExtra(
                                         android.content.Intent.EXTRA_TEXT,
-                                        "Watch ${liveReel.authorName}'s reel on Meskot Global: ${liveReel.text.ifBlank { liveReel.audioTrackTitle }}"
+                                        "Watch ${liveReel.authorName}'s reel on Meskot: ${liveReel.text.ifBlank { liveReel.audioTrackTitle }}"
                                     )
                                     type = "text/plain"
                                 }

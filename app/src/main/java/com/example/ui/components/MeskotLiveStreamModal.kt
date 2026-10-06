@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.data.ExchangeRateManager
 import com.example.data.LiveStreamComment
 import com.example.data.LiveStreamSession
 import com.example.data.User
@@ -102,7 +103,8 @@ fun buildLiveGiftsHtml(
     viewerCount: String = "52.4k Viewers",
     streamTitle: String = "Meskot Live",
     isHost: Boolean = false,
-    likesCount: Int = 0
+    likesCount: Int = 0,
+    nbeUsdToEtbRate: Double = ExchangeRateManager.usdToEtbRate
 ): String {
     val escapedUserName = userName.replace("'", "\\'").replace("\"", "\\\"")
     val escapedStreamerName = streamerName.replace("'", "\\'").replace("\"", "\\\"")
@@ -1212,7 +1214,14 @@ fun buildLiveGiftsHtml(
             <span id="deposit-current-balance">$initialCoins 🪙</span>
           </div>
 
-          <div class="section-label">Choose a package</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; margin-bottom:2px;">
+            <div class="section-label" style="margin:0;">Choose a package</div>
+            <div style="display:flex; gap:4px; background:rgba(255,255,255,0.08); padding:2px; border-radius:8px; border:1px solid rgba(254,209,0,0.25);">
+              <button id="live-cur-usd" type="button" onclick="setLiveCurrency('USD')" style="border:none; border-radius:6px; padding:4px 9px; font-size:10px; font-weight:800; cursor:pointer; background:#fed100; color:#0d1310;">🇺🇸 USD</button>
+              <button id="live-cur-etb" type="button" onclick="setLiveCurrency('ETB')" style="border:none; border-radius:6px; padding:4px 9px; font-size:10px; font-weight:800; cursor:pointer; background:transparent; color:#ccc;">🇪🇹 ETB</button>
+            </div>
+          </div>
+          <div style="font-size:9.5px; color:#fed100; margin-bottom:6px; font-weight:600;">1 USD = ${String.format(java.util.Locale.US, "%.2f", nbeUsdToEtbRate)} ETB (National Bank of Ethiopia Daily Rate)</div>
           <div class="package-grid" id="package-grid"></div>
 
           <div class="section-label">Payment method</div>
@@ -1658,39 +1667,83 @@ fun buildLiveGiftsHtml(
 
     renderGifts('all');
 
+    const NBE_USD_TO_ETB = $nbeUsdToEtbRate;
     const COIN_PACKAGES = [
-      { id: 'p1', coins: 1000, price: '130 ETB', amountETB: 130 },
-      { id: 'p2', coins: 5000, price: '580 ETB', bonus: '+5% bonus', amountETB: 580 },
-      { id: 'p3', coins: 12000, price: '1,290 ETB', bonus: '+10% bonus', amountETB: 1290 },
-      { id: 'p4', coins: 30000, price: '2,970 ETB', bonus: '+15% bonus', tag: 'POPULAR', amountETB: 2970 },
-      { id: 'p5', coins: 65000, price: '5,810 ETB', bonus: '+20% bonus', amountETB: 5810 },
-      { id: 'p6', coins: 150000, price: '11,620 ETB', bonus: '+25% bonus', tag: 'BEST VALUE', amountETB: 11620 }
-    ];
+      { id: 'p1', coins: 1000, amountUSD: 0.99 },
+      { id: 'p2', coins: 5000, amountUSD: 4.49, bonus: '+5% bonus' },
+      { id: 'p3', coins: 12000, amountUSD: 9.99, bonus: '+10% bonus' },
+      { id: 'p4', coins: 30000, amountUSD: 23.99, bonus: '+15% bonus', tag: 'POPULAR' },
+      { id: 'p5', coins: 65000, amountUSD: 46.99, bonus: '+20% bonus' },
+      { id: 'p6', coins: 150000, amountUSD: 94.99, bonus: '+25% bonus', tag: 'BEST VALUE' }
+    ].map(pkg => {
+      const etb = Math.round(pkg.amountUSD * NBE_USD_TO_ETB);
+      return {
+        ...pkg,
+        amountETB: etb,
+        price: etb.toLocaleString() + ' ETB',
+        priceUSD: '$' + pkg.amountUSD.toFixed(2) + ' USD'
+      };
+    });
 
     const CHAPA_PUBLIC_KEY = 'CHAPUBK_TEST-1PW1FKvNMh2tx4k5hHPibEZA4A6GPpRc';
 
     const PAYMENT_METHODS = [
       { id: 'chapa', name: 'Telebirr/CBE', icon: '📱', fields: 'fields-chapa' },
-      { id: 'card', name: 'Card', icon: '💳', fields: 'fields-card' },
-      { id: 'paypal', name: 'PayPal', icon: '🅿️', fields: 'fields-paypal' },
+      { id: 'card', name: 'Card (USD/ETB)', icon: '💳', fields: 'fields-card' },
+      { id: 'paypal', name: 'PayPal (USD)', icon: '🅿️', fields: 'fields-paypal' },
       { id: 'bank', name: 'Bank Transfer', icon: '🏛️', fields: 'fields-bank' }
     ];
 
     let selectedPackage = null;
     let selectedMethod = null;
+    let liveCurrency = 'USD';
+
+    function getPkgPriceLabel(pkg) {
+      return liveCurrency === 'USD' ? pkg.priceUSD : pkg.price;
+    }
+
+    function setLiveCurrency(cur) {
+      liveCurrency = cur;
+      const btnEtb = document.getElementById('live-cur-etb');
+      const btnUsd = document.getElementById('live-cur-usd');
+      if (btnEtb && btnUsd) {
+        if (cur === 'ETB') {
+          btnEtb.style.background = '#fed100';
+          btnEtb.style.color = '#0d1310';
+          btnUsd.style.background = 'transparent';
+          btnUsd.style.color = '#ccc';
+        } else {
+          btnUsd.style.background = '#fed100';
+          btnUsd.style.color = '#0d1310';
+          btnEtb.style.background = 'transparent';
+          btnEtb.style.color = '#ccc';
+        }
+      }
+      renderPackages();
+      if (selectedPackage) {
+        document.querySelectorAll('.package-card').forEach(el => {
+          el.classList.toggle('selected', el.dataset.id === selectedPackage.id);
+        });
+      }
+      updateConfirmButton();
+      if (selectedMethod && selectedMethod.id === 'chapa') renderChapaWidget();
+    }
 
     function renderPackages() {
       const grid = document.getElementById('package-grid');
       grid.innerHTML = '';
       COIN_PACKAGES.forEach(pkg => {
         const card = document.createElement('div');
-        card.className = 'package-card';
+        card.className = 'package-card' + (selectedPackage && selectedPackage.id === pkg.id ? ' selected' : '');
         card.dataset.id = pkg.id;
         card.onclick = () => selectPackage(pkg.id);
+        const primaryPrice = getPkgPriceLabel(pkg);
+        const secondaryPrice = liveCurrency === 'USD' ? pkg.price : pkg.priceUSD;
         card.innerHTML = `
           ${'$'}{pkg.tag ? `<div class="package-badge">${'$'}{pkg.tag}</div>` : ''}
           <div class="package-coins">${'$'}{pkg.coins.toLocaleString()} 🪙</div>
-          <div class="package-price">${'$'}{pkg.price}</div>
+          <div class="package-price">${'$'}{primaryPrice}</div>
+          <div style="font-size:8.5px; color:#8fa898;">≈ ${'$'}{secondaryPrice}</div>
           ${'$'}{pkg.bonus ? `<div class="package-bonus">${'$'}{pkg.bonus}</div>` : ''}
         `;
         grid.appendChild(card);
@@ -1746,7 +1799,7 @@ fun buildLiveGiftsHtml(
       } else {
         btn.disabled = false;
         btn.style.display = 'block';
-        btn.innerText = `Deposit ${'$'}{selectedPackage.coins.toLocaleString()} 🪙 for ${'$'}{selectedPackage.price}`;
+        btn.innerText = `Deposit ${'$'}{selectedPackage.coins.toLocaleString()} 🪙 for ${'$'}{getPkgPriceLabel(selectedPackage)}`;
       }
     }
 
@@ -1755,8 +1808,11 @@ fun buildLiveGiftsHtml(
       if (!container || !selectedPackage) return;
       container.innerHTML = '';
 
+      const payAmt = liveCurrency === 'USD' ? selectedPackage.amountUSD.toFixed(2) : String(selectedPackage.amountETB);
+      const payLabel = getPkgPriceLabel(selectedPackage);
+
       if (typeof ChapaCheckout === 'undefined') {
-        container.innerHTML = '<div class="phone-hint">Chapa checkout ready for ETB deposit.</div>';
+        container.innerHTML = `<div class="phone-hint">Chapa checkout ready for ${'$'}{payLabel} deposit.</div>`;
         return;
       }
 
@@ -1764,15 +1820,15 @@ fun buildLiveGiftsHtml(
       try {
         const chapa = new ChapaCheckout({
           publicKey: CHAPA_PUBLIC_KEY,
-          amount: String(selectedPackage.amountETB),
-          currency: 'ETB',
+          amount: payAmt,
+          currency: liveCurrency,
           tx_ref: txRef,
           email: 'customer@meskot.et',
           first_name: currentUserName,
           last_name: 'Habesha',
           availablePaymentMethods: ['telebirr', 'cbebirr', 'ebirr', 'mpesa', 'chapa'],
           customizations: {
-            buttonText: `Pay ${'$'}{selectedPackage.amountETB} ETB with Chapa`,
+            buttonText: `Pay ${'$'}{payLabel} with Chapa`,
             styles: `
               .chapa-pay-button {
                 background-color: #fed100;
@@ -1844,7 +1900,7 @@ fun buildLiveGiftsHtml(
       document.getElementById('deposit-form-view').style.display = 'none';
       document.getElementById('deposit-processing').classList.remove('active');
       document.getElementById('deposit-success-amount').innerText =
-        `${'$'}{coinsAdded.toLocaleString()} 🪙 added • ${'$'}{selectedPackage.price}`;
+        `${'$'}{coinsAdded.toLocaleString()} 🪙 added • ${'$'}{getPkgPriceLabel(selectedPackage)}`;
       document.getElementById('deposit-success').classList.add('active');
     }
 
@@ -1896,7 +1952,8 @@ fun MeskotLiveStreamModal(
     val streamTitle = liveSession?.title ?: "Meskot Live Stream"
     val likesCount = liveSession?.likesCount ?: 0
 
-    val htmlContent = remember(initialCoins, userName, streamerName, isHost) {
+    val nbeRate = ExchangeRateManager.usdToEtbRate
+    val htmlContent = remember(initialCoins, userName, streamerName, isHost, nbeRate) {
         buildLiveGiftsHtml(
             initialCoins = initialCoins,
             userName = userName,
@@ -1904,7 +1961,8 @@ fun MeskotLiveStreamModal(
             viewerCount = viewerCount,
             streamTitle = streamTitle,
             isHost = isHost,
-            likesCount = likesCount
+            likesCount = likesCount,
+            nbeUsdToEtbRate = nbeRate
         )
     }
 

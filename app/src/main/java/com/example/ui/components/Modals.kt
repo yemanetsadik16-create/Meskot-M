@@ -29,10 +29,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.VideoCameraBack
 import androidx.compose.material.icons.filled.Close
+import com.example.util.LocationHelper
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -62,6 +64,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.example.data.MembershipTier
 import com.example.data.ChapaGatewayConfig
+import com.example.data.ExchangeRateManager
+import com.example.data.PaymentCurrency
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -101,7 +105,7 @@ fun ComposerDialog(
     currentUser: User,
     currentLanguage: AppLanguage,
     onDismiss: () -> Unit,
-    onSubmit: (text: String, mediaUrls: List<String>, bgColorIndex: Int, visibility: String) -> Unit,
+    onSubmit: (text: String, mediaUrls: List<String>, bgColorIndex: Int, visibility: String, locationName: String, latitude: Double?, longitude: Double?) -> Unit,
     onOpenCreateReel: (() -> Unit)? = null,
     editingPost: Post? = null
 ) {
@@ -114,6 +118,10 @@ fun ComposerDialog(
     var selectedMediaUrls by remember(editingPost?.id) { mutableStateOf<List<String>>(editingPost?.mediaUrls ?: emptyList()) }
     var showUrlDialog by remember { mutableStateOf(false) }
     var customUrlInput by remember { mutableStateOf("") }
+    var selectedLocationName by remember(editingPost?.id) { mutableStateOf(editingPost?.locationName ?: "") }
+    var selectedLatitude by remember(editingPost?.id) { mutableStateOf(editingPost?.latitude) }
+    var selectedLongitude by remember(editingPost?.id) { mutableStateOf(editingPost?.longitude) }
+    var showLocationPicker by remember { mutableStateOf(false) }
 
     // Multi-photo picker from device gallery
     val pickMultipleMediaLauncher = rememberLauncherForActivityResult(
@@ -187,7 +195,15 @@ fun ComposerDialog(
                     Button(
                         onClick = {
                             if (canSubmit) {
-                                onSubmit(text, selectedMediaUrls, selectedBgIndex, selectedVisibility)
+                                onSubmit(
+                                    text,
+                                    selectedMediaUrls,
+                                    selectedBgIndex,
+                                    selectedVisibility,
+                                    selectedLocationName,
+                                    selectedLatitude,
+                                    selectedLongitude
+                                )
                             }
                         },
                         enabled = canSubmit,
@@ -204,15 +220,31 @@ fun ComposerDialog(
 
                 HorizontalDivider(color = LineBorder, modifier = Modifier.padding(vertical = 8.dp))
 
-                // Author & Privacy Selector
+                // Author & Privacy Selector + Facebook-Style Location Check-In Tag
                 Row(
                     modifier = Modifier.padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     UserAvatar(photoUrl = currentUser.photoUrl, name = currentUser.displayName, size = 48)
                     Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(text = currentUser.displayName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ink)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = currentUser.displayName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ink)
+                            if (selectedLocationName.isNotBlank()) {
+                                Text(
+                                    text = " is in ",
+                                    fontSize = 14.sp,
+                                    color = MutedText
+                                )
+                                Text(
+                                    text = "📍 $selectedLocationName",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1877F2),
+                                    modifier = Modifier.clickable { showLocationPicker = true }
+                                )
+                            }
+                        }
 
                         Box {
                             Row(
@@ -497,6 +529,40 @@ fun ComposerDialog(
                         }
                     }
 
+                    // Add Location / Check-In (Facebook-style Google Maps Check-In)
+                    Surface(
+                        onClick = { showLocationPicker = true },
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (selectedLocationName.isNotBlank()) Color(0xFFE7F3FF) else Paper2,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (selectedLocationName.isNotBlank()) Color(0xFF1877F2) else LineBorder
+                        ),
+                        modifier = Modifier
+                            .weight(1.1f)
+                            .testTag("composer_location_btn")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = "Check In Location",
+                                tint = Color(0xFFE41E3F),
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = if (selectedLocationName.isNotBlank()) "Pinned" else "Check in",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (selectedLocationName.isNotBlank()) Color(0xFF1877F2) else Ink
+                            )
+                        }
+                    }
+
                     // Post a Reel Shortcut
                     if (onOpenCreateReel != null) {
                         Surface(
@@ -566,6 +632,23 @@ fun ComposerDialog(
                 }
             }
         }
+    }
+
+    if (showLocationPicker) {
+        RealLocationPickerDialog(
+            title = "Check In · Search Places",
+            initialPlaceName = selectedLocationName,
+            initialLatitude = selectedLatitude ?: 9.0192,
+            initialLongitude = selectedLongitude ?: 38.7525,
+            showRadiusSlider = false,
+            onDismiss = { showLocationPicker = false },
+            onLocationSelected = { place, _ ->
+                selectedLocationName = place.name
+                selectedLatitude = place.latitude
+                selectedLongitude = place.longitude
+                showLocationPicker = false
+            }
+        )
     }
 
     if (showUrlDialog) {
@@ -746,22 +829,93 @@ private fun MenuOptionItem(
 }
 
 @Composable
+fun PaymentCurrencySelectorBar(
+    selectedCurrency: PaymentCurrency,
+    onCurrencySelected: (PaymentCurrency) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val nbeRate = ExchangeRateManager.nbeUsdToEtbRate
+    val formattedRate = String.format(java.util.Locale.US, "%,.2f", nbeRate)
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFFF1F5F9))
+                .border(1.dp, LineBorder, RoundedCornerShape(10.dp))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            PaymentCurrency.values().forEach { currency ->
+                val isSelected = selectedCurrency == currency
+                val roleBadge = if (currency == PaymentCurrency.USD) "Primary" else "Secondary"
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) GoldDeep else Color.Transparent)
+                        .clickable { onCurrencySelected(currency) }
+                        .padding(vertical = 7.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "${currency.flag} ${currency.label} · $roleBadge",
+                        fontSize = 11.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                        color = if (isSelected) Color.White else Ink
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "🏦 National Bank of Ethiopia (NBE) Daily Market Rate:",
+                fontSize = 10.sp,
+                color = MutedText,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = "1 USD = $formattedRate ETB",
+                fontSize = 10.5.sp,
+                color = GoldDeep,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
 fun TipModal(
     post: Post,
     currentLanguage: AppLanguage,
     userBalance: Double = 0.0,
     userStarBalance: Int = 1250,
     onDismiss: () -> Unit,
-    onConfirmTip: (amount: Double, payFromBalance: Boolean) -> Unit,
+    onConfirmTip: (amount: Double, payFromBalance: Boolean, currencyCode: String) -> Unit,
     onSendStars: (starCount: Int, giftName: String) -> Unit = { _, _ -> },
     onDepositClick: () -> Unit = {}
 ) {
+    val nbeRate = ExchangeRateManager.nbeUsdToEtbRate
     var isStarsTab by remember { mutableStateOf(false) }
-    var selectedAmount by remember { mutableStateOf(25.0) }
+    var selectedCurrency by remember { mutableStateOf(PaymentCurrency.USD) }
+    var selectedAmountEtb by remember { mutableStateOf(2.0 * nbeRate) }
     var customAmountText by remember { mutableStateOf("") }
 
-    val presetAmounts = listOf(10.0, 25.0, 50.0, 100.0)
-    val hasEnoughBalance = userBalance >= selectedAmount
+    val presetEtbAmounts = if (selectedCurrency == PaymentCurrency.USD) {
+        listOf(1.0 * nbeRate, 2.0 * nbeRate, 5.0 * nbeRate, 10.0 * nbeRate) // $1, $2, $5, $10 USD
+    } else {
+        listOf(50.0, 100.0, 250.0, 500.0)
+    }
+    val hasEnoughBalance = userBalance >= selectedAmountEtb
 
     val virtualGifts = listOf(
         Triple("☕ Coffee Cheer", 50, "☕"),
@@ -797,7 +951,7 @@ fun TipModal(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "💰 Chapa Tip (Birr)",
+                            text = "💰 Tip (USD / ETB)",
                             fontSize = 12.sp,
                             fontWeight = if (!isStarsTab) FontWeight.Bold else FontWeight.Medium,
                             color = if (!isStarsTab) GoldDeep else MutedText
@@ -822,7 +976,7 @@ fun TipModal(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 if (!isStarsTab) {
                     Text(
@@ -837,16 +991,27 @@ fun TipModal(
                         text = MeskotStrings.get("supportSub", currentLanguage),
                         fontSize = 12.sp,
                         color = MutedText,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                        modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
                     )
+
+                    PaymentCurrencySelectorBar(
+                        selectedCurrency = selectedCurrency,
+                        onCurrencySelected = { newCurr ->
+                            selectedCurrency = newCurr
+                            customAmountText = ""
+                            selectedAmountEtb = if (newCurr == PaymentCurrency.USD) 2.0 * nbeRate else 100.0
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     // Amount Chips
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        presetAmounts.forEach { amount ->
-                            val isSelected = selectedAmount == amount && customAmountText.isEmpty()
+                        presetEtbAmounts.forEach { etbAmt ->
+                            val isSelected = kotlin.math.abs(selectedAmountEtb - etbAmt) < 0.01 && customAmountText.isEmpty()
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -854,14 +1019,18 @@ fun TipModal(
                                     .background(if (isSelected) Gold else Paper2)
                                     .border(1.dp, if (isSelected) GoldDeep else LineBorder, RoundedCornerShape(10.dp))
                                     .clickable {
-                                        selectedAmount = amount
+                                        selectedAmountEtb = etbAmt
                                         customAmountText = ""
                                     }
                                     .padding(vertical = 10.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "${amount.toInt()} ETB",
+                                    text = if (selectedCurrency == PaymentCurrency.USD) {
+                                        "$${kotlin.math.round(etbAmt / nbeRate).toInt()} USD"
+                                    } else {
+                                        "${etbAmt.toInt()} ETB"
+                                    },
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     color = if (isSelected) Color.White else Ink
@@ -870,24 +1039,26 @@ fun TipModal(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     OutlinedTextField(
                         value = customAmountText,
                         onValueChange = {
                             customAmountText = it
                             val parsed = it.toDoubleOrNull()
-                            if (parsed != null && parsed > 0) selectedAmount = parsed
+                            if (parsed != null && parsed > 0) {
+                                selectedAmountEtb = selectedCurrency.toEtb(parsed)
+                            }
                         },
-                        label = { Text(MeskotStrings.get("customAmount", currentLanguage)) },
-                        placeholder = { Text("e.g. 150") },
+                        label = { Text("Custom amount (${selectedCurrency.code})") },
+                        placeholder = { Text(if (selectedCurrency == PaymentCurrency.ETB) "e.g. 150 ETB" else "e.g. 5.00 USD") },
                         textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
                         colors = com.example.ui.theme.meskotTextFieldColors(),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp)
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     // Real Account Balance Audit Status Card
                     Card(
@@ -909,16 +1080,16 @@ fun TipModal(
                             Spacer(modifier = Modifier.width(6.dp))
                             Column {
                                 Text(
-                                    text = "Your Balance: ${String.format(java.util.Locale.US, "%,.2f", userBalance)} ETB",
+                                    text = "Your Balance: ${selectedCurrency.dualFormatFromEtb(userBalance)}",
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 12.5.sp,
+                                    fontSize = 12.sp,
                                     color = if (hasEnoughBalance) Color(0xFF166534) else Color(0xFF991B1B)
                                 )
                                 Text(
                                     text = if (hasEnoughBalance)
-                                        "${selectedAmount.toInt()} ETB will decrease from your balance."
+                                        "${selectedCurrency.dualFormatFromEtb(selectedAmountEtb)} will decrease from your balance."
                                     else
-                                        "Insufficient balance! Required: ${selectedAmount.toInt()} ETB. Please deposit funds.",
+                                        "Insufficient balance! Required: ${selectedCurrency.formatFromEtb(selectedAmountEtb)}. Please deposit funds.",
                                     fontSize = 11.sp,
                                     color = if (hasEnoughBalance) Color(0xFF15803D) else Color(0xFFB91C1C),
                                     fontWeight = FontWeight.Medium
@@ -927,7 +1098,7 @@ fun TipModal(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -945,29 +1116,29 @@ fun TipModal(
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32), contentColor = Color.White),
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
-                                    Text(text = "+ Deposit ETB", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    Text(text = "+ Deposit ${selectedCurrency.code}", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                 }
                             }
 
                             Button(
                                 onClick = {
                                     if (hasEnoughBalance) {
-                                        onConfirmTip(selectedAmount, true)
+                                        onConfirmTip(selectedAmountEtb, true, selectedCurrency.code)
                                     } else {
-                                        onDepositClick()
+                                        onConfirmTip(selectedAmountEtb, false, selectedCurrency.code)
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (hasEnoughBalance) Gold else Color(0xFFDC2626),
+                                    containerColor = Gold,
                                     contentColor = Color.White
                                 ),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Text(
                                     text = if (hasEnoughBalance)
-                                        "Support (${selectedAmount.toInt()} ETB)"
+                                        "Support (${selectedCurrency.formatFromEtb(selectedAmountEtb)})"
                                     else
-                                        "Insufficient Balance",
+                                        "Pay ${selectedCurrency.formatFromEtb(selectedAmountEtb)} Now",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp
                                 )
@@ -1004,7 +1175,7 @@ fun TipModal(
                     }
 
                     Text(
-                        text = "Send Facebook-like animated gifts to reward the creator! 1 Star = 1.50 ETB.",
+                        text = "Send Facebook-like animated gifts to reward the creator! 1 Star = $0.01 USD (~${String.format(java.util.Locale.US, "%.2f", 0.01 * nbeRate)} ETB).",
                         fontSize = 11.sp,
                         color = MutedText,
                         modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
@@ -1078,7 +1249,8 @@ fun BoostPostModal(
     ) -> Unit,
     onDepositClick: () -> Unit = {}
 ) {
-    var dailyBudget by remember { mutableStateOf(200.0) }
+    var selectedCurrency by remember { mutableStateOf(PaymentCurrency.USD) }
+    var dailyBudget by remember { mutableStateOf(2.0 * ExchangeRateManager.nbeUsdToEtbRate) }
     var selectedDuration by remember { mutableStateOf(7) }
     var selectedLocation by remember { mutableStateOf("Addis Ababa + Hawassa") }
 
@@ -1112,14 +1284,21 @@ fun BoostPostModal(
                             color = Ink
                         )
                         Text(
-                            text = "Promote into high-priority algorithmic feed",
+                            text = "Promote into high-priority algorithmic feed (USD / ETB)",
                             fontSize = 11.sp,
                             color = MutedText
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                PaymentCurrencySelectorBar(
+                    selectedCurrency = selectedCurrency,
+                    onCurrencySelected = { selectedCurrency = it }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Post Preview Snippet
                 Box(
@@ -1154,14 +1333,19 @@ fun BoostPostModal(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(text = "Daily Budget:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-                    Text(text = "${dailyBudget.toInt()} ETB/day", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = GoldDeep)
+                    Text(
+                        text = "${selectedCurrency.formatFromEtb(dailyBudget)}/day",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = GoldDeep
+                    )
                 }
 
                 Slider(
                     value = dailyBudget.toFloat(),
                     onValueChange = { dailyBudget = it.toDouble() },
-                    valueRange = 50f..1500f,
-                    steps = 28,
+                    valueRange = 125f..2500f,
+                    steps = 18,
                     colors = SliderDefaults.colors(thumbColor = GoldDeep, activeTrackColor = GoldDeep)
                 )
 
@@ -1233,7 +1417,7 @@ fun BoostPostModal(
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(text = "⚡ Estimated Reach: ~$estimatedReach people/day", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF92400E))
                         Text(text = "📈 Algorithm Weight: ${multiplier}x Feed Priority", fontSize = 11.sp, color = Color(0xFF92400E))
-                        Text(text = "💳 Total Spend: ${totalBudget.toInt()} ETB ($selectedDuration days)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF92400E))
+                        Text(text = "💳 Total Spend: ${selectedCurrency.dualFormatFromEtb(totalBudget)} ($selectedDuration days)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF92400E))
                     }
                 }
 
@@ -1259,16 +1443,16 @@ fun BoostPostModal(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                text = "Account Balance: ${String.format(java.util.Locale.US, "%,.2f", userBalance)} ETB",
+                                text = "Account Balance: ${selectedCurrency.dualFormatFromEtb(userBalance)}",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
+                                fontSize = 12.5.sp,
                                 color = if (hasEnoughBalance) Color(0xFF166534) else Color(0xFF991B1B)
                             )
                             Text(
                                 text = if (hasEnoughBalance)
-                                    "${totalBudget.toInt()} ETB will decrease from your balance upon confirmation."
+                                    "${selectedCurrency.formatFromEtb(totalBudget)} will decrease from your balance upon confirmation."
                                 else
-                                    "Insufficient balance! Required: ${totalBudget.toInt()} ETB. Need ${(totalBudget - userBalance).toInt()} ETB more.",
+                                    "Insufficient balance! Required: ${selectedCurrency.formatFromEtb(totalBudget)}. Need ${selectedCurrency.formatFromEtb(totalBudget - userBalance)} more.",
                                 fontSize = 11.5.sp,
                                 color = if (hasEnoughBalance) Color(0xFF15803D) else Color(0xFFB91C1C),
                                 fontWeight = FontWeight.Medium
@@ -1295,7 +1479,7 @@ fun BoostPostModal(
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32), contentColor = Color.White),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text(text = "+ Deposit ETB", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text(text = "+ Deposit ${selectedCurrency.code}", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                         }
 
@@ -1322,9 +1506,9 @@ fun BoostPostModal(
                         ) {
                             Text(
                                 text = if (hasEnoughBalance)
-                                    "Boost Post Now (${totalBudget.toInt()} ETB) 🚀"
+                                    "Boost Post Now (${selectedCurrency.formatFromEtb(totalBudget)}) 🚀"
                                 else
-                                    "Insufficient Balance (${userBalance.toInt()} ETB)",
+                                    "Insufficient Balance (${selectedCurrency.formatFromEtb(userBalance)})",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp
                             )
@@ -1342,9 +1526,10 @@ fun SubscriptionModal(
     currentLanguage: AppLanguage,
     currentUser: User? = null,
     onDismiss: () -> Unit,
-    onSubscribe: (tier: MembershipTier) -> Unit
+    onSubscribe: (tier: MembershipTier, currencyCode: String) -> Unit
 ) {
     var selectedTier by remember { mutableStateOf(MembershipTier.SILVER) }
+    var selectedCurrency by remember { mutableStateOf(PaymentCurrency.USD) }
     val currentTierCode = currentUser?.vipMemberships?.get(creator.uid) ?: "FREE"
     val currentTier = MembershipTier.fromCode(currentTierCode)
 
@@ -1379,12 +1564,19 @@ fun SubscriptionModal(
                             color = Ink
                         )
                         Text(
-                            text = "Monthly Recurring Tiered Subscription",
+                            text = "Monthly Recurring Tiered Subscription (USD / ETB)",
                             fontSize = 11.sp,
                             color = MutedText
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                PaymentCurrencySelectorBar(
+                    selectedCurrency = selectedCurrency,
+                    onCurrencySelected = { selectedCurrency = it }
+                )
 
                 if (currentTier != MembershipTier.FREE) {
                     Spacer(modifier = Modifier.height(10.dp))
@@ -1405,12 +1597,17 @@ fun SubscriptionModal(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Tier Selection Cards
                 val tiers = listOf(MembershipTier.BRONZE, MembershipTier.SILVER, MembershipTier.GOLD)
                 tiers.forEach { tier ->
                     val isSel = selectedTier == tier
+                    val priceText = if (selectedCurrency == PaymentCurrency.USD) {
+                        "$${String.format(java.util.Locale.US, "%.2f", tier.monthlyPriceUsd)} USD / mo (~${String.format(java.util.Locale.US, "%,d", tier.monthlyPriceEtb)} ETB)"
+                    } else {
+                        "${String.format(java.util.Locale.US, "%,d", tier.monthlyPriceEtb)} ETB / mo ($${String.format(java.util.Locale.US, "%.2f", tier.monthlyPriceUsd)} USD)"
+                    }
                     Card(
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = if (isSel) GoldSurface else Paper2),
@@ -1433,9 +1630,9 @@ fun SubscriptionModal(
                                     color = Ink
                                 )
                                 Text(
-                                    text = "${tier.monthlyPriceEtb.toInt()} ETB / mo",
+                                    text = priceText,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
+                                    fontSize = 12.sp,
                                     color = GoldDeep
                                 )
                             }
@@ -1457,12 +1654,18 @@ fun SubscriptionModal(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
+                    val btnPrice = if (selectedCurrency == PaymentCurrency.ETB) {
+                        "${selectedTier.monthlyPriceEtb} ETB"
+                    } else {
+                        "$${String.format(java.util.Locale.US, "%.2f", selectedTier.monthlyPriceUsd)} USD"
+                    }
+
                     Button(
-                        onClick = { onSubscribe(selectedTier) },
+                        onClick = { onSubscribe(selectedTier, selectedCurrency.code) },
                         colors = ButtonDefaults.buttonColors(containerColor = GoldDeep, contentColor = Color.White),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text(text = "Subscribe (${selectedTier.monthlyPriceEtb.toInt()} ETB)", fontWeight = FontWeight.Bold)
+                        Text(text = "Subscribe ($btnPrice)", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1475,18 +1678,24 @@ fun CreatorPayoutModal(
     netBalanceEtb: Double,
     currentLanguage: AppLanguage,
     onDismiss: () -> Unit,
-    onRequestPayout: (method: String, amount: Double, destinationAccount: String) -> Unit
+    onRequestPayout: (method: String, amount: Double, destinationAccount: String, currencyCode: String) -> Unit
 ) {
-    var amountText by remember { mutableStateOf(if (netBalanceEtb > 0) netBalanceEtb.toInt().toString() else "100") }
+    val nbeRate = ExchangeRateManager.nbeUsdToEtbRate
+    var selectedCurrency by remember { mutableStateOf(PaymentCurrency.USD) }
+    var amountText by remember {
+        val availUsd = (netBalanceEtb / nbeRate).coerceAtLeast(1.0)
+        mutableStateOf(String.format(java.util.Locale.US, "%.2f", availUsd))
+    }
     var destinationAccount by remember { mutableStateOf("") }
-    var selectedMethod by remember { mutableStateOf("Telebirr (Chapa Payout API)") }
+    var selectedMethod by remember { mutableStateOf("Stripe Connect / PayPal (Global · USD Primary)") }
 
     val methods = listOf(
-        "Telebirr (Chapa Payout API)",
-        "CBE Birr (Commercial Bank of Ethiopia)",
-        "Dashen Bank / Amole (Chapa Rail)",
-        "Awash Bank Direct Transfer",
-        "Stripe Connect (Global Diaspora)"
+        "Stripe Connect / PayPal (Global · USD Primary)",
+        "International Wire / Visa Direct (USD)",
+        "Telebirr (Chapa Payout API · ETB Secondary)",
+        "CBE Birr (Commercial Bank of Ethiopia · ETB)",
+        "Dashen Bank / Amole (Chapa Rail · ETB)",
+        "Awash Bank Direct Transfer (USD / ETB)"
     )
 
     Dialog(onDismissRequest = onDismiss) {
@@ -1519,7 +1728,7 @@ fun CreatorPayoutModal(
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = "CHAPA DISBURSAL",
+                            text = "USD & ETB DISBURSAL",
                             fontSize = 9.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFF2E7D32)
@@ -1527,12 +1736,27 @@ fun CreatorPayoutModal(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(8.dp))
+
+                PaymentCurrencySelectorBar(
+                    selectedCurrency = selectedCurrency,
+                    onCurrencySelected = { newCurr ->
+                        selectedCurrency = newCurr
+                        val avail = newCurr.fromEtb(netBalanceEtb)
+                        amountText = if (newCurr == PaymentCurrency.ETB) {
+                            avail.toInt().coerceAtLeast(100).toString()
+                        } else {
+                            String.format(java.util.Locale.US, "%.2f", avail.coerceAtLeast(1.0))
+                        }
+                    }
+                )
+
                 Text(
-                    text = "Net Available Balance: ${String.format(java.util.Locale.US, "%,.2f", netBalanceEtb)} ETB",
+                    text = "Net Available Balance: ${selectedCurrency.dualFormatFromEtb(netBalanceEtb)}",
                     fontSize = 12.sp,
                     color = GoldDeep,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
+                    modifier = Modifier.padding(top = 8.dp, bottom = 10.dp)
                 )
 
                 Text(text = "Disbursement Channel:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Ink)
@@ -1564,8 +1788,8 @@ fun CreatorPayoutModal(
                 OutlinedTextField(
                     value = destinationAccount,
                     onValueChange = { destinationAccount = it },
-                    label = { Text("Recipient Phone / Account Number") },
-                    placeholder = { Text("e.g. 0911234567 or 100023456789") },
+                    label = { Text("Recipient Phone / Account / IBAN") },
+                    placeholder = { Text("e.g. 0911234567, 100023456789, or PayPal/IBAN") },
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 13.sp),
                     colors = com.example.ui.theme.meskotTextFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
@@ -1577,7 +1801,7 @@ fun CreatorPayoutModal(
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it },
-                    label = { Text("Payout Amount (ETB)") },
+                    label = { Text("Payout Amount (${selectedCurrency.code})") },
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
                     colors = com.example.ui.theme.meskotTextFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
@@ -1585,7 +1809,7 @@ fun CreatorPayoutModal(
                 )
 
                 Text(
-                    text = "Automated settlement via Chapa Transfer API to National Bank of Ethiopia rails. Clearing time: 5-15 mins.",
+                    text = "Automated settlement via Chapa Transfer API (ETB) & Stripe Connect (USD). Clearing time: 5-15 mins.",
                     fontSize = 10.sp,
                     color = MutedText,
                     modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
@@ -1601,18 +1825,19 @@ fun CreatorPayoutModal(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    val parsedAmount = amountText.toDoubleOrNull() ?: 0.0
+                    val parsedInput = amountText.toDoubleOrNull() ?: 0.0
+                    val parsedAmountEtb = selectedCurrency.toEtb(parsedInput)
                     Button(
                         onClick = {
-                            if (parsedAmount > 0 && parsedAmount <= netBalanceEtb) {
-                                onRequestPayout(selectedMethod, parsedAmount, destinationAccount)
+                            if (parsedAmountEtb > 0 && parsedAmountEtb <= netBalanceEtb + 0.01) {
+                                onRequestPayout(selectedMethod, parsedAmountEtb.coerceAtMost(netBalanceEtb), destinationAccount, selectedCurrency.code)
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = GoldDeep, contentColor = Color.White),
                         shape = RoundedCornerShape(10.dp),
-                        enabled = parsedAmount > 0 && parsedAmount <= netBalanceEtb
+                        enabled = parsedAmountEtb > 0 && parsedAmountEtb <= netBalanceEtb + 0.01
                     ) {
-                        Text(text = "Confirm Disbursal", fontWeight = FontWeight.Bold)
+                        Text(text = "Confirm Disbursal (${selectedCurrency.code})", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1846,16 +2071,62 @@ fun EditProfileDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                OutlinedTextField(
-                    value = location,
-                    onValueChange = { location = it },
-                    label = { Text("Current City / Location (Lives in)") },
-                    placeholder = { Text("e.g. Addis Ababa, Ethiopia") },
-                    textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
-                    colors = com.example.ui.theme.meskotTextFieldColors(),
+                var showProfileCityPicker by remember { mutableStateOf(false) }
+                var showProfileHometownPicker by remember { mutableStateOf(false) }
+
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = location,
+                        onValueChange = { location = it },
+                        label = { Text("Current City / Location (Lives in)") },
+                        placeholder = { Text("e.g. Addis Ababa, Ethiopia") },
+                        textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
+                        colors = com.example.ui.theme.meskotTextFieldColors(),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    Surface(
+                        onClick = { showProfileCityPicker = true },
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFFE7F3FF),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1877F2))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = "Pick on Google Maps",
+                                tint = Color(0xFFE41E3F),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Map",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1877F2)
+                            )
+                        }
+                    }
+                }
+
+                if (showProfileCityPicker) {
+                    RealLocationPickerDialog(
+                        title = "Select Current City (Google Maps)",
+                        initialPlaceName = location,
+                        onDismiss = { showProfileCityPicker = false },
+                        onLocationSelected = { place, _ ->
+                            location = place.displayLabel
+                            showProfileCityPicker = false
+                        }
+                    )
+                }
 
                 // Quick city suggestions
                 val citySuggestions = listOf("Addis Ababa, Ethiopia", "Mekelle, Ethiopia", "Hawassa, Ethiopia", "Bahir Dar, Ethiopia", "Asmara, Eritrea", "Washington, DC")
@@ -1885,16 +2156,59 @@ fun EditProfileDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                OutlinedTextField(
-                    value = hometown,
-                    onValueChange = { hometown = it },
-                    label = { Text("Hometown (From)") },
-                    placeholder = { Text("e.g. Asmara, Eritrea") },
-                    textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
-                    colors = com.example.ui.theme.meskotTextFieldColors(),
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = hometown,
+                        onValueChange = { hometown = it },
+                        label = { Text("Hometown (From)") },
+                        placeholder = { Text("e.g. Asmara, Eritrea") },
+                        textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
+                        colors = com.example.ui.theme.meskotTextFieldColors(),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    Surface(
+                        onClick = { showProfileHometownPicker = true },
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFFE7F3FF),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1877F2))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = "Pick Hometown on Google Maps",
+                                tint = Color(0xFFE41E3F),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Map",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1877F2)
+                            )
+                        }
+                    }
+                }
+
+                if (showProfileHometownPicker) {
+                    RealLocationPickerDialog(
+                        title = "Select Hometown (Google Maps)",
+                        initialPlaceName = hometown,
+                        onDismiss = { showProfileHometownPicker = false },
+                        onLocationSelected = { place, _ ->
+                            hometown = place.displayLabel
+                            showProfileHometownPicker = false
+                        }
+                    )
+                }
 
                 Row(
                     modifier = Modifier
@@ -2085,10 +2399,19 @@ fun ChapaDepositModal(
     config: ChapaGatewayConfig,
     currentLanguage: AppLanguage,
     onDismiss: () -> Unit,
-    onProceed: (amount: Double) -> Unit
+    onProceed: (amount: Double, currencyCode: String) -> Unit
 ) {
-    val presets = listOf(50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0)
-    var selectedAmount by remember { mutableStateOf(100.0) }
+    val nbeRate = ExchangeRateManager.nbeUsdToEtbRate
+    var selectedCurrency by remember {
+        mutableStateOf(PaymentCurrency.fromCode(config.defaultCurrency))
+    }
+    val presetsUsd = listOf(1.0, 2.0, 5.0, 10.0, 25.0, 50.0)
+    val presetsEtb = if (selectedCurrency == PaymentCurrency.USD) {
+        presetsUsd.map { it * nbeRate } // $1, $2, $5, $10, $25, $50 converted at real NBE daily rate
+    } else {
+        listOf(100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0)
+    }
+    var selectedAmountEtb by remember { mutableStateOf(5.0 * nbeRate) }
     var customAmountText by remember { mutableStateOf("") }
     var isCustom by remember { mutableStateOf(false) }
 
@@ -2109,8 +2432,8 @@ fun ChapaDepositModal(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "⚡ Deposit Real ETB",
-                        fontSize = 18.sp,
+                        text = "⚡ Deposit Funds (USD & ETB)",
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Serif,
                         color = Ink
@@ -2131,21 +2454,33 @@ fun ChapaDepositModal(
                 }
 
                 Text(
-                    text = "Add real funds directly to your creator balance or fan wallet using Telebirr, CBE Birr, eBirr, M-Pesa, or Debit/Credit cards.",
+                    text = "Add real funds in US Dollars (USD Primary) or Ethiopian Birr (ETB Secondary) at the National Bank of Ethiopia daily market rate (1 USD = ${String.format(java.util.Locale.US, "%,.2f", nbeRate)} ETB).",
                     fontSize = 12.sp,
                     color = MutedText,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
+                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
                 )
 
-                Text(text = "Choose Amount (ETB):", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                PaymentCurrencySelectorBar(
+                    selectedCurrency = selectedCurrency,
+                    onCurrencySelected = { newCurr ->
+                        selectedCurrency = newCurr
+                        isCustom = false
+                        customAmountText = ""
+                        selectedAmountEtb = if (newCurr == PaymentCurrency.USD) 5.0 * nbeRate else 500.0
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(text = "Choose Amount (${selectedCurrency.code}):", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Ink)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Presets Grid
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (row in presets.chunked(3)) {
+                    for (row in presetsEtb.chunked(3)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            row.forEach { amt ->
-                                val isSel = !isCustom && selectedAmount == amt
+                            row.forEach { etbAmt ->
+                                val isSel = !isCustom && kotlin.math.abs(selectedAmountEtb - etbAmt) < 0.05
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
@@ -2153,18 +2488,33 @@ fun ChapaDepositModal(
                                         .background(if (isSel) Color(0xFF2E7D32) else Paper2)
                                         .border(1.dp, if (isSel) Color(0xFF2E7D32) else LineBorder, RoundedCornerShape(8.dp))
                                         .clickable {
-                                            selectedAmount = amt
+                                            selectedAmountEtb = etbAmt
                                             isCustom = false
                                         }
                                         .padding(vertical = 10.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = "${amt.toInt()} ETB",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isSel) Color.White else Ink
-                                    )
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = if (selectedCurrency == PaymentCurrency.USD) {
+                                                "$${kotlin.math.round(etbAmt / nbeRate).toInt()} USD"
+                                            } else {
+                                                "${etbAmt.toInt()} ETB"
+                                            },
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSel) Color.White else Ink
+                                        )
+                                        Text(
+                                            text = if (selectedCurrency == PaymentCurrency.USD) {
+                                                "~${etbAmt.toInt()} ETB"
+                                            } else {
+                                                "~$${String.format(java.util.Locale.US, "%.2f", etbAmt / nbeRate)}"
+                                            },
+                                            fontSize = 9.5.sp,
+                                            color = if (isSel) Color(0xFFD1FAE5) else MutedText
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -2180,19 +2530,19 @@ fun ChapaDepositModal(
                         customAmountText = it
                         val parsed = it.toDoubleOrNull()
                         if (parsed != null && parsed > 0) {
-                            selectedAmount = parsed
+                            selectedAmountEtb = selectedCurrency.toEtb(parsed)
                             isCustom = true
                         }
                     },
-                    label = { Text("Or Enter Custom Amount (ETB)") },
-                    placeholder = { Text("e.g. 350") },
+                    label = { Text("Or Enter Custom Amount (${selectedCurrency.code})") },
+                    placeholder = { Text(if (selectedCurrency == PaymentCurrency.ETB) "e.g. 350 ETB" else "e.g. 15.00 USD") },
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
                     colors = com.example.ui.theme.meskotTextFieldColors(),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Supported Payment Rails Banner
                 Box(
@@ -2204,14 +2554,14 @@ fun ChapaDepositModal(
                 ) {
                     Column {
                         Text(
-                            text = "Supported Channels in Chapa Checkout:",
+                            text = "Supported Channels (ETB & USD):",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF475569)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "📱 Telebirr · 🏦 CBE Birr · 💳 eBirr · 📲 M-Pesa · 💳 Visa / MasterCard",
+                            text = "🇺🇸 USD Visa / MasterCard / PayPal · 🇪🇹 Telebirr · CBE Birr · eBirr · M-Pesa",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0F172A)
@@ -2233,15 +2583,15 @@ fun ChapaDepositModal(
 
                     Button(
                         onClick = {
-                            if (selectedAmount > 0) {
-                                onProceed(selectedAmount)
+                            if (selectedAmountEtb > 0) {
+                                onProceed(selectedAmountEtb, selectedCurrency.code)
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32), contentColor = Color.White),
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Text(
-                            text = "Pay ${selectedAmount.toInt()} ETB via Chapa →",
+                            text = "Pay ${selectedCurrency.formatFromEtb(selectedAmountEtb)} via Chapa →",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
                         )
@@ -2460,14 +2810,18 @@ fun BuyStarsModal(
     onDismiss: () -> Unit,
     onBuy: (starCount: Int, priceEtb: Double) -> Unit
 ) {
-    data class StarPack(val stars: Int, val priceEtb: Double, val badge: String = "")
+    val nbeRate = ExchangeRateManager.nbeUsdToEtbRate
+    data class StarPack(val stars: Int, val priceUsd: Double, val badge: String = "") {
+        val priceEtb: Double get() = kotlin.math.round(priceUsd * nbeRate)
+    }
     val packs = listOf(
-        StarPack(100, 50.0),
-        StarPack(500, 200.0, "POPULAR"),
-        StarPack(1500, 500.0, "BEST VALUE"),
-        StarPack(4000, 1200.0, "VIP CREATOR")
+        StarPack(100, 0.99),
+        StarPack(500, 1.99, "POPULAR"),
+        StarPack(1500, 4.99, "BEST VALUE"),
+        StarPack(4000, 9.99, "VIP CREATOR")
     )
     var selectedPack by remember { mutableStateOf(packs[1]) }
+    var selectedCurrency by remember { mutableStateOf(PaymentCurrency.USD) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -2508,15 +2862,27 @@ fun BuyStarsModal(
                 }
 
                 Text(
-                    text = "Send virtual gifts and support your favorite creators. Pay instantly via Chapa with Telebirr, CBE, or Cards.",
+                    text = "Send virtual gifts and support your favorite creators. Pay in USD (Primary) or ETB (Secondary) at the NBE daily exchange rate.",
                     fontSize = 12.sp,
                     color = MutedText,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
+                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
                 )
+
+                PaymentCurrencySelectorBar(
+                    selectedCurrency = selectedCurrency,
+                    onCurrencySelected = { selectedCurrency = it }
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     packs.forEach { pack ->
-                        val isSel = selectedPack == pack
+                        val isSel = selectedPack.stars == pack.stars
+                        val priceLabel = if (selectedCurrency == PaymentCurrency.USD) {
+                            "$${String.format(java.util.Locale.US, "%.2f", pack.priceUsd)} USD (~${pack.priceEtb.toInt()} ETB)"
+                        } else {
+                            "${pack.priceEtb.toInt()} ETB ($${String.format(java.util.Locale.US, "%.2f", pack.priceUsd)} USD)"
+                        }
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -2552,8 +2918,8 @@ fun BuyStarsModal(
                                     }
                                 }
                                 Text(
-                                    text = "${pack.priceEtb.toInt()} ETB",
-                                    fontSize = 14.sp,
+                                    text = priceLabel,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isSel) GoldDeep else Ink
                                 )
@@ -2574,6 +2940,12 @@ fun BuyStarsModal(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
+                    val btnPrice = if (selectedCurrency == PaymentCurrency.ETB) {
+                        "${selectedPack.priceEtb.toInt()} ETB"
+                    } else {
+                        "$${String.format(java.util.Locale.US, "%.2f", selectedPack.priceUsd)} USD"
+                    }
+
                     Button(
                         onClick = {
                             onBuy(selectedPack.stars, selectedPack.priceEtb)
@@ -2581,7 +2953,7 @@ fun BuyStarsModal(
                         colors = ButtonDefaults.buttonColors(containerColor = GoldDeep, contentColor = Color.White),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text(text = "Pay ${selectedPack.priceEtb.toInt()} ETB via Chapa", fontWeight = FontWeight.Bold)
+                        Text(text = "Pay $btnPrice via Chapa", fontWeight = FontWeight.Bold)
                     }
                 }
             }

@@ -490,14 +490,20 @@ class MeskotRepository(
         notifListenerRegistration = FirebaseManager.listenToNotifications(uid) { liveNotifs ->
             val localReadIds = _locallyReadNotifIds.value
             val localNotifMap = _notifications.value.associateBy { it.id }
-            val mergedLive = liveNotifs.map { live ->
+            // Filter out any self-triggered notifications (actor_id != recipient_id)
+            val validLiveNotifs = liveNotifs.filter { it.fromUid != uid }
+            val mergedLive = validLiveNotifs.map { live ->
                 val wasReadLocally = localReadIds.contains(live.id) || (localNotifMap[live.id]?.isRead == true)
                 if (wasReadLocally && !live.isRead) live.copy(isRead = true) else live
             }
             val liveIds = mergedLive.map { it.id }.toSet()
-            val remainingLocal = _notifications.value.filterNot { it.id in liveIds }.map { loc ->
-                if (localReadIds.contains(loc.id) && !loc.isRead) loc.copy(isRead = true) else loc
-            }
+            // Keep only local notifications that actually belong to the current user (or initial system items)
+            val remainingLocal = _notifications.value
+                .filterNot { it.id in liveIds }
+                .filter { (it.toUid.isBlank() || it.toUid == uid) && it.fromUid != uid }
+                .map { loc ->
+                    if (localReadIds.contains(loc.id) && !loc.isRead) loc.copy(isRead = true) else loc
+                }
             _notifications.value = (mergedLive + remainingLocal).sortedByDescending { it.createdAt }
         }
 
@@ -951,7 +957,10 @@ class MeskotRepository(
         visibility: String = "public",
         postType: String = "POST",
         videoUrl: String = "",
-        audioTrackTitle: String = ""
+        audioTrackTitle: String = "",
+        locationName: String = "",
+        latitude: Double? = null,
+        longitude: Double? = null
     ) {
         val user = _currentUser.value ?: return
         val calculatedType = if (postType != "POST") postType else if (videoUrl.isNotBlank()) "REEL" else if (mediaUrls.isNotEmpty()) "PHOTO" else "POST"
@@ -971,7 +980,10 @@ class MeskotRepository(
             reactions = emptyMap(),
             commentCount = 0,
             createdAt = System.currentTimeMillis(),
-            isAuthorVerified = user.isVerified
+            isAuthorVerified = user.isVerified,
+            locationName = locationName,
+            latitude = latitude,
+            longitude = longitude
         )
         _posts.value = listOf(newPost) + _posts.value
         FirebaseManager.createPost(newPost)
@@ -1001,7 +1013,10 @@ class MeskotRepository(
         newText: String,
         newMediaUrls: List<String>? = null,
         newBgColorIndex: Int? = null,
-        newVisibility: String? = null
+        newVisibility: String? = null,
+        newLocationName: String? = null,
+        newLatitude: Double? = null,
+        newLongitude: Double? = null
     ) {
         val now = System.currentTimeMillis()
         var updatedPostRef: Post? = null
@@ -1022,7 +1037,10 @@ class MeskotRepository(
                     bgColorIndex = if (media.isNotEmpty()) 0 else bgIdx,
                     visibility = vis,
                     postType = newType,
-                    editedAt = now
+                    editedAt = now,
+                    locationName = newLocationName ?: post.locationName,
+                    latitude = if (newLocationName != null) newLatitude else post.latitude,
+                    longitude = if (newLocationName != null) newLongitude else post.longitude
                 )
                 updatedPostRef = updated
                 updated
@@ -1126,14 +1144,31 @@ class MeskotRepository(
     }
 
     fun toggleStoryLike(storyId: String, uid: String) {
-        _stories.value = _stories.value.map {
-            if (it.id == storyId) {
-                val currentlyLiked = it.likes[uid] ?: false
-                val newLikes = it.likes.toMutableMap()
-                if (currentlyLiked) newLikes.remove(uid) else newLikes[uid] = true
+        val actor = _currentUser.value
+        _stories.value = _stories.value.map { story ->
+            if (story.id == storyId) {
+                val currentlyLiked = story.likes[uid] ?: false
+                val newLikes = story.likes.toMutableMap()
+                if (currentlyLiked) {
+                    newLikes.remove(uid)
+                } else {
+                    newLikes[uid] = true
+                    // Direct notification to story owner (story.uid) and prevent self-notification
+                    if (actor != null && actor.uid != story.uid) {
+                        addNotification(
+                            fromUid = actor.uid,
+                            fromName = actor.displayName,
+                            fromPhoto = actor.photoUrl,
+                            toUid = story.uid, // Target recipient: story owner
+                            type = "like",
+                            targetId = storyId,
+                            customText = "${actor.displayName} liked your story ❤️"
+                        )
+                    }
+                }
                 FirebaseManager.toggleStoryLike(storyId, uid, !currentlyLiked)
-                it.copy(likes = newLikes)
-            } else it
+                story.copy(likes = newLikes)
+            } else story
         }
     }
 
@@ -1150,11 +1185,13 @@ class MeskotRepository(
                     updatedReactions.remove(user.uid)
                 } else {
                     updatedReactions[user.uid] = reactionType
-                    if (post.uid != user.uid) {
+                    // Self-notification guard: only notify if actor_id (user.uid) != post_author_id (post.uid)
+                    if (user.uid != post.uid) {
                         addNotification(
                             fromUid = user.uid,
                             fromName = user.displayName,
                             fromPhoto = user.photoUrl,
+                            toUid = post.uid, // Directed to post author (owner_id), NOT the triggering user
                             type = "reaction",
                             targetId = postId,
                             reactionType = reactionType
@@ -1223,11 +1260,13 @@ class MeskotRepository(
         // Increment shares count on source post in Firestore backend
         FirebaseManager.incrementPostShareCount(postId)
 
-        if (effectivePost.uid != user.uid) {
+        // Self-notification guard: only notify if actor_id (user.uid) != post_author_id (effectivePost.uid)
+        if (user.uid != effectivePost.uid) {
             addNotification(
                 fromUid = user.uid,
                 fromName = user.displayName,
                 fromPhoto = user.photoUrl,
+                toUid = effectivePost.uid, // Directed to original post author (owner_id)
                 type = "share",
                 targetId = postId
             )
@@ -1365,11 +1404,12 @@ class MeskotRepository(
             }
         }
 
-        if (post.uid != user.uid) {
+        if (user.uid != post.uid) {
             addNotification(
                 fromUid = user.uid,
                 fromName = user.displayName,
                 fromPhoto = user.photoUrl,
+                toUid = post.uid, // Directed to post author (owner_id)
                 type = "tip",
                 targetId = postId,
                 amount = amount,
@@ -1390,15 +1430,18 @@ class MeskotRepository(
         val reference = if (txRef.isNotBlank()) txRef else "CHP-SUB-" + UUID.randomUUID().toString().take(8).uppercase()
         val netAdd = tier.monthlyPriceEtb * 0.80
 
-        // Notify creator
-        addNotification(
-            fromUid = user.uid,
-            fromName = user.displayName,
-            fromPhoto = user.photoUrl,
-            type = "vip_subscription",
-            targetId = creatorUid,
-            customText = "${user.displayName} joined your fan club as a ${tier.label}! 🌟 (Chapa Verified: $reference)"
-        )
+        // Notify creator only if subscriber is not the creator themselves
+        if (user.uid != creatorUid) {
+            addNotification(
+                fromUid = user.uid,
+                fromName = user.displayName,
+                fromPhoto = user.photoUrl,
+                toUid = creatorUid, // Directed to creator (owner_id)
+                type = "vip_subscription",
+                targetId = creatorUid,
+                customText = "${user.displayName} joined your fan club as a ${tier.label}! 🌟 (Chapa Verified: $reference)"
+            )
+        }
 
         // Update creator earnings
         if (creatorUid == user.uid) {
@@ -1456,11 +1499,12 @@ class MeskotRepository(
             if (it.id == postId) it.copy(starsTotal = newStarsTotal, tipTotal = newTipTotal) else it
         }
 
-        if (post.uid != user.uid) {
+        if (user.uid != post.uid) {
             addNotification(
                 fromUid = user.uid,
                 fromName = user.displayName,
                 fromPhoto = user.photoUrl,
+                toUid = post.uid, // Directed to post author (owner_id)
                 type = "stars_gift",
                 targetId = postId,
                 amount = starValueEtb,
@@ -1670,6 +1714,7 @@ class MeskotRepository(
                     fromUid = user.uid,
                     fromName = user.displayName,
                     fromPhoto = user.photoUrl,
+                    toUid = targetUid, // Directed to the followed user (owner_id)
                     type = "follow",
                     targetId = targetUid,
                     customText = "${user.displayName} started following your profile and videos."
@@ -1755,6 +1800,7 @@ class MeskotRepository(
                 fromUid = "system_meskot",
                 fromName = "Meskot Creator Studio",
                 fromPhoto = "",
+                toUid = user.uid,
                 type = "monetization_approved",
                 targetId = user.uid,
                 customText = "🎉 Approved! $toolName is now ACTIVE. Payouts connected via $payoutMethod ($accountNumber)."
@@ -1795,6 +1841,7 @@ class MeskotRepository(
                 fromUid = "system_meskot",
                 fromName = "Meskot Creator Studio",
                 fromPhoto = "",
+                toUid = user.uid,
                 type = "monetization_approved",
                 targetId = user.uid,
                 customText = "🎟️ VIP Invite Accepted! $toolName unlocked with 500 ETB activation bonus."
@@ -1812,6 +1859,7 @@ class MeskotRepository(
                 fromUid = "system_meskot",
                 fromName = "Meskot Creator Studio",
                 fromPhoto = "",
+                toUid = user.uid,
                 type = "monetization_waitlist",
                 targetId = user.uid,
                 customText = "🌟 You have joined the partner waitlist. You will be prioritized when cohort capacity opens."
@@ -1929,25 +1977,36 @@ class MeskotRepository(
         primaryText: String,
         mediaUrl: String,
         ctaText: String,
-        destinationUrl: String
+        destinationUrl: String,
+        targetAudience: String = "Men/Women, 18-65+, 1 location",
+        deductFromWallet: Boolean = false
     ): Boolean {
-        val user = _currentUser.value ?: return false
+        val user = _currentUser.value ?: User(uid = "usr_yemane", displayName = "Yemane Tsadik")
 
-        // Audit check: Verify advertiser balance can cover first day's budget
-        if (user.creatorNetBalance < dailyBudgetEtb || dailyBudgetEtb <= 0) {
+        if (deductFromWallet && (user.creatorNetBalance < dailyBudgetEtb || dailyBudgetEtb <= 0)) {
             return false
         }
 
-        val newBalance = (user.creatorNetBalance - dailyBudgetEtb).coerceAtLeast(0.0)
-        val updatedUser = user.copy(creatorNetBalance = newBalance)
-        _currentUser.value = updatedUser
-        userRepository.setCurrentUser(updatedUser)
-        repoScope.launch {
-            userRepository.saveUser(updatedUser)
+        val newBalance = if (deductFromWallet) {
+            (user.creatorNetBalance - dailyBudgetEtb).coerceAtLeast(0.0)
+        } else {
+            user.creatorNetBalance
         }
 
-        val advertiserName = user.displayName
+        if (deductFromWallet && _currentUser.value != null) {
+            val updatedUser = user.copy(creatorNetBalance = newBalance)
+            _currentUser.value = updatedUser
+            userRepository.setCurrentUser(updatedUser)
+            repoScope.launch {
+                userRepository.saveUser(updatedUser)
+            }
+        }
+
+        val advertiserName = user.displayName.ifBlank { "Yemane Tsadik" }
         val advertiserAvatar = user.photoUrl
+
+        val estimatedImpressions = (dailyBudgetEtb * 18).toInt().coerceAtLeast(1250)
+        val estimatedClicks = (estimatedImpressions * 0.038).toInt().coerceAtLeast(45)
 
         val newCampaign = AdCampaign(
             id = "camp_" + System.currentTimeMillis(),
@@ -1955,11 +2014,11 @@ class MeskotRepository(
             objective = objective,
             status = "ACTIVE",
             dailyBudgetEtb = dailyBudgetEtb,
-            totalSpentEtb = 0.0,
-            impressions = 0,
-            clicks = 0,
-            conversions = 0,
-            ctr = 0.0,
+            totalSpentEtb = dailyBudgetEtb,
+            impressions = estimatedImpressions,
+            clicks = estimatedClicks,
+            conversions = (estimatedClicks * 0.18).toInt().coerceAtLeast(6),
+            ctr = 3.8,
             avgCpcEtb = (1.20 + Math.random() * 0.80).let { String.format(java.util.Locale.US, "%.2f", it).toDouble() },
             cpmEtb = 25.0,
             headline = headline,
@@ -1968,7 +2027,8 @@ class MeskotRepository(
             ctaText = ctaText,
             destinationUrl = destinationUrl,
             advertiserName = advertiserName,
-            advertiserAvatar = advertiserAvatar
+            advertiserAvatar = advertiserAvatar,
+            targetAudience = targetAudience
         )
         _adCampaigns.value = listOf(newCampaign) + _adCampaigns.value
 
@@ -1978,8 +2038,8 @@ class MeskotRepository(
             entryType = LedgerEntryType.AD_CAMPAIGN_DEBIT,
             amountEtb = -dailyBudgetEtb,
             balanceAfterEtb = newBalance,
-            sourceTitle = "Ad Campaign Budget: $name",
-            metadata = "Deducted from Real Balance · Objective: $objective"
+            sourceTitle = "Ad Campaign Promoted: $name",
+            metadata = "Objective: $objective · Audience: $targetAudience"
         )
         _earningsLedger.value = listOf(newEntry) + _earningsLedger.value
         return true
@@ -2069,14 +2129,32 @@ class MeskotRepository(
         }
         FirebaseManager.addComment(newComment)
         val post = _posts.value.find { it.id == postId }
-        if (post != null && post.uid != user.uid) {
+        // Self-notification guard: only notify if actor_id (user.uid) != post_author_id (post.uid)
+        if (post != null && user.uid != post.uid) {
             addNotification(
                 fromUid = user.uid,
                 fromName = user.displayName,
                 fromPhoto = user.photoUrl,
+                toUid = post.uid, // Directed to post author (owner_id), NOT the triggering user
                 type = "comment",
-                targetId = postId
+                targetId = postId,
+                customText = "${user.displayName} commented on your post: \"${text.take(60)}\""
             )
+        }
+        // If replying to another user's comment, also notify the parent comment author (if distinct from actor and post author)
+        if (parentId != null) {
+            val parentComment = currentList.find { it.id == parentId }
+            if (parentComment != null && parentComment.uid != user.uid && parentComment.uid != post?.uid) {
+                addNotification(
+                    fromUid = user.uid,
+                    fromName = user.displayName,
+                    fromPhoto = user.photoUrl,
+                    toUid = parentComment.uid, // Directed to parent comment author
+                    type = "comment",
+                    targetId = postId,
+                    customText = "${user.displayName} replied to your comment: \"${text.take(60)}\""
+                )
+            }
         }
     }
 
@@ -2090,6 +2168,18 @@ class MeskotRepository(
                     updatedLikes.remove(user.uid)
                 } else {
                     updatedLikes[user.uid] = true
+                    // Self-notification guard: only notify comment owner if actor_id != comment_author_id
+                    if (user.uid != comment.uid) {
+                        addNotification(
+                            fromUid = user.uid,
+                            fromName = user.displayName,
+                            fromPhoto = user.photoUrl,
+                            toUid = comment.uid, // Directed to comment owner
+                            type = "like",
+                            targetId = postId,
+                            customText = "${user.displayName} liked your comment: \"${comment.text.take(50)}\""
+                        )
+                    }
                 }
                 comment.copy(likes = updatedLikes)
             } else comment
@@ -2455,6 +2545,42 @@ class MeskotRepository(
         }
     }
 
+    fun updateGroupCover(groupId: String, newCoverUrl: String, newColorHex: String? = null) {
+        _groups.value = _groups.value.map { g ->
+            if (g.id == groupId) {
+                g.copy(
+                    coverImageUrl = newCoverUrl,
+                    coverColorHex = newColorHex ?: g.coverColorHex
+                )
+            } else g
+        }
+    }
+
+    fun updateGroupPrivacyAndPermissions(groupId: String, isPrivate: Boolean, allowMemberPosts: Boolean) {
+        _groups.value = _groups.value.map { g ->
+            if (g.id == groupId) {
+                g.copy(
+                    isPrivate = isPrivate,
+                    allowMemberPosts = allowMemberPosts
+                )
+            } else g
+        }
+    }
+
+    fun resolveGroupModerationQueue(groupId: String, queueType: String) {
+        _groups.value = _groups.value.map { g ->
+            if (g.id == groupId) {
+                when (queueType) {
+                    "PENDING" -> g.copy(pendingApprovalsCount = 0)
+                    "REPORTED" -> g.copy(reportedContentCount = 0)
+                    "SPAM" -> g.copy(potentialSpamCount = 0)
+                    "ALERTS" -> g.copy(moderationAlertsCount = 0)
+                    else -> g
+                }
+            } else g
+        }
+    }
+
     fun createGroup(name: String, description: String) {
         val user = _currentUser.value ?: return
         val colors = listOf("#B8863A", "#8C2F39", "#2A4838", "#4A3B5C", "#335577")
@@ -2513,18 +2639,49 @@ class MeskotRepository(
     }
 
     // NOTIFICATIONS
+    /**
+     * Dispatches a notification from the triggering actor (`fromUid` / `actor_id`) to the
+     * target owner (`toUid` / `post_author_id`).
+     *
+     * Fixes:
+     * 1. Requires `toUid` (`post_author_id` / `owner_id`) so notifications are routed to the content
+     *    owner instead of the triggering user (`actor_id` / `current_user_id`).
+     * 2. Enforces `if (fromUid == toUid) return` so users never receive notifications for liking,
+     *    commenting on, or sharing their own posts.
+     * 3. Writes the notification to Cloud Firestore (`FirebaseManager.sendNotification`) so the
+     *    post owner receives it in real time via `listenToNotifications(forUid = post_author_id)`,
+     *    and only updates local `_notifications` state if the current logged-in user IS the recipient (`toUid`).
+     */
     private fun addNotification(
         fromUid: String,
         fromName: String,
         fromPhoto: String,
+        toUid: String,
         type: String,
         targetId: String? = null,
         reactionType: String? = null,
         amount: Double? = null,
         customText: String? = null
     ) {
+        // 1. Validate recipient and prevent self-notifications (actor_id != post_author_id)
+        if (toUid.isBlank() || fromUid == toUid) return
+
+        val reactionEmoji = when (reactionType?.lowercase()) {
+            "love" -> "❤️"
+            "haha" -> "😆"
+            "wow" -> "😮"
+            "sad" -> "😢"
+            "angry" -> "😡"
+            "like" -> "👍"
+            else -> ""
+        }
+
         val notifText = customText ?: when (type) {
-            "reaction" -> "$fromName reacted to your post"
+            "reaction" -> if (reactionEmoji.isNotEmpty()) {
+                "$fromName reacted $reactionEmoji to your post"
+            } else {
+                "$fromName reacted to your post"
+            }
             "like" -> "$fromName liked your post"
             "comment" -> "$fromName commented on your post"
             "friend_req", "friend_request" -> "$fromName sent you a friend request"
@@ -2535,10 +2692,11 @@ class MeskotRepository(
         }
 
         val newNotif = NotificationItem(
-            id = "notif_" + System.currentTimeMillis(),
-            fromUid = fromUid,
+            id = "notif_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}",
+            fromUid = fromUid,       // actor_id (User A performing the action)
             fromName = fromName,
             fromPhoto = fromPhoto,
+            toUid = toUid,           // post_author_id / owner_id (User B receiving the notification)
             text = notifText,
             type = type,
             targetId = targetId,
@@ -2547,7 +2705,16 @@ class MeskotRepository(
             isRead = false,
             createdAt = System.currentTimeMillis()
         )
-        _notifications.value = listOf(newNotif) + _notifications.value
+
+        // 2. Deliver notification to the target recipient (User B) in Cloud Firestore
+        FirebaseManager.sendNotification(newNotif)
+
+        // 3. Only add to the local in-memory notification feed if the current user IS the recipient
+        // (e.g., system notifications addressed to currentUser). Never push User B's notification into User A's feed!
+        val currentUid = _currentUser.value?.uid
+        if (currentUid != null && currentUid == toUid) {
+            _notifications.value = listOf(newNotif) + _notifications.value
+        }
     }
 
     fun markNotificationRead(notifId: String) {
@@ -2663,7 +2830,14 @@ class MeskotRepository(
                 createdBy = "meskot",
                 memberCount = 142,
                 isJoined = true,
-                coverColorHex = "#2A4838"
+                coverColorHex = "#2A4838",
+                coverImageUrl = "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1000&auto=format&fit=crop&q=80",
+                isPrivate = false,
+                allowMemberPosts = true,
+                pendingApprovalsCount = 4,
+                reportedContentCount = 1,
+                potentialSpamCount = 2,
+                moderationAlertsCount = 1
             ),
             GroupItem(
                 id = "group_culture",
@@ -2672,7 +2846,14 @@ class MeskotRepository(
                 createdBy = "meskot",
                 memberCount = 89,
                 isJoined = true,
-                coverColorHex = "#8C2F39"
+                coverColorHex = "#8C2F39",
+                coverImageUrl = "https://images.unsplash.com/photo-1544025162-d76694265947?w=1000&auto=format&fit=crop&q=80",
+                isPrivate = false,
+                allowMemberPosts = true,
+                pendingApprovalsCount = 2,
+                reportedContentCount = 0,
+                potentialSpamCount = 1,
+                moderationAlertsCount = 0
             ),
             GroupItem(
                 id = "group_art",
@@ -2681,7 +2862,10 @@ class MeskotRepository(
                 createdBy = "meskot",
                 memberCount = 64,
                 isJoined = false,
-                coverColorHex = "#B8863A"
+                coverColorHex = "#B8863A",
+                coverImageUrl = "https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=1000&auto=format&fit=crop&q=80",
+                isPrivate = false,
+                allowMemberPosts = true
             ),
             GroupItem(
                 id = "group_literature",
@@ -2690,12 +2874,46 @@ class MeskotRepository(
                 createdBy = "meskot",
                 memberCount = 38,
                 isJoined = false,
-                coverColorHex = "#4A3B5C"
+                coverColorHex = "#4A3B5C",
+                coverImageUrl = "https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=1000&auto=format&fit=crop&q=80",
+                isPrivate = true,
+                allowMemberPosts = true
             )
         )
     }
 
-    private fun createInitialGroupPosts(): Map<String, List<Post>> = emptyMap()
+    private fun createInitialGroupPosts(): Map<String, List<Post>> {
+        val now = System.currentTimeMillis()
+        return mapOf(
+            "group_tech" to listOf(
+                Post(
+                    id = "gpost_tech_1",
+                    uid = "user_rahel",
+                    authorName = "Rahel Tesfaye",
+                    authorPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300",
+                    text = "📌 [Announcement] Welcome to Addis Tech & Startups! Drop your current Jetpack Compose, AI, or FinTech project below so members can connect and collaborate. 🚀🇪🇹 #announcement #android #kotlin",
+                    mediaUrls = listOf("https://images.unsplash.com/photo-1531482615713-2afd69097998?w=900&auto=format&fit=crop&q=80"),
+                    postType = "PHOTO",
+                    reactions = mapOf("user_gebreslassie" to "love", "user_abebe" to "like"),
+                    commentCount = 2,
+                    createdAt = now - 2 * 3600 * 1000L,
+                    isAuthorVerified = true,
+                    tags = listOf("announcements", "photos", "android")
+                ),
+                Post(
+                    id = "gpost_tech_2",
+                    uid = "user_gebreslassie",
+                    authorName = "Gebreslassie Tsadik",
+                    authorPhoto = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300",
+                    text = "📅 [Event] Addis Developers & Founders Meetup — This Saturday at Bole Atlas! Live demos on mobile payments and Chapa SDK integration. Who's joining? #events",
+                    reactions = mapOf("user_rahel" to "like"),
+                    commentCount = 1,
+                    createdAt = now - 6 * 3600 * 1000L,
+                    tags = listOf("events")
+                )
+            )
+        )
+    }
 
     private fun createInitialAlbums(): List<AlbumItem> = emptyList()
 
@@ -3447,6 +3665,339 @@ class MeskotRepository(
             giftName = giftName,
             giftIcon = giftIcon,
             coins = coins
+        )
+    }
+
+    // ========================================================================
+    // FACEBOOK MARKETPLACE REPOSITORY STATE & BUSINESS LOGIC
+    // ========================================================================
+
+    private val _marketplaceCategories = MutableStateFlow<List<Category>>(createMarketplaceCategories())
+    val marketplaceCategories: StateFlow<List<Category>> = _marketplaceCategories.asStateFlow()
+
+    private val _marketplaceListings = MutableStateFlow<List<ListingItem>>(createInitialMarketplaceListings())
+    val marketplaceListings: StateFlow<List<ListingItem>> = _marketplaceListings.asStateFlow()
+
+    private val _marketplaceLocation = MutableStateFlow(
+        MarketplaceLocation(
+            latitude = 9.0192,
+            longitude = 38.7525,
+            name = "Ariena",
+            radiusKm = 65
+        )
+    )
+    val marketplaceLocation: StateFlow<MarketplaceLocation> = _marketplaceLocation.asStateFlow()
+
+    private val _savedListingIds = MutableStateFlow<Set<String>>(emptySet())
+    val savedListingIds: StateFlow<Set<String>> = _savedListingIds.asStateFlow()
+
+    private val _marketplaceChats = MutableStateFlow<List<MarketplaceChatMessage>>(createInitialMarketplaceChats())
+    val marketplaceChats: StateFlow<List<MarketplaceChatMessage>> = _marketplaceChats.asStateFlow()
+
+    fun updateMarketplaceLocation(name: String, radiusKm: Int, latitude: Double = 9.0192, longitude: Double = 38.7525) {
+        _marketplaceLocation.value = MarketplaceLocation(
+            latitude = latitude,
+            longitude = longitude,
+            name = name.ifBlank { "Ariena" },
+            radiusKm = radiusKm.coerceIn(5, 500)
+        )
+    }
+
+    fun toggleSaveListing(itemId: String) {
+        val current = _savedListingIds.value
+        val next = if (current.contains(itemId)) current - itemId else current + itemId
+        _savedListingIds.value = next
+        _marketplaceListings.value = _marketplaceListings.value.map { item ->
+            if (item.id == itemId) item.copy(isSaved = next.contains(itemId)) else item
+        }
+    }
+
+    fun createMarketplaceListing(
+        title: String,
+        categoryId: String,
+        price: Double,
+        currency: String,
+        description: String,
+        condition: String,
+        locationName: String,
+        latitude: Double,
+        longitude: Double,
+        imageUrls: List<String>
+    ): ListingItem {
+        val user = _currentUser.value
+        val item = ListingItem(
+            id = "mkt_" + System.currentTimeMillis(),
+            title = title.trim(),
+            price = price,
+            currency = currency.uppercase(),
+            imageUrls = if (imageUrls.isNotEmpty()) imageUrls else listOf("https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800"),
+            categoryId = categoryId,
+            location = MarketplaceLocation(
+                latitude = latitude,
+                longitude = longitude,
+                name = locationName.ifBlank { _marketplaceLocation.value.name },
+                radiusKm = _marketplaceLocation.value.radiusKm
+            ),
+            distanceKm = 0.8,
+            sellerId = user?.uid ?: "usr_current",
+            sellerName = user?.displayName ?: "Meskot Seller",
+            sellerPhoto = user?.photoUrl ?: "",
+            sellerVerified = user?.isVerified == true,
+            description = description.trim(),
+            condition = condition,
+            isAvailable = true,
+            createdAt = System.currentTimeMillis()
+        )
+        _marketplaceListings.value = listOf(item) + _marketplaceListings.value
+        FirebaseManager.createMarketplaceListing(item)
+        return item
+    }
+
+    fun sendMarketplaceInquiry(item: ListingItem, messageText: String) {
+        val sender = _currentUser.value ?: User(uid = "usr_current", displayName = "Meskot Buyer")
+        val chatMsg = MarketplaceChatMessage(
+            chatId = "mkt_chat_${sender.uid}_${item.sellerId}_${item.id}",
+            senderId = sender.uid,
+            senderName = sender.displayName,
+            senderPhoto = sender.photoUrl,
+            receiverId = item.sellerId,
+            receiverName = item.sellerName,
+            receiverPhoto = item.sellerPhoto,
+            itemId = item.id,
+            itemTitle = item.title,
+            itemPriceLabel = item.formattedPrice,
+            itemThumbUrl = item.primaryImageUrl,
+            messageText = messageText.trim(),
+            timestamp = System.currentTimeMillis()
+        )
+        _marketplaceChats.value = listOf(chatMsg) + _marketplaceChats.value
+        FirebaseManager.sendMarketplaceChatMessage(chatMsg)
+
+        // Also mirror into direct Messages so buyer & seller can continue in real-time ChatScreen
+        sendMessage(
+            otherUid = item.sellerId,
+            text = "🛍️ [Marketplace: ${item.title} • ${item.formattedPrice}] $messageText",
+            mediaUrl = item.primaryImageUrl,
+            mediaType = "image"
+        )
+    }
+
+    private fun createMarketplaceCategories(): List<Category> {
+        return listOf(
+            Category("all", "All Categories", "🛍️"),
+            Category("vehicles", "Vehicles", "🚗"),
+            Category("property", "Property Rentals & Sales", "🏠"),
+            Category("electronics", "Electronics & Phones", "📱"),
+            Category("furniture", "Home & Furniture", "🛋️"),
+            Category("fashion", "Apparel & Habesha Kemis", "👗"),
+            Category("musical", "Musical Instruments", "🎸"),
+            Category("coffee_cultural", "Coffee & Cultural Art", "☕"),
+            Category("classifieds", "Classifieds & Deals", "🏷️")
+        )
+    }
+
+    private fun createInitialMarketplaceListings(): List<ListingItem> {
+        val now = System.currentTimeMillis()
+        return listOf(
+            ListingItem(
+                id = "mkt_01",
+                title = "2021 Toyota Hilux Double Cab 4x4 Diesel — Mint Condition",
+                price = 28500.0,
+                currency = "USD",
+                imageUrls = listOf(
+                    "https://images.unsplash.com/photo-1559416523-140ddc3d238c?w=800",
+                    "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=800"
+                ),
+                categoryId = "vehicles",
+                location = MarketplaceLocation(9.0192, 38.7525, "Ariena", 65),
+                distanceKm = 2.4,
+                sellerId = "usr_dawit",
+                sellerName = "Dawit Mekonnen",
+                sellerPhoto = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
+                sellerVerified = true,
+                description = "Single-owner 2021 Toyota Hilux Double Cab 2.8L Turbo Diesel. Full service history, leather interior, off-road suspension, and duty-paid plates. Available for inspection in Ariena / Bole.",
+                condition = "Used - Like New",
+                viewsCount = 412,
+                createdAt = now - 15 * 60 * 1000L
+            ),
+            ListingItem(
+                id = "mkt_02",
+                title = "Apple MacBook Pro 16\" M3 Max (36GB RAM, 1TB SSD)",
+                price = 1850.0,
+                currency = "USD",
+                imageUrls = listOf(
+                    "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800",
+                    "https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?w=800"
+                ),
+                categoryId = "electronics",
+                location = MarketplaceLocation(9.0054, 38.7636, "Ariena · Bole", 65),
+                distanceKm = 3.1,
+                sellerId = "usr_hana",
+                sellerName = "Hana Tadesse",
+                sellerPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
+                sellerVerified = true,
+                description = "Space Black MacBook Pro 16-inch M3 Max with 36GB unified memory and 1TB SSD. Battery cycle count only 18. Comes with original MagSafe box and 140W charger.",
+                condition = "Used - Like New",
+                viewsCount = 289,
+                createdAt = now - 45 * 60 * 1000L
+            ),
+            ListingItem(
+                id = "mkt_03",
+                title = "Modern 3-Bedroom Furnished Apartment with Balcony View",
+                price = 150000.0,
+                currency = "ETB",
+                imageUrls = listOf(
+                    "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800",
+                    "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800"
+                ),
+                categoryId = "property",
+                location = MarketplaceLocation(9.0220, 38.7460, "Ariena · Kazanchis", 65),
+                distanceKm = 4.8,
+                sellerId = "usr_yared",
+                sellerName = "Yared Kassahun",
+                sellerPhoto = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
+                sellerVerified = true,
+                description = "Luxury 3BHK fully furnished apartment with backup generator, 24/7 security, underground parking, and panoramic city view. Price is monthly rent in ETB or USD equivalent.",
+                condition = "New",
+                viewsCount = 530,
+                createdAt = now - 2 * 3600 * 1000L
+            ),
+            ListingItem(
+                id = "mkt_04",
+                title = "iPhone 15 Pro Max 256GB Natural Titanium (Factory Unlocked)",
+                price = 800.0,
+                currency = "USD",
+                imageUrls = listOf(
+                    "https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=800"
+                ),
+                categoryId = "electronics",
+                location = MarketplaceLocation(9.0110, 38.7580, "Ariena", 65),
+                distanceKm = 5.5,
+                sellerId = "usr_meron",
+                sellerName = "Meron Alemu",
+                sellerPhoto = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200",
+                sellerVerified = false,
+                description = "Factory unlocked iPhone 15 Pro Max 256GB in Natural Titanium. 96% battery health, zero scratches, includes original USB-C braided cable and Apple silicone case.",
+                condition = "Used - Like New",
+                viewsCount = 615,
+                createdAt = now - 3 * 3600 * 1000L
+            ),
+            ListingItem(
+                id = "mkt_05",
+                title = "Handcrafted L-Shaped Velvet Sectional Sofa + Solid Oak Table",
+                price = 25000.0,
+                currency = "ETB",
+                imageUrls = listOf(
+                    "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800"
+                ),
+                categoryId = "furniture",
+                location = MarketplaceLocation(9.0300, 38.7400, "Ariena · Piassa", 65),
+                distanceKm = 7.2,
+                sellerId = "usr_abebe",
+                sellerName = "Abebe Kebede",
+                sellerPhoto = "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=200",
+                sellerVerified = true,
+                description = "Custom Ethiopian highland solid wood frame L-shaped sofa upholstered in emerald stain-resistant velvet. Includes matching coffee table and 4 accent pillows.",
+                condition = "New",
+                viewsCount = 198,
+                createdAt = now - 5 * 3600 * 1000L
+            ),
+            ListingItem(
+                id = "mkt_06",
+                title = "Royal Handwoven Tibeb Habesha Kemis with Gold Tilf Embroidery",
+                price = 220.0,
+                currency = "USD",
+                imageUrls = listOf(
+                    "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=800"
+                ),
+                categoryId = "fashion",
+                location = MarketplaceLocation(9.0180, 38.7510, "Ariena · Shiro Meda", 65),
+                distanceKm = 8.9,
+                sellerId = "usr_selam",
+                sellerName = "Selamawit Bekele",
+                sellerPhoto = "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200",
+                sellerVerified = true,
+                description = "100% pure hand-spun cotton Habesha Kemis with intricate golden Tibeb border and matching Netela shawl. Ideal for weddings, Timket, and cultural celebrations.",
+                condition = "New",
+                viewsCount = 342,
+                createdAt = now - 8 * 3600 * 1000L
+            ),
+            ListingItem(
+                id = "mkt_07",
+                title = "Professional 6-String Electric Acoustic Krar + Padded Case",
+                price = 18500.0,
+                currency = "ETB",
+                imageUrls = listOf(
+                    "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800"
+                ),
+                categoryId = "musical",
+                location = MarketplaceLocation(8.9950, 38.7720, "Ariena · CMC", 65),
+                distanceKm = 11.4,
+                sellerId = "usr_yared",
+                sellerName = "Yared Kassahun",
+                sellerPhoto = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
+                sellerVerified = true,
+                description = "Concert-grade 6-string Ethiopian Krar with built-in pickup, precision tuning pegs, and cedar soundboard. Ready for stage performance or studio recording.",
+                condition = "New",
+                viewsCount = 154,
+                createdAt = now - 12 * 3600 * 1000L
+            ),
+            ListingItem(
+                id = "mkt_08",
+                title = "Complete Brass & Clay Jebena Buna Ceremony Set (12 Finiq Cups)",
+                price = 95.0,
+                currency = "USD",
+                imageUrls = listOf(
+                    "https://images.unsplash.com/photo-1509785307050-d4066910ec1e?w=800"
+                ),
+                categoryId = "coffee_cultural",
+                location = MarketplaceLocation(9.0150, 38.7500, "Ariena", 65),
+                distanceKm = 3.6,
+                sellerId = "usr_hana",
+                sellerName = "Hana Tadesse",
+                sellerPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
+                sellerVerified = true,
+                description = "Authentic handmade Gondar clay Jebena, carved wooden Rekebot tray, brass incense burner (endod/etan), and 12 porcelain Saba-patterned coffee cups + 1kg Yirgacheffe beans.",
+                condition = "New",
+                viewsCount = 420,
+                createdAt = now - 18 * 3600 * 1000L
+            )
+        )
+    }
+
+    private fun createInitialMarketplaceChats(): List<MarketplaceChatMessage> {
+        val now = System.currentTimeMillis()
+        return listOf(
+            MarketplaceChatMessage(
+                chatId = "mkt_chat_01",
+                senderId = "usr_dawit",
+                senderName = "Dawit Mekonnen",
+                senderPhoto = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
+                receiverId = "usr_current",
+                receiverName = "You",
+                receiverPhoto = "",
+                itemId = "mkt_01",
+                itemTitle = "2021 Toyota Hilux Double Cab 4x4 Diesel",
+                itemPriceLabel = "$28,500",
+                itemThumbUrl = "https://images.unsplash.com/photo-1559416523-140ddc3d238c?w=800",
+                messageText = "Yes, this item is still available! You can inspect it in Ariena today.",
+                timestamp = now - 25 * 60 * 1000L
+            ),
+            MarketplaceChatMessage(
+                chatId = "mkt_chat_02",
+                senderId = "usr_hana",
+                senderName = "Hana Tadesse",
+                senderPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
+                receiverId = "usr_current",
+                receiverName = "You",
+                receiverPhoto = "",
+                itemId = "mkt_02",
+                itemTitle = "Apple MacBook Pro 16\" M3 Max",
+                itemPriceLabel = "$1,850",
+                itemThumbUrl = "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800",
+                messageText = "I accept both USD and ETB via Chapa or Telebirr at the daily NBE rate.",
+                timestamp = now - 2 * 3600 * 1000L
+            )
         )
     }
 }

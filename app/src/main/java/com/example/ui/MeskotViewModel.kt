@@ -8,11 +8,13 @@ import com.example.data.CallSession
 import com.example.data.ChatMessage
 import com.example.data.Comment
 import com.example.data.GroupItem
+import com.example.data.GroupUiState
 import com.example.data.MeskotRepository
 import com.example.data.NotificationItem
 import com.example.data.Post
 import com.example.data.StoryItem
 import com.example.data.User
+import com.example.data.UserGroupRole
 import com.example.data.AdCampaign
 import com.example.data.BoostCampaign
 import com.example.data.CreatorPayoutRecord
@@ -23,9 +25,15 @@ import com.example.data.ContentFormatMetric
 import com.example.data.DailyEarningsMetric
 import com.example.data.CreatorPayoutAccount
 import com.example.data.ChapaGatewayConfig
+import com.example.data.ExchangeRateManager
+import com.example.data.PaymentCurrency
 import com.example.data.ProgramStatus
 import com.example.data.LiveStreamSession
 import com.example.data.LiveStreamComment
+import com.example.data.Category
+import com.example.data.ListingItem
+import com.example.data.MarketplaceChatMessage
+import com.example.data.MarketplaceLocation
 import com.example.data.UserInsightsData
 import com.example.data.UserEngagementData
 import com.example.recommendation.UserInterestAnalysisResult
@@ -58,9 +66,11 @@ enum class ScreenTab {
     PROFILE,
     CHAT,
     GROUP_DETAIL,
+    GROUP_ADMIN_DASHBOARD,
     ALBUM_DETAIL,
     ADS_MANAGER,
     CREATOR_STUDIO,
+    MARKETPLACE,
     LIVE
 }
 
@@ -105,6 +115,9 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     val tickerTimeMs: StateFlow<Long> = _tickerTimeMs.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            ExchangeRateManager.refreshDailyNbeRate()
+        }
         viewModelScope.launch {
             while (isActive) {
                 delay(30_000L) // tick every 30 seconds for live UI relative times
@@ -404,7 +417,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _activeChapaSession.value = null
     }
 
-    fun depositViaChapa(amount: Double) {
+    fun depositViaChapa(amount: Double, currencyCode: String = "ETB") {
         closeChapaDeposit()
         val user = currentUser.value
         val fName = user?.displayName?.split(" ")?.firstOrNull() ?: "Meskot"
@@ -412,6 +425,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         val email = if (user?.email?.contains("@") == true) user.email else "customer@example.com"
         val cfg = repository.chapaConfig.value
         val ref = "CHP-DEP-" + System.currentTimeMillis()
+        val cur = PaymentCurrency.fromCode(currencyCode)
 
         launchChapaPayment(
             ChapaPaymentSession(
@@ -421,17 +435,18 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
                 email = email,
                 firstName = fName,
                 lastName = lName,
+                initialCurrency = cur.code,
                 publicKey = cfg.publicKey,
                 isLiveMode = cfg.isLiveMode,
                 onPaymentCompleted = { completedRef ->
                     repository.depositViaChapa(amount, completedRef)
-                    showMessage("✅ Successfully added ${amount.toInt()} ETB to balance via Chapa! Ref: $completedRef")
+                    showMessage("✅ Successfully added ${cur.formatFromEtb(amount)} (${amount.toInt()} ETB) to balance via Chapa! Ref: $completedRef")
                 }
             )
         )
     }
 
-    fun buyStarsViaChapa(starCount: Int, priceEtb: Double) {
+    fun buyStarsViaChapa(starCount: Int, priceEtb: Double, currencyCode: String = "ETB") {
         closeBuyStars()
         val user = currentUser.value
         val fName = user?.displayName?.split(" ")?.firstOrNull() ?: "Meskot"
@@ -439,6 +454,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         val email = if (user?.email?.contains("@") == true) user.email else "customer@example.com"
         val cfg = repository.chapaConfig.value
         val ref = "CHP-STAR-" + System.currentTimeMillis()
+        val cur = PaymentCurrency.fromCode(currencyCode)
 
         launchChapaPayment(
             ChapaPaymentSession(
@@ -448,11 +464,12 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
                 email = email,
                 firstName = fName,
                 lastName = lName,
+                initialCurrency = cur.code,
                 publicKey = cfg.publicKey,
                 isLiveMode = cfg.isLiveMode,
                 onPaymentCompleted = { completedRef ->
                     repository.buyStarsWithChapa(starCount, priceEtb, completedRef)
-                    showMessage("⭐ Added $starCount Stars to your balance via Chapa! Ref: $completedRef")
+                    showMessage("⭐ Added $starCount Stars (${cur.formatFromEtb(priceEtb)}) to your balance via Chapa! Ref: $completedRef")
                 }
             )
         )
@@ -628,6 +645,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         if (current != ScreenTab.FEED) {
             val fallbackTab = when (current) {
                 ScreenTab.CHAT -> ScreenTab.MESSAGES
+                ScreenTab.GROUP_ADMIN_DASHBOARD -> ScreenTab.GROUP_DETAIL
                 ScreenTab.GROUP_DETAIL -> ScreenTab.GROUPS
                 ScreenTab.ALBUM_DETAIL -> ScreenTab.PHOTOS
                 ScreenTab.ADS_MANAGER, ScreenTab.CREATOR_STUDIO -> ScreenTab.MENU
@@ -673,6 +691,11 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         navigateTo(ScreenTab.GROUP_DETAIL)
     }
 
+    fun openGroupAdminDashboard(group: GroupItem) {
+        _viewingGroup.value = group
+        navigateTo(ScreenTab.GROUP_ADMIN_DASHBOARD)
+    }
+
     fun openAlbumDetail(album: AlbumItem) {
         _viewingAlbum.value = album
         navigateTo(ScreenTab.ALBUM_DETAIL)
@@ -696,7 +719,10 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         visibility: String,
         postType: String = "POST",
         videoUrl: String = "",
-        audioTrackTitle: String = ""
+        audioTrackTitle: String = "",
+        locationName: String = "",
+        latitude: Double? = null,
+        longitude: Double? = null
     ) {
         val gid = _composerGroupId.value
         if (gid != null) {
@@ -709,7 +735,10 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
                 visibility = visibility,
                 postType = postType,
                 videoUrl = videoUrl,
-                audioTrackTitle = audioTrackTitle
+                audioTrackTitle = audioTrackTitle,
+                locationName = locationName,
+                latitude = latitude,
+                longitude = longitude
             )
         }
         closeComposer()
@@ -802,14 +831,20 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         newText: String,
         newMediaUrls: List<String>? = null,
         newBgColorIndex: Int? = null,
-        newVisibility: String? = null
+        newVisibility: String? = null,
+        newLocationName: String? = null,
+        newLatitude: Double? = null,
+        newLongitude: Double? = null
     ) {
         repository.editPost(
             postId = postId,
             newText = newText,
             newMediaUrls = newMediaUrls,
             newBgColorIndex = newBgColorIndex,
-            newVisibility = newVisibility
+            newVisibility = newVisibility,
+            newLocationName = newLocationName,
+            newLatitude = newLatitude,
+            newLongitude = newLongitude
         )
         _editingPost.value = null
         showMessage("✅ Post updated!")
@@ -849,21 +884,22 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _tippingPost.value = null
     }
 
-    fun confirmTip(amount: Double, payFromBalance: Boolean = true) {
+    fun confirmTip(amount: Double, payFromBalance: Boolean = true, currencyCode: String = "ETB") {
         val post = _tippingPost.value ?: return
         val user = currentUser.value
         val currentBalance = user?.creatorNetBalance ?: 0.0
+        val cur = PaymentCurrency.fromCode(currencyCode)
 
         if (payFromBalance) {
             if (currentBalance < amount || amount <= 0) {
-                showMessage("⚠️ Insufficient balance (${String.format(java.util.Locale.US, "%,.2f", currentBalance)} ETB). Required: ${amount.toInt()} ETB. Please deposit funds first.")
+                showMessage("⚠️ Insufficient balance (${cur.formatFromEtb(currentBalance)}). Required: ${cur.formatFromEtb(amount)}. Please deposit funds first.")
                 return
             }
             val success = repository.sendTip(post.id, amount, payFromBalance = true)
             if (success) {
                 closeTipModal()
                 val remaining = (currentBalance - amount).coerceAtLeast(0.0)
-                showMessage("✅ Real Tip of ${amount.toInt()} ETB sent to ${post.authorName}! Deducted from balance. Remaining: ${String.format(java.util.Locale.US, "%,.2f", remaining)} ETB.")
+                showMessage("✅ Real Tip of ${cur.formatFromEtb(amount)} (${amount.toInt()} ETB) sent to ${post.authorName}! Deducted from balance. Remaining: ${cur.formatFromEtb(remaining)}.")
             } else {
                 showMessage("⚠️ Insufficient balance to send tip. Please deposit funds.")
             }
@@ -884,11 +920,12 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
                     email = email,
                     firstName = fName,
                     lastName = lName,
+                    initialCurrency = cur.code,
                     publicKey = cfg.publicKey,
                     isLiveMode = cfg.isLiveMode,
                     onPaymentCompleted = { completedRef ->
                         repository.sendTip(post.id, amount, completedRef, payFromBalance = false)
-                        showMessage("✅ Real Tip of ${amount.toInt()} ETB sent to ${post.authorName} via Chapa! (Ref: $completedRef)")
+                        showMessage("✅ Real Tip of ${cur.formatFromEtb(amount)} (${amount.toInt()} ETB) sent to ${post.authorName} via Chapa! (Ref: $completedRef)")
                     }
                 )
             )
@@ -984,12 +1021,12 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _subscriptionModalCreator.value = null
     }
 
-    fun subscribeToTier(creatorUid: String, tier: MembershipTier) = subscribeToCreator(creatorUid, tier)
+    fun subscribeToTier(creatorUid: String, tier: MembershipTier, currencyCode: String = "ETB") = subscribeToCreator(creatorUid, tier, currencyCode)
 
-    fun subscribeToCreator(creatorUid: String, tier: MembershipTier) {
+    fun subscribeToCreator(creatorUid: String, tier: MembershipTier, currencyCode: String = "ETB") {
         val creator = users.value.find { it.uid == creatorUid } ?: _subscriptionModalCreator.value
         if (creator != null) {
-            initiateSubscriptionPayment(creator, tier)
+            initiateSubscriptionPayment(creator, tier, currencyCode)
         } else {
             repository.subscribeToCreator(creatorUid, tier)
             closeSubscriptionModal()
@@ -997,13 +1034,14 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         }
     }
 
-    fun initiateSubscriptionPayment(creator: User, tier: MembershipTier) {
+    fun initiateSubscriptionPayment(creator: User, tier: MembershipTier, currencyCode: String = "ETB") {
         val user = currentUser.value
         val fName = user?.displayName?.split(" ")?.firstOrNull() ?: "Meskot"
         val lName = user?.displayName?.split(" ")?.drop(1)?.joinToString(" ")?.ifBlank { "User" } ?: "User"
         val email = if (user?.email?.contains("@") == true) user.email else "customer@example.com"
         val cfg = repository.chapaConfig.value
         val ref = "CHP-SUB-" + System.currentTimeMillis()
+        val cur = PaymentCurrency.fromCode(currencyCode)
 
         closeSubscriptionModal()
 
@@ -1015,11 +1053,12 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
                 email = email,
                 firstName = fName,
                 lastName = lName,
+                initialCurrency = cur.code,
                 publicKey = cfg.publicKey,
                 isLiveMode = cfg.isLiveMode,
                 onPaymentCompleted = { completedRef ->
                     repository.subscribeToCreator(creator.uid, tier, completedRef)
-                    showMessage("🎉 Unlocked ${tier.label} for ${creator.displayName} via Chapa! (Ref: $completedRef)")
+                    showMessage("🎉 Unlocked ${tier.label} for ${creator.displayName} (${tier.formattedMonthlyPrice(cur)}/mo) via Chapa! (Ref: $completedRef)")
                 }
             )
         )
@@ -1042,20 +1081,32 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         primaryText: String,
         mediaUrl: String,
         ctaText: String,
-        destinationUrl: String
+        destinationUrl: String,
+        targetAudience: String = "Men/Women, 18-65+, 1 location",
+        deductFromWallet: Boolean = false
     ) {
         val currentBalance = currentUser.value?.creatorNetBalance ?: 0.0
-        if (currentBalance < dailyBudgetEtb || dailyBudgetEtb <= 0) {
-            showMessage("⚠️ Insufficient balance (${String.format(java.util.Locale.US, "%,.2f", currentBalance)} ETB). Required daily budget: ${dailyBudgetEtb.toInt()} ETB. Please deposit funds first.")
+        if (deductFromWallet && (currentBalance < dailyBudgetEtb || dailyBudgetEtb <= 0)) {
+            showMessage("⚠️ Insufficient wallet balance. Please verify card payment or deposit funds first.")
             return
         }
-        val success = repository.createAdCampaign(name, objective, dailyBudgetEtb, headline, primaryText, mediaUrl, ctaText, destinationUrl)
+        val success = repository.createAdCampaign(
+            name = name,
+            objective = objective,
+            dailyBudgetEtb = dailyBudgetEtb,
+            headline = headline,
+            primaryText = primaryText,
+            mediaUrl = mediaUrl,
+            ctaText = ctaText,
+            destinationUrl = destinationUrl,
+            targetAudience = targetAudience,
+            deductFromWallet = deductFromWallet
+        )
         if (success) {
             closeCreateCampaignModal()
-            val remaining = (currentBalance - dailyBudgetEtb).coerceAtLeast(0.0)
-            showMessage("📢 Campaign \"$name\" launched! Deducted ${dailyBudgetEtb.toInt()} ETB from your balance. Remaining: ${String.format(java.util.Locale.US, "%,.2f", remaining)} ETB.")
+            showMessage("🚀 Ad promoted! \"$name\" is now active.")
         } else {
-            showMessage("⚠️ Insufficient balance to launch campaign.")
+            showMessage("⚠️ Could not launch campaign.")
         }
     }
 
@@ -1072,10 +1123,11 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _isPayoutModalOpen.value = false
     }
 
-    fun requestPayout(method: String, amountEtb: Double, destinationAccount: String = "") {
+    fun requestPayout(method: String, amountEtb: Double, destinationAccount: String = "", currencyCode: String = "ETB") {
         repository.requestPayout(method, amountEtb, destinationAccount)
         closePayoutModal()
-        showMessage("💸 Payout request of ${amountEtb.toInt()} ETB submitted via $method! Transferred through Chapa rails.")
+        val cur = PaymentCurrency.fromCode(currencyCode)
+        showMessage("💸 Payout request of ${cur.formatFromEtb(amountEtb)} (${amountEtb.toInt()} ETB) submitted via $method! Transferred through Chapa rails.")
     }
 
     fun applyForMonetizationTool(toolId: String, payoutMethod: String = "Telebirr", accountNumber: String = ""): Boolean {
@@ -1335,9 +1387,76 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _activeCall.value = null
     }
 
-    // Groups
+    // Groups & Role-Based State
+    val groupPostsMap: StateFlow<Map<String, List<Post>>> = repository.groupPosts
+
+    private val _groupRoleOverrides = MutableStateFlow<Map<String, UserGroupRole>>(emptyMap())
+    val groupRoleOverrides: StateFlow<Map<String, UserGroupRole>> = _groupRoleOverrides.asStateFlow()
+
+    fun getUserRoleForGroup(group: GroupItem, user: User? = currentUser.value): UserGroupRole {
+        _groupRoleOverrides.value[group.id]?.let { return it }
+        if (!group.isJoined) return UserGroupRole.NON_MEMBER
+        if (user?.isAdmin == true || group.createdBy == user?.uid || group.createdBy == "meskot") {
+            return UserGroupRole.ADMIN
+        }
+        return UserGroupRole.MEMBER
+    }
+
+    fun setGroupRoleOverride(groupId: String, role: UserGroupRole) {
+        _groupRoleOverrides.value = _groupRoleOverrides.value + (groupId to role)
+        if (role == UserGroupRole.NON_MEMBER) {
+            val currentGroup = repository.groups.value.find { it.id == groupId }
+            if (currentGroup?.isJoined == true) {
+                repository.toggleGroupJoin(groupId)
+            }
+        } else {
+            val currentGroup = repository.groups.value.find { it.id == groupId }
+            if (currentGroup?.isJoined == false) {
+                repository.toggleGroupJoin(groupId)
+            }
+        }
+        refreshViewingGroup(groupId)
+        showMessage("Switched group role to ${role.name}")
+    }
+
+    private fun refreshViewingGroup(groupId: String) {
+        val latest = repository.groups.value.find { it.id == groupId }
+        if (latest != null && _viewingGroup.value?.id == groupId) {
+            _viewingGroup.value = latest
+        }
+    }
+
     fun toggleGroupJoin(group: GroupItem) {
         repository.toggleGroupJoin(group.id)
+        val updated = repository.groups.value.find { it.id == group.id }
+        if (updated != null) {
+            if (_viewingGroup.value?.id == group.id) {
+                _viewingGroup.value = updated
+            }
+            if (!updated.isJoined) {
+                _groupRoleOverrides.value = _groupRoleOverrides.value - group.id
+            } else if (_groupRoleOverrides.value[group.id] == UserGroupRole.NON_MEMBER) {
+                _groupRoleOverrides.value = _groupRoleOverrides.value - group.id
+            }
+        }
+    }
+
+    fun updateGroupCover(groupId: String, newCoverUrl: String, newColorHex: String? = null) {
+        repository.updateGroupCover(groupId, newCoverUrl, newColorHex)
+        refreshViewingGroup(groupId)
+        showMessage("✅ Group cover updated!")
+    }
+
+    fun updateGroupPrivacyAndPermissions(groupId: String, isPrivate: Boolean, allowMemberPosts: Boolean) {
+        repository.updateGroupPrivacyAndPermissions(groupId, isPrivate, allowMemberPosts)
+        refreshViewingGroup(groupId)
+        showMessage("✅ Group settings saved!")
+    }
+
+    fun resolveGroupModerationQueue(groupId: String, queueType: String) {
+        repository.resolveGroupModerationQueue(groupId, queueType)
+        refreshViewingGroup(groupId)
+        showMessage("✅ Moderation queue reviewed and cleared!")
     }
 
     fun createGroup(name: String, desc: String) {
@@ -1507,6 +1626,74 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
             repository.refreshFeed()
         }
     }
+
+    // ============================================================================
+    // FACEBOOK MARKETPLACE ("TODAY'S PICKS" FEED, SELL FLOW, INBOX & SELLER CHAT)
+    // ============================================================================
+    val marketplaceCategories: StateFlow<List<Category>> = repository.marketplaceCategories
+    val marketplaceListings: StateFlow<List<ListingItem>> = repository.marketplaceListings
+    val marketplaceChats: StateFlow<List<MarketplaceChatMessage>> = repository.marketplaceChats
+    val marketplaceCurrentLocation: StateFlow<MarketplaceLocation> = repository.marketplaceLocation
+    val savedListingIds: StateFlow<Set<String>> = repository.savedListingIds
+
+    fun updateMarketplaceLocationFilter(location: MarketplaceLocation, radiusKm: Double) {
+        repository.updateMarketplaceLocation(
+            name = location.name,
+            radiusKm = radiusKm.toInt(),
+            latitude = location.latitude,
+            longitude = location.longitude
+        )
+        showMessage("Location updated to ${location.name} · ${radiusKm.toInt()} km")
+    }
+
+    fun toggleSaveListing(itemId: String) {
+        repository.toggleSaveListing(itemId)
+    }
+
+    fun createMarketplaceListing(
+        title: String,
+        price: Double,
+        currency: String,
+        categoryId: String,
+        description: String,
+        imageUrls: List<String>,
+        location: MarketplaceLocation,
+        condition: String = "Used - Like New",
+        onDone: (Boolean) -> Unit = {}
+    ) {
+        val created = repository.createMarketplaceListing(
+            title = title,
+            categoryId = categoryId,
+            price = price,
+            currency = currency,
+            description = description,
+            condition = condition,
+            locationName = location.name,
+            latitude = location.latitude,
+            longitude = location.longitude,
+            imageUrls = imageUrls
+        )
+        showMessage("Listed \"${created.title}\" on Marketplace!")
+        onDone(true)
+    }
+
+    fun sendMarketplaceInquiry(item: ListingItem, messageText: String) {
+        repository.sendMarketplaceInquiry(item, messageText)
+    }
+
+    fun startChatWithSeller(item: ListingItem, initialMessage: String? = null) {
+        val sellerUser = users.value.find { it.uid == item.sellerId } ?: User(
+            uid = item.sellerId,
+            displayName = item.sellerName.ifBlank { "Marketplace Seller" },
+            email = "${item.sellerId}@meskot.app",
+            photoUrl = item.sellerPhoto,
+            isVerified = item.sellerVerified
+        )
+        if (!initialMessage.isNullOrBlank()) {
+            repository.sendMarketplaceInquiry(item, initialMessage)
+        }
+        openChat(sellerUser)
+    }
 }
 
 /**
@@ -1520,6 +1707,7 @@ data class ChapaPaymentSession(
     val email: String = "customer@example.com",
     val firstName: String = "Meskot",
     val lastName: String = "User",
+    val initialCurrency: String = "ETB",
     val publicKey: String = "CHAPUBK_TEST-1PW1FKvNMh2tx4k5hHPibEZA4A6GPpRc",
     val isLiveMode: Boolean = false,
     val onPaymentCompleted: (txRef: String) -> Unit = {}

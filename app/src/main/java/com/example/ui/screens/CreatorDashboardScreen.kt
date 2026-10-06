@@ -83,10 +83,12 @@ import com.example.data.CreatorPayoutAccount
 import com.example.data.CreatorPayoutRecord
 import com.example.data.DailyEarningsMetric
 import com.example.data.EarningsLedgerEntry
+import com.example.data.ExchangeRateManager
 import com.example.data.LedgerEntryType
 import com.example.data.MembershipTier
 import com.example.data.MeskotStrings
 import com.example.data.MonetizationTool
+import com.example.data.PaymentCurrency
 import com.example.data.ProgramStatus
 import com.example.data.User
 import com.example.ui.MeskotViewModel
@@ -151,8 +153,8 @@ fun CreatorDashboardScreen(
             netBalanceEtb = netBalance,
             currentLanguage = currentLanguage,
             onDismiss = { showPayoutModal = false },
-            onRequestPayout = { method, amount, destAccount ->
-                viewModel.requestPayout(method, amount, destAccount)
+            onRequestPayout = { method, amount, destAccount, currencyCode ->
+                viewModel.requestPayout(method, amount, destAccount, currencyCode)
                 showPayoutModal = false
             }
         )
@@ -163,9 +165,9 @@ fun CreatorDashboardScreen(
             config = chapaConfig,
             currentLanguage = currentLanguage,
             onDismiss = { showDepositModal = false },
-            onProceed = { amount ->
+            onProceed = { amount, currencyCode ->
                 showDepositModal = false
-                viewModel.depositViaChapa(amount)
+                viewModel.depositViaChapa(amount, currencyCode)
             }
         )
     }
@@ -305,7 +307,7 @@ fun CreatorDashboardScreen(
                             modifier = Modifier.size(13.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "+ Add ETB", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "+ Add Funds", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
                     Spacer(modifier = Modifier.width(6.dp))
@@ -356,7 +358,7 @@ fun CreatorDashboardScreen(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "CHAPA REAL FINANCIAL BALANCE",
+                                    text = "CHAPA REAL FINANCIAL BALANCE (USD PRIMARY)",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFF94A3B8)
@@ -376,7 +378,7 @@ fun CreatorDashboardScreen(
                                     .padding(horizontal = 8.dp, vertical = 3.dp)
                             ) {
                                 Text(
-                                    text = if (chapaConfig.isLiveMode) "🟢 LIVE CHAPA (REAL ETB)" else "🟡 CHAPA TEST GATEWAY",
+                                    text = if (chapaConfig.isLiveMode) "🟢 LIVE CHAPA (USD / ETB)" else "🟡 CHAPA TEST GATEWAY",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (chapaConfig.isLiveMode) Color(0xFF34D399) else Color(0xFFFDE68A)
@@ -386,18 +388,30 @@ fun CreatorDashboardScreen(
 
                         Spacer(modifier = Modifier.height(6.dp))
 
+                        val nbeRate = ExchangeRateManager.nbeUsdToEtbRate
+                        val netBalanceUsd = netBalance / nbeRate
+                        val grossEarningsUsd = grossEarnings / nbeRate
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.Bottom
                         ) {
-                            Text(
-                                text = "${String.format(java.util.Locale.US, "%,.2f", netBalance)} ETB",
-                                fontSize = 32.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFBBF24),
-                                fontFamily = FontFamily.Serif
-                            )
+                            Column {
+                                Text(
+                                    text = "$${String.format(java.util.Locale.US, "%,.2f", netBalanceUsd)} USD",
+                                    fontSize = 30.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFBBF24),
+                                    fontFamily = FontFamily.Serif
+                                )
+                                Text(
+                                    text = "Secondary: ≈ ${String.format(java.util.Locale.US, "%,.2f", netBalance)} ETB · NBE Rate: 1 USD = ${String.format(java.util.Locale.US, "%,.2f", nbeRate)} ETB",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF94A3B8)
+                                )
+                            }
 
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Button(
@@ -432,20 +446,31 @@ fun CreatorDashboardScreen(
                             Column {
                                 Text(text = "Gross Revenue", fontSize = 11.sp, color = Color(0xFF94A3B8))
                                 Text(
-                                    text = "${String.format(java.util.Locale.US, "%,.2f", grossEarnings)} ETB",
+                                    text = "$${String.format(java.util.Locale.US, "%,.2f", grossEarningsUsd)} USD",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
+                                Text(
+                                    text = "≈ ${String.format(java.util.Locale.US, "%,.0f", grossEarnings)} ETB",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF94A3B8)
+                                )
                             }
                             Column {
                                 Text(text = "Platform Fee (20%)", fontSize = 11.sp, color = Color(0xFF94A3B8))
-                                val fee = grossEarnings * 0.20
+                                val feeUsd = grossEarningsUsd * 0.20
+                                val feeEtb = grossEarnings * 0.20
                                 Text(
-                                    text = "-${String.format(java.util.Locale.US, "%,.2f", fee)} ETB",
+                                    text = "-$${String.format(java.util.Locale.US, "%,.2f", feeUsd)} USD",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFF87171)
+                                )
+                                Text(
+                                    text = "≈ -${String.format(java.util.Locale.US, "%,.0f", feeEtb)} ETB",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF94A3B8)
                                 )
                             }
                             Column {
@@ -511,7 +536,7 @@ fun CreatorDashboardScreen(
                                         }
                                     }
                                     Text(
-                                        text = "Telebirr · CBE Birr · eBirr · M-Pesa · Debit/Credit Cards",
+                                        text = "USD (Primary) & ETB (Secondary) · NBE Rate: 1 USD = ${String.format(java.util.Locale.US, "%,.2f", ExchangeRateManager.nbeUsdToEtbRate)} ETB",
                                         fontSize = 11.sp,
                                         color = MutedText
                                     )
@@ -531,15 +556,15 @@ fun CreatorDashboardScreen(
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.weight(1.2f)
                             ) {
-                                Text(text = "+ Add Real ETB", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(text = "+ Deposit (USD / ETB)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
 
                             OutlinedButton(
-                                onClick = { viewModel.openTestChapaCheckout(100.0) },
+                                onClick = { viewModel.openTestChapaCheckout(5.0 * ExchangeRateManager.nbeUsdToEtbRate) },
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text(text = "Test Checkout", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                                Text(text = "Test Checkout ($5)", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Ink)
                             }
 
                             OutlinedButton(
@@ -864,7 +889,7 @@ fun DailyEarningsBarChartCard(dailyEarnings: List<DailyEarningsMetric>) {
                         color = Ink
                     )
                     Text(
-                        text = "Real-time estimated daily accruals (ETB)",
+                        text = "Real-time estimated daily accruals (USD Primary / ETB Secondary)",
                         fontSize = 11.sp,
                         color = MutedText
                     )
@@ -901,7 +926,7 @@ fun DailyEarningsBarChartCard(dailyEarnings: List<DailyEarningsMetric>) {
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(
-                            text = "${item.totalEtb.toInt()}",
+                            text = "$${String.format(java.util.Locale.US, "%.1f", item.totalEtb / ExchangeRateManager.nbeUsdToEtbRate)}",
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             color = GoldDeep
@@ -999,14 +1024,15 @@ fun ContentFormatMetricCard(metric: ContentFormatMetric) {
             }
 
             Column(horizontalAlignment = Alignment.End) {
+                val nbeRate = ExchangeRateManager.nbeUsdToEtbRate
                 Text(
-                    text = "${String.format(java.util.Locale.US, "%,.2f", metric.netCreatorRevenueEtb)} ETB",
+                    text = "$${String.format(java.util.Locale.US, "%,.2f", metric.netCreatorRevenueEtb / nbeRate)} USD",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF059669)
                 )
                 Text(
-                    text = "RPM: ${String.format(java.util.Locale.US, "%,.2f", metric.rpmEtb)} ETB",
+                    text = "≈ ${String.format(java.util.Locale.US, "%,.0f", metric.netCreatorRevenueEtb)} ETB · RPM: $${String.format(java.util.Locale.US, "%.2f", metric.rpmEtb / nbeRate)}",
                     fontSize = 10.sp,
                     color = MutedText,
                     fontWeight = FontWeight.Medium
@@ -1491,16 +1517,17 @@ fun FinancialLedgerSection(
                     }
                     Column {
                         Text(text = "Latest Running Balance", fontSize = 10.sp, color = MutedText)
+                        val nbeRate = ExchangeRateManager.nbeUsdToEtbRate
                         Text(
-                            text = "${String.format(java.util.Locale.US, "%,.2f", currentNetBalance)} ETB",
-                            fontSize = 13.sp,
+                            text = "$${String.format(java.util.Locale.US, "%,.2f", currentNetBalance / nbeRate)} USD (~${String.format(java.util.Locale.US, "%,.0f", currentNetBalance)} ETB)",
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = GoldDeep
                         )
                     }
                     Column {
                         Text(text = "Audit Currency", fontSize = 10.sp, color = MutedText)
-                        Text(text = "ETB / Birr", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
+                        Text(text = "USD / ETB (NBE)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Ink)
                     }
                 }
             }
@@ -1580,12 +1607,21 @@ fun LedgerEntryCard(entry: EarningsLedgerEntry) {
                     )
                 }
 
-                Text(
-                    text = (if (entry.amountEtb > 0) "+" else "") + "${String.format(java.util.Locale.US, "%,.2f", entry.amountEtb)} ETB",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (entry.amountEtb >= 0) Color(0xFF059669) else Color(0xFFDC2626)
-                )
+                val nbeRate = ExchangeRateManager.nbeUsdToEtbRate
+                val entryUsd = entry.amountEtb / nbeRate
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = (if (entryUsd > 0) "+" else "") + "$${String.format(java.util.Locale.US, "%,.2f", entryUsd)} USD",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (entry.amountEtb >= 0) Color(0xFF059669) else Color(0xFFDC2626)
+                    )
+                    Text(
+                        text = (if (entry.amountEtb > 0) "+" else "") + "${String.format(java.util.Locale.US, "%,.2f", entry.amountEtb)} ETB",
+                        fontSize = 10.sp,
+                        color = MutedText
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -1604,8 +1640,9 @@ fun LedgerEntryCard(entry: EarningsLedgerEntry) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(text = entry.formattedDate, fontSize = 10.sp, color = MutedText)
+                val balUsd = entry.balanceAfterEtb / ExchangeRateManager.nbeUsdToEtbRate
                 Text(
-                    text = "Balance: ${String.format(java.util.Locale.US, "%,.2f", entry.balanceAfterEtb)} ETB",
+                    text = "Balance: $${String.format(java.util.Locale.US, "%,.2f", balUsd)} USD (~${String.format(java.util.Locale.US, "%,.0f", entry.balanceAfterEtb)} ETB)",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF334155)
@@ -1643,7 +1680,7 @@ fun PayoutsAndGatewaysSection(
                         color = Color(0xFF854D0E)
                     )
                     Text(
-                        text = "Balances reaching 1,000 ETB automatically settle every Monday morning. You can also request instant cash out anytime above 100 ETB.",
+                        text = "Balances reaching $10.00 USD (~${(10.0 * ExchangeRateManager.nbeUsdToEtbRate).toInt()} ETB) automatically settle every Monday morning. Instant cash out available anytime in USD or ETB.",
                         fontSize = 11.sp,
                         color = Color(0xFFA16207),
                         lineHeight = 15.sp
@@ -1848,7 +1885,7 @@ fun ApplyMonetizationProgramModal(
     onDismiss: () -> Unit,
     onConfirmApply: (payoutMethod: String, accountNumber: String) -> Unit
 ) {
-    var payoutMethod by remember { mutableStateOf("Telebirr") }
+    var payoutMethod by remember { mutableStateOf("PayPal / Wire (USD)") }
     var accountNumber by remember { mutableStateOf("") }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -1905,7 +1942,7 @@ fun ApplyMonetizationProgramModal(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Telebirr", "CBE Birr").forEach { method ->
+                    listOf("PayPal / Wire (USD)", "Telebirr (ETB)", "CBE Birr (ETB)").forEach { method ->
                         val isSelected = payoutMethod == method
                         OutlinedButton(
                             onClick = { payoutMethod = method },
@@ -1917,13 +1954,15 @@ fun ApplyMonetizationProgramModal(
                                 if (isSelected) GoldDeep else LineBorder
                             ),
                             shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp)
                         ) {
                             Text(
                                 text = method,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) Ink else MutedText
+                                color = if (isSelected) Ink else MutedText,
+                                maxLines = 1
                             )
                         }
                     }
@@ -2285,13 +2324,14 @@ fun StreamRow(
             }
         }
         Column(horizontalAlignment = Alignment.End) {
+            val nbeRate = ExchangeRateManager.nbeUsdToEtbRate
             Text(
-                text = "${String.format(java.util.Locale.US, "%,.2f", amountEtb)} ETB",
+                text = "$${String.format(java.util.Locale.US, "%,.2f", amountEtb / nbeRate)} USD",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = GoldDeep
             )
-            Text(text = pct, fontSize = 10.sp, color = MutedText, fontWeight = FontWeight.SemiBold)
+            Text(text = "≈ ${String.format(java.util.Locale.US, "%,.0f", amountEtb)} ETB ($pct)", fontSize = 10.sp, color = MutedText, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -2345,11 +2385,17 @@ fun PayoutHistoryCard(record: CreatorPayoutRecord) {
             }
 
             Column(horizontalAlignment = Alignment.End) {
+                val nbeRate = ExchangeRateManager.nbeUsdToEtbRate
                 Text(
-                    text = "${String.format(java.util.Locale.US, "%,.2f", record.amountEtb)} ETB",
+                    text = "$${String.format(java.util.Locale.US, "%,.2f", record.amountEtb / nbeRate)} USD",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = Ink
+                )
+                Text(
+                    text = "≈ ${String.format(java.util.Locale.US, "%,.0f", record.amountEtb)} ETB",
+                    fontSize = 10.sp,
+                    color = MutedText
                 )
                 Box(
                     modifier = Modifier
@@ -2399,8 +2445,8 @@ fun MembershipTierManagementCard(tier: MembershipTier) {
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "${tier.monthlyPriceEtb.toInt()} ETB / month",
-                        fontSize = 12.sp,
+                        text = "$${String.format(java.util.Locale.US, "%.2f", tier.monthlyPriceUsd)} USD (~${String.format(java.util.Locale.US, "%,d", tier.monthlyPriceEtb)} ETB) / mo",
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = GoldDeep
                     )

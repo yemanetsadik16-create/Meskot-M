@@ -32,11 +32,14 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.ui.platform.LocalContext
+import com.example.util.LocationHelper
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -112,9 +115,11 @@ fun PostCard(
     onReelClick: (Post) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var isCommentsOpen by remember { mutableStateOf(false) }
     var isReactionPickerOpen by remember { mutableStateOf(false) }
     var isExpandedText by remember { mutableStateOf(false) }
+    var showEmbeddedPostMap by remember { mutableStateOf(false) }
     var commentInput by remember { mutableStateOf("") }
     var replyingToCommentId by remember { mutableStateOf<String?>(null) }
 
@@ -206,6 +211,32 @@ fun PostCard(
                             "onlyme" -> "🔒"
                             else -> "🌐"
                         }
+                        if (post.locationName.isNotBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .padding(top = 1.dp)
+                                    .clickable {
+                                        showEmbeddedPostMap = !showEmbeddedPostMap
+                                    }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = "Post Location",
+                                    tint = Color(0xFFE41E3F),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = post.locationName,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF1877F2),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                         Text(
                             text = MeskotStrings.formatPostTime(post.createdAt, currentLanguage) +
                                     (if (post.editedAt != null) " · ${MeskotStrings.get("editedLabel", currentLanguage)}" else "") +
@@ -224,6 +255,23 @@ fun PostCard(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = "Options",
                         tint = MutedText
+                    )
+                }
+            }
+
+            // Expandable Google Map Preview when user taps the post's check-in location
+            AnimatedVisibility(visible = showEmbeddedPostMap && post.locationName.isNotBlank()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                ) {
+                    InteractiveGoogleMapCard(
+                        latitude = post.latitude ?: 9.0192,
+                        longitude = post.longitude ?: 38.7525,
+                        placeName = post.locationName,
+                        height = 170.dp,
+                        showOpenButton = true
                     )
                 }
             }
