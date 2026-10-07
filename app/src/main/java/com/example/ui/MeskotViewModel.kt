@@ -1659,6 +1659,14 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         imageUrls: List<String>,
         location: MarketplaceLocation,
         condition: String = "Used - Like New",
+        isNegotiable: Boolean = true,
+        deliveryOption: String = "Meetup · Bole",
+        sellerPhone: String = "+251 911 234 567",
+        allowChat: Boolean = true,
+        allowCall: Boolean = true,
+        allowWhatsApp: Boolean = false,
+        isPromoted: Boolean = false,
+        tags: List<String> = emptyList(),
         onDone: (Boolean) -> Unit = {}
     ) {
         val created = repository.createMarketplaceListing(
@@ -1671,9 +1679,17 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
             locationName = location.name,
             latitude = location.latitude,
             longitude = location.longitude,
-            imageUrls = imageUrls
+            imageUrls = imageUrls,
+            isNegotiable = isNegotiable,
+            deliveryOption = deliveryOption,
+            sellerPhone = sellerPhone,
+            allowChat = allowChat,
+            allowCall = allowCall,
+            allowWhatsApp = allowWhatsApp,
+            isPromoted = isPromoted,
+            tags = tags
         )
-        showMessage("Listed \"${created.title}\" on Marketplace!")
+        showMessage("Listed \"${created.title}\" on Meskot Marketplace!")
         onDone(true)
     }
 

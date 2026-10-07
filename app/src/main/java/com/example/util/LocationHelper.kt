@@ -53,6 +53,57 @@ data class RealPlaceResult(
  */
 object LocationHelper {
 
+    /**
+     * Exact saved locations list (`LOCS`) from the Sell on Meskot specification:
+     * const LOCS=['Mekelle','Wukro','Adwa','Axum, Ethiopia','Addis Ababa, Ethiopia','Temben, Tigray, Ethiopia','Anseba, Tigray, Ethiopia','Shehet, Tigray, Ethiopia','Megab, Tigray, Ethiopia','Calgary, Alberta','Perth, Western Australia','Berlin, Germany','Bangkok, Thailand','Makurdu, Benue, Nigeria','Dhaka, Bangladesh','Baghdad, Iraq','Bangalore, India'];
+     */
+    val MESKOT_HTML_LOCS: List<String> = listOf(
+        "Mekelle",
+        "Wukro",
+        "Adwa",
+        "Axum, Ethiopia",
+        "Addis Ababa, Ethiopia",
+        "Temben, Tigray, Ethiopia",
+        "Anseba, Tigray, Ethiopia",
+        "Shehet, Tigray, Ethiopia",
+        "Megab, Tigray, Ethiopia",
+        "Calgary, Alberta",
+        "Perth, Western Australia",
+        "Berlin, Germany",
+        "Bangkok, Thailand",
+        "Makurdu, Benue, Nigeria",
+        "Dhaka, Bangladesh",
+        "Baghdad, Iraq",
+        "Bangalore, India"
+    )
+
+    fun resolvePlaceByName(
+        placeName: String,
+        fallbackLat: Double = 13.4967,
+        fallbackLng: Double = 39.4753
+    ): RealPlaceResult {
+        val trimmed = placeName.trim().ifBlank { "Mekelle" }
+        val exact = defaultVerifiedPlaces().find {
+            it.name.equals(trimmed, ignoreCase = true) ||
+                    it.fullAddress.equals(trimmed, ignoreCase = true)
+        }
+        if (exact != null) return exact.copy(name = trimmed)
+
+        val partial = defaultVerifiedPlaces().find {
+            trimmed.contains(it.name, ignoreCase = true) ||
+                    it.name.contains(trimmed.substringBefore(","), ignoreCase = true)
+        }
+        if (partial != null) {
+            return partial.copy(name = trimmed, fullAddress = trimmed)
+        }
+        return RealPlaceResult(
+            name = trimmed,
+            fullAddress = trimmed,
+            latitude = fallbackLat,
+            longitude = fallbackLng
+        )
+    }
+
     fun hasLocationPermission(context: Context): Boolean {
         val fine = ContextCompat.checkSelfPermission(
             context,
@@ -356,51 +407,147 @@ object LocationHelper {
 
     fun defaultVerifiedPlaces(): List<RealPlaceResult> = listOf(
         RealPlaceResult(
+            name = "Mekelle",
+            fullAddress = "Mekelle, Tigray, Ethiopia",
+            latitude = 13.4967,
+            longitude = 39.4753,
+            city = "Mekelle",
+            country = "Ethiopia"
+        ),
+        RealPlaceResult(
+            name = "Wukro",
+            fullAddress = "Wukro, Tigray, Ethiopia",
+            latitude = 13.7889,
+            longitude = 39.5997,
+            city = "Wukro",
+            country = "Ethiopia"
+        ),
+        RealPlaceResult(
+            name = "Adwa",
+            fullAddress = "Adwa, Tigray, Ethiopia",
+            latitude = 14.1667,
+            longitude = 38.9000,
+            city = "Adwa",
+            country = "Ethiopia"
+        ),
+        RealPlaceResult(
+            name = "Axum, Ethiopia",
+            fullAddress = "Axum, Tigray, Ethiopia",
+            latitude = 14.1211,
+            longitude = 38.7233,
+            city = "Axum",
+            country = "Ethiopia"
+        ),
+        RealPlaceResult(
+            name = "Addis Ababa, Ethiopia",
+            fullAddress = "Addis Ababa, Ethiopia",
+            latitude = 9.0192,
+            longitude = 38.7525,
+            city = "Addis Ababa",
+            country = "Ethiopia"
+        ),
+        RealPlaceResult(
+            name = "Temben, Tigray, Ethiopia",
+            fullAddress = "Abi Adi, Temben, Tigray, Ethiopia",
+            latitude = 13.6228,
+            longitude = 39.0031,
+            city = "Temben",
+            country = "Ethiopia"
+        ),
+        RealPlaceResult(
+            name = "Anseba, Tigray, Ethiopia",
+            fullAddress = "Anseba, Tigray, Ethiopia",
+            latitude = 13.8500,
+            longitude = 39.1000,
+            city = "Anseba",
+            country = "Ethiopia"
+        ),
+        RealPlaceResult(
+            name = "Shehet, Tigray, Ethiopia",
+            fullAddress = "Shehet, Tigray, Ethiopia",
+            latitude = 13.3833,
+            longitude = 39.8000,
+            city = "Shehet",
+            country = "Ethiopia"
+        ),
+        RealPlaceResult(
+            name = "Megab, Tigray, Ethiopia",
+            fullAddress = "Megab, Hawzen, Tigray, Ethiopia",
+            latitude = 13.9436,
+            longitude = 39.4139,
+            city = "Megab",
+            country = "Ethiopia"
+        ),
+        RealPlaceResult(
+            name = "Calgary, Alberta",
+            fullAddress = "Calgary, Alberta, Canada",
+            latitude = 51.0447,
+            longitude = -114.0719,
+            city = "Calgary",
+            country = "Canada"
+        ),
+        RealPlaceResult(
+            name = "Perth, Western Australia",
+            fullAddress = "Perth, Western Australia, Australia",
+            latitude = -31.9505,
+            longitude = 115.8605,
+            city = "Perth",
+            country = "Australia"
+        ),
+        RealPlaceResult(
+            name = "Berlin, Germany",
+            fullAddress = "Berlin, Germany",
+            latitude = 52.5200,
+            longitude = 13.4050,
+            city = "Berlin",
+            country = "Germany"
+        ),
+        RealPlaceResult(
+            name = "Bangkok, Thailand",
+            fullAddress = "Bangkok, Thailand",
+            latitude = 13.7563,
+            longitude = 100.5018,
+            city = "Bangkok",
+            country = "Thailand"
+        ),
+        RealPlaceResult(
+            name = "Makurdu, Benue, Nigeria",
+            fullAddress = "Makurdi, Benue, Nigeria",
+            latitude = 7.7322,
+            longitude = 8.5391,
+            city = "Makurdi",
+            country = "Nigeria"
+        ),
+        RealPlaceResult(
+            name = "Dhaka, Bangladesh",
+            fullAddress = "Dhaka, Bangladesh",
+            latitude = 23.8103,
+            longitude = 90.4125,
+            city = "Dhaka",
+            country = "Bangladesh"
+        ),
+        RealPlaceResult(
+            name = "Baghdad, Iraq",
+            fullAddress = "Baghdad, Iraq",
+            latitude = 33.3152,
+            longitude = 44.3661,
+            city = "Baghdad",
+            country = "Iraq"
+        ),
+        RealPlaceResult(
+            name = "Bangalore, India",
+            fullAddress = "Bengaluru, Karnataka, India",
+            latitude = 12.9716,
+            longitude = 77.5946,
+            city = "Bangalore",
+            country = "India"
+        ),
+        RealPlaceResult(
             name = "Bole, Addis Ababa",
             fullAddress = "Bole Sub-City, Addis Ababa, Ethiopia",
             latitude = 8.9980,
             longitude = 38.7890,
             city = "Addis Ababa",
-            country = "Ethiopia"
-        ),
-        RealPlaceResult(
-            name = "Meskel Square, Addis Ababa",
-            fullAddress = "Meskel Square, Kirkos, Addis Ababa, Ethiopia",
-            latitude = 9.0104,
-            longitude = 38.7612,
-            city = "Addis Ababa",
-            country = "Ethiopia"
-        ),
-        RealPlaceResult(
-            name = "Kazanchis, Addis Ababa",
-            fullAddress = "Kazanchis Business District, Addis Ababa, Ethiopia",
-            latitude = 9.0192,
-            longitude = 38.7665,
-            city = "Addis Ababa",
-            country = "Ethiopia"
-        ),
-        RealPlaceResult(
-            name = "Piassa, Addis Ababa",
-            fullAddress = "Arada (Piassa), Addis Ababa, Ethiopia",
-            latitude = 9.0331,
-            longitude = 38.7501,
-            city = "Addis Ababa",
-            country = "Ethiopia"
-        ),
-        RealPlaceResult(
-            name = "CMC, Addis Ababa",
-            fullAddress = "CMC Michael, Yeka, Addis Ababa, Ethiopia",
-            latitude = 9.0205,
-            longitude = 38.8350,
-            city = "Addis Ababa",
-            country = "Ethiopia"
-        ),
-        RealPlaceResult(
-            name = "Mekelle, Ethiopia",
-            fullAddress = "Mekelle, Tigray, Ethiopia",
-            latitude = 13.4967,
-            longitude = 39.4753,
-            city = "Mekelle",
             country = "Ethiopia"
         ),
         RealPlaceResult(
@@ -417,14 +564,6 @@ object LocationHelper {
             latitude = 11.5936,
             longitude = 37.3908,
             city = "Bahir Dar",
-            country = "Ethiopia"
-        ),
-        RealPlaceResult(
-            name = "Adama, Ethiopia",
-            fullAddress = "Adama (Nazret), Oromia, Ethiopia",
-            latitude = 8.5400,
-            longitude = 39.2700,
-            city = "Adama",
             country = "Ethiopia"
         ),
         RealPlaceResult(

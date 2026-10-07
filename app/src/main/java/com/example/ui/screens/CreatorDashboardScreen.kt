@@ -74,6 +74,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -256,31 +257,36 @@ fun CreatorDashboardScreen(
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "Meskot Partner Studio",
-                                fontSize = 17.sp,
+                                text = "Meskot Partner",
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Serif,
-                                color = Ink
+                                color = Ink,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(4.dp))
                                     .background(Color(0xFF065F46))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .padding(horizontal = 5.dp, vertical = 2.dp)
                             ) {
                                 Text(
                                     text = "PROD",
-                                    fontSize = 9.sp,
+                                    fontSize = 8.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF34D399)
+                                    color = Color(0xFF34D399),
+                                    maxLines = 1
                                 )
                             }
                         }
                         Text(
-                            text = "Multi-tier Monetization · Ledger · Gateways",
-                            fontSize = 11.sp,
-                            color = MutedText
+                            text = "Monetization · Ledger · Gateways",
+                            fontSize = 10.5.sp,
+                            color = MutedText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 },
@@ -298,34 +304,40 @@ fun CreatorDashboardScreen(
                         onClick = { showDepositModal = true },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.height(34.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Bolt,
                             contentDescription = "Add Funds",
                             tint = Color.White,
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(12.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "+ Add Funds", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(text = "+ Add Funds", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
 
                     Button(
                         onClick = { showPayoutModal = true },
                         colors = ButtonDefaults.buttonColors(containerColor = GoldDeep),
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.height(34.dp)
                     ) {
-                        Text(text = "💸 Cash Out", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "💸 Cash Out", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
 
-                    IconButton(onClick = { showConfigModal = true }) {
+                    IconButton(
+                        onClick = { showConfigModal = true },
+                        modifier = Modifier.size(36.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = "Chapa Gateway Settings",
-                            tint = Ink
+                            tint = Ink,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 },
@@ -350,20 +362,25 @@ fun CreatorDashboardScreen(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
                                 Text(
-                                    text = "CHAPA REAL FINANCIAL BALANCE (USD PRIMARY)",
-                                    fontSize = 11.sp,
+                                    text = "CHAPA FINANCIAL BALANCE (USD)",
+                                    fontSize = 10.5.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF94A3B8)
+                                    color = Color(0xFF94A3B8),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 Icon(
                                     imageVector = Icons.Default.Verified,
                                     contentDescription = "Ledger Reconciled",
@@ -371,6 +388,7 @@ fun CreatorDashboardScreen(
                                     modifier = Modifier.size(13.dp)
                                 )
                             }
+                            Spacer(modifier = Modifier.width(6.dp))
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
@@ -378,15 +396,16 @@ fun CreatorDashboardScreen(
                                     .padding(horizontal = 8.dp, vertical = 3.dp)
                             ) {
                                 Text(
-                                    text = if (chapaConfig.isLiveMode) "🟢 LIVE CHAPA (USD / ETB)" else "🟡 CHAPA TEST GATEWAY",
-                                    fontSize = 10.sp,
+                                    text = if (chapaConfig.isLiveMode) "🟢 LIVE CHAPA" else "🟡 TEST GATEWAY",
+                                    fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (chapaConfig.isLiveMode) Color(0xFF34D399) else Color(0xFFFDE68A)
+                                    color = if (chapaConfig.isLiveMode) Color(0xFF34D399) else Color(0xFFFDE68A),
+                                    maxLines = 1
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         val nbeRate = ExchangeRateManager.nbeUsdToEtbRate
                         val netBalanceUsd = netBalance / nbeRate
@@ -395,32 +414,39 @@ fun CreatorDashboardScreen(
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Bottom
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = "$${String.format(java.util.Locale.US, "%,.2f", netBalanceUsd)} USD",
-                                    fontSize = 30.sp,
+                                    fontSize = 26.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFFBBF24),
-                                    fontFamily = FontFamily.Serif
+                                    fontFamily = FontFamily.Serif,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "Secondary: ≈ ${String.format(java.util.Locale.US, "%,.2f", netBalance)} ETB · NBE Rate: 1 USD = ${String.format(java.util.Locale.US, "%,.2f", nbeRate)} ETB",
+                                    text = "≈ ${String.format(java.util.Locale.US, "%,.2f", netBalance)} ETB · 1 USD = ${String.format(java.util.Locale.US, "%,.2f", nbeRate)} ETB",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF94A3B8)
+                                    color = Color(0xFF94A3B8),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
+
+                            Spacer(modifier = Modifier.width(8.dp))
 
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Button(
                                     onClick = { showDepositModal = true },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
                                     shape = RoundedCornerShape(8.dp),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                    modifier = Modifier.height(34.dp)
                                 ) {
-                                    Text(text = "+ Deposit", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text(text = "+ Deposit", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
 
                                 OutlinedButton(
@@ -428,9 +454,10 @@ fun CreatorDashboardScreen(
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF93C5FD)),
                                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF3B82F6)),
                                     shape = RoundedCornerShape(8.dp),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                    modifier = Modifier.height(34.dp)
                                 ) {
-                                    Text(text = "⚙️ Chapa", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(text = "⚙️ Chapa", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                                 }
                             }
                         }

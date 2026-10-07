@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sell on Meskot</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fbf8ef;--paper:#fffdf8;--ink:#1d2419;--mut:#7a7360;--line:#eadfc2;--g1:#efd06c;--g2:#a87b25;--bz:#96691f;--mar:#8a1c2b;--tint:#f6edd2;--sh:rgba(120,90,20,.14);
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root[data-theme="dark"]{--bg:#15120b;--paper:#211c11;--ink:#f6ecd2;--mut:#b6ac90;--line:#3a3220;--tint:#2d2615;--sh:rgba(0,0,0,.5)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--ink);font:15px/1.4 Poppins,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Ethiopic",sans-serif;display:flex;justify-content:center}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:left}
+.app{width:100%;max-width:480px;min-height:100vh;position:relative}
+.hd{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-top:4px solid;border-image:linear-gradient(90deg,var(--g1),var(--g2)) 1;display:flex;align-items:center;gap:12px;padding:10px 14px}
+.rb{width:44px;height:44px;border-radius:50%;border:2px solid var(--g1);background:var(--paper);display:grid;place-items:center;color:var(--bz);flex:none}
+.tt{flex:1;min-width:0}.tt b{display:block;font-size:19px;font-weight:700;line-height:1.15}.tt span{font-size:12px;color:var(--bz);font-weight:600}
+.gp{height:44px;padding:0 20px;border-radius:22px;background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;font-weight:700;text-shadow:0 1px 1px rgba(80,50,0,.3);box-shadow:0 3px 8px var(--sh)}
+.mt{height:4px;background:var(--line);margin:0 14px;border-radius:2px;overflow:hidden;position:sticky;top:calc(62px + env(safe-area-inset-top,0px));z-index:4}.mt i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--g1),var(--g2));transition:.25s}
+main{padding:14px 14px 120px}
+.card{position:relative;background:var(--paper);border:1px solid var(--line);border-radius:28px;padding:22px 18px 18px;margin-bottom:16px;box-shadow:0 6px 18px var(--sh);overflow:hidden}
+.card:before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:linear-gradient(90deg,var(--g1),var(--g2))}
+.ch{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.ch h2{font-size:17px;font-weight:700}
+.pill{font-size:12px;font-weight:600;color:var(--bz);background:var(--tint);border-radius:12px;padding:2px 10px}
+.hint{font-size:13px;color:var(--mut);margin:-6px 0 12px}
+.drop{width:100%;border:2px dashed var(--g1);background:var(--bg);border-radius:22px;padding:26px 12px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.drop .ic{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--g1),var(--g2));display:grid;place-items:center;color:#fff}
+.drop b{font-size:16px}.drop small{color:var(--mut);font-size:13px}
+.pg{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.pg:empty{display:none}
+.ph{position:relative;aspect-ratio:1;border-radius:18px;overflow:hidden;background:var(--tint)}.ph img{width:100%;height:100%;object-fit:cover}
+.ph .x{position:absolute;top:5px;right:5px;width:26px;height:26px;border-radius:50%;background:rgba(29,36,25,.7);color:#fff;text-align:center;line-height:26px;font-size:17px}
+.ph .cv{position:absolute;left:6px;bottom:6px;background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;font-size:11px;font-weight:600;border-radius:10px;padding:1px 9px}
+.ad{aspect-ratio:1;border-radius:18px;border:2px dashed var(--g1);display:grid;place-items:center;color:var(--bz);font-size:28px}
+.f{margin-top:14px}.f:first-of-type{margin-top:0}
+.lb{display:block;font-size:13px;font-weight:600;color:var(--bz);margin:0 0 6px 4px}
+.in,.sl{width:100%;min-height:50px;border:1.5px solid var(--line);border-radius:16px;background:var(--bg);color:var(--ink);font:inherit;font-size:16px;padding:0 16px;outline:0}
+.in:focus{border-color:var(--g2);box-shadow:0 0 0 4px rgba(239,208,108,.35)}
+textarea.in{height:120px;padding:12px 16px;resize:none;display:block}
+.pre{position:relative}.pre span{position:absolute;left:16px;top:13px;font-weight:600;color:var(--bz)}.pre .in{padding-left:34px}
+.sl{display:flex;align-items:center;justify-content:space-between;gap:8px}.sl.e{color:var(--mut)}.sl svg{flex:none;color:var(--g2)}
+.sl .sw0{width:18px;height:18px;border-radius:50%;border:1px solid var(--line);display:inline-block;vertical-align:-3px;margin-right:8px}
+.cat{width:100%;display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:20px;background:var(--tint);border:1.5px solid var(--line)}
+.cat em{font-style:normal;font-size:26px;width:44px;height:44px;border-radius:14px;background:var(--paper);display:grid;place-items:center}
+.cat b{flex:1;font-weight:600}.cat.e b{color:var(--mut);font-weight:500}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:8px 16px;border-radius:20px;border:1.5px solid var(--line);background:var(--bg);font-size:14px;font-weight:500}
+.chip.on{background:linear-gradient(135deg,var(--g1),var(--g2));border-color:transparent;color:#fff;font-weight:600;text-shadow:0 1px 1px rgba(80,50,0,.3)}
+.tg{display:flex;align-items:center;gap:14px;padding:14px 0;border-top:1px solid var(--line)}.tg:first-of-type{border-top:0;padding-top:0}
+.tg .t{flex:1}.tg b{font-weight:600;display:block}.tg p{font-size:13px;color:var(--mut)}.tg a{color:var(--bz);font-weight:600}
+.sw{position:relative;width:50px;height:30px;flex:none}.sw input{position:absolute;inset:0;opacity:0;z-index:2;cursor:pointer}
+.sw i{position:absolute;inset:0;border-radius:15px;background:var(--line);transition:.15s}
+.sw i:after{content:"";position:absolute;left:3px;top:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:.15s}
+.sw input:checked+i{background:linear-gradient(135deg,var(--g1),var(--g2))}.sw input:checked+i:after{transform:translateX(20px)}
+.note{font-size:12px;color:var(--mut);text-align:center;padding:0 10px}.note a{color:var(--bz);font-weight:600;text-decoration:none}
+.ft{position:fixed;bottom:0;width:100%;max-width:480px;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,var(--bg) 70%,transparent);z-index:6}
+.big{width:100%;height:54px;border-radius:27px;background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;font-size:17px;font-weight:700;text-align:center;text-shadow:0 1px 1px rgba(80,50,0,.3);box-shadow:0 6px 16px var(--sh)}
+.ov{position:fixed;inset:0;background:rgba(29,20,5,.5);z-index:50;display:none;align-items:flex-end;justify-content:center}.ov.on{display:flex}
+.sheet{width:100%;max-width:480px;max-height:86vh;background:var(--paper);border-radius:28px 28px 0 0;display:flex;flex-direction:column;animation:up .2s ease-out;padding-bottom:env(safe-area-inset-bottom,0px)}
+@keyframes up{from{transform:translateY(100%)}}
+.sheet:before{content:"";width:44px;height:5px;border-radius:3px;background:var(--line);margin:10px auto 0}
+.sh{display:flex;justify-content:space-between;align-items:center;padding:12px 20px 10px}.sh h3{font-size:18px;font-weight:700}
+.sh button{width:34px;height:34px;border-radius:50%;background:var(--tint);color:var(--bz);text-align:center;font-size:20px}
+.sb{overflow-y:auto;padding:4px 16px 18px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.cd{border:1.5px solid var(--line);border-radius:20px;padding:12px;background:var(--bg);display:flex;flex-direction:column;gap:2px;min-height:96px}
+.cd em{font-style:normal;font-size:26px}.cd b{font-size:14px;font-weight:600;line-height:1.25}.cd small{font-size:11.5px;color:var(--mut);line-height:1.3}
+.cd.on,.yr.on,.sq.on{border-color:var(--g2);background:var(--tint);box-shadow:0 0 0 2px var(--g1)}
+.yr{padding:10px 0;text-align:center;border:1.5px solid var(--line);border-radius:14px;font-weight:600;font-size:14px;background:var(--bg)}
+.sq{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px;border:1.5px solid var(--line);border-radius:18px;font-size:12px;font-weight:500;text-align:center;background:var(--bg)}
+.sq i{width:34px;height:34px;border-radius:50%;border:1px solid rgba(0,0,0,.15)}
+.li{display:flex;gap:10px;align-items:center;width:100%;padding:13px 6px;border-bottom:1px solid var(--line)}
+.srch{width:100%;height:48px;border-radius:24px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;padding:0 18px;outline:0;margin-bottom:8px}.srch:focus{border-color:var(--g2)}
+.mid{align-items:center;padding:20px}.ok{width:100%;max-width:340px;background:var(--paper);border-radius:28px;padding:28px 22px 22px;text-align:center;overflow:hidden;position:relative}
+.ok:before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:linear-gradient(90deg,var(--g1),var(--g2))}
+.ok .m{width:64px;height:64px;border-radius:20px;background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;font:700 34px/64px Georgia,serif;margin:0 auto 12px;font-style:italic}
+.ok h3{font-size:20px}.ok p{color:var(--mut);font-size:14px;margin:6px 0 18px}
+.toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--mar);color:#fff;padding:11px 18px;border-radius:20px;font-size:14px;font-weight:500;z-index:99;display:none;max-width:90%;box-shadow:0 4px 12px rgba(0,0,0,.3)}.toast.on{display:block}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="hd">
+    <button class="rb" aria-label="Back" onclick="toast('Listing discarded')"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l-8 8 8 8"/></svg></button>
+    <div class="tt"><b>Sell on Meskot</b><span>መስኮት · New listing</span></div>
+    <button class="gp" onclick="publish()">Publish</button>
+  </header>
+  <div class="mt"><i id="mt"></i></div>
+  <main id="form"></main>
+  <footer class="ft"><button class="big" onclick="publish()">Publish listing</button></footer>
+</div>
+
+<div class="ov" id="ov" onclick="if(event.target===this)closeSheet()"><div class="sheet"><div class="sh"><h3 id="sh-t"></h3><button aria-label="Close" onclick="closeSheet()">&times;</button></div><div class="sb" id="sb"></div></div></div>
+<div class="ov mid" id="ok"><div class="ok"><div class="m">M</div><h3>Listing published</h3><p>We review every listing quickly before it appears on Meskot Market.</p><button class="big" onclick="reset()">Done</button></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id),esc=s=>String(s==null?'':s).replace(/"/g,'&quot;');
+const CATS=[['Vehicles','🚗'],['Rentals','🏠'],["Women's clothing & shoes",'👗'],["Men's clothing & shoes",'👔'],['Furniture','🛋️'],['Electronics & computers','💻'],['Mobile phones','📱'],['Home sales','🏡'],['Video Games','🎮'],['Toys & Games','🧸'],['Appliances','🔌'],['Antiques & Collectibles','🏺'],['Arts & Crafts','🎨'],['Auto parts','🔧'],['Baby & kids','🍼'],['Bags & Luggage','🧳'],['Bicycles','🚲'],['Books, Movies & Music','📚'],['Garage Sale','🏷️'],['Garden','🌿'],['Health & beauty','💄'],['Household','🧺'],['Jewelry & Accessories','💍'],['Miscellaneous','✨'],['Musical Instruments','🎸'],['Pet Supplies','🐾'],['Sports & Outdoors','⚽'],['Tools','🛠️']];
+const VT=[['Cars & Trucks','Sedans, SUVs, trucks, vans, etc.','🚗'],['Motorcycles','Street, dirt bikes, scooters, etc.','🏍️'],['Powersports','ATVs, snowmobiles, watercrafts, etc.','🛺'],['RVs & Campers','Motorhomes, towable RVs, etc.','🚐'],['Boats','Sailboats, motorboats, etc.','⛵'],['Commercial & Industrial','Semi trucks, cranes, tractors, etc.','🚛'],['Trailers','Livestock, cargo vehicles, etc.','🛻'],['Other','Golf carts, aircrafts, etc.','🚜']];
+const YEARS=Array.from({length:128},(_,i)=>String(2027-i));
+const COL=[['Black','#111'],['Charcoal','#36454f'],['Grey','#8a8d91'],['Silver','#c4c7cc'],['White','#fff'],['Off white','#f3efe4'],['Tan','#d2b48c'],['Beige','#e0d4b8'],['Yellow','#f4d03f'],['Gold','#c9a227'],['Brown','#7b4a2a'],['Orange','#f08a24'],['Red','#d32f2f'],['Burgundy','#7b1e2b'],['Pink','#f48fb1'],['Purple','#7e57c2'],['Blue','#1e6fd9'],['Turquoise','#26c6b4'],['Green','#2e8b4e'],['Other','conic-gradient(#d32f2f,#f4d03f,#2e8b4e,#1e6fd9,#7e57c2,#d32f2f)']];
+const LOCS=['Mekelle','Wukro','Adwa','Axum, Ethiopia','Addis Ababa, Ethiopia','Temben, Tigray, Ethiopia','Anseba, Tigray, Ethiopia','Shehet, Tigray, Ethiopia','Megab, Tigray, Ethiopia','Calgary, Alberta','Perth, Western Australia','Berlin, Germany','Bangkok, Thailand','Makurdu, Benue, Nigeria','Dhaka, Bangladesh','Baghdad, Iraq','Bangalore, India'];
+const F={
+ cat:{l:'Category'},type:{l:'Vehicle type',kind:'cards',o:VT,t:'Vehicle types'},year:{l:'Year',kind:'grid',o:YEARS},
+ make:{l:'Make',t:'txt'},model:{l:'Model',t:'txt'},trim:{l:'Trim',t:'txt'},
+ body:{l:'Body style',chips:['Convertible','Coupe','Hatchback','Minivan','Sedan','Wagon','SUV','Truck','Small Car','Other']},
+ trans:{l:'Transmission',chips:['Automatic transmission','Manual transmission']},
+ fuel:{l:'Fuel type',chips:['Diesel','Electric','Gasoline','Flex','Hybrid','Other','Petrol','Plug-in hybrid']},
+ icol:{l:'Interior color',kind:'swatch',o:COL,t:'Interior color'},ecol:{l:'Exterior color',kind:'swatch',o:COL,t:'Exterior color'},
+ cond:{l:'Condition',chips:['New','Used - Like New','Used - Good','Used - Fair']},carrier:{l:'Carrier',t:'txt'},
+ dev:{l:'Device name',chips:['iPhone XS','iPhone XS Max','iPhone XR','iPhone 8 Plus','iPhone 11','iPhone 12','Samsung Galaxy S21','Google Pixel 6']},
+ brand:{l:'Brand',t:'txt'},size:{l:'Size',t:'txt'},
+ plat:{l:'Platform',chips:['Playstation+4','Nintendo+Switch','Xbox+One','PC','Nintendo+DS','Nintendo+WiiU','Nintendo+Wii','Nintendo+GameCube','Playstation+3','Xbox+360']},
+ title:{l:'What are you selling?',t:'txt'},price:{l:'Price',t:'num'},loc:{l:'Location',t:'loc'},desc:{l:'Description',t:'area'},
+ avail:{l:'Availability',chips:['List as Single Item','List as In Stock']}};
+const BLANK={cat:'',type:'',year:'',make:'',model:'',trim:'',body:'',trans:'',fuel:'',icol:'',ecol:'',cond:'',carrier:'',dev:'',brand:'',size:'',plat:'',title:'',price:'',desc:''};
+let S={...BLANK,avail:'List as Single Item',loc:'Mekelle',ship:false,hide:false,cm:true,photos:[]};
+
+function layout(){
+  const c=S.cat;
+  if(c==='Vehicles')return ['cat','type','year','make','model',...(S.type==='Cars & Trucks'?['trim','body','trans','fuel']:[]),'icol','ecol','price','loc','desc'];
+  const x=/clothing/.test(c)?['cond','brand','size']:c==='Mobile phones'?['cond','carrier','dev']:c==='Video Games'?['cond','plat']:c==='Toys & Games'?['cond','brand']:(c==='Rentals'||c==='Home sales'||!c)?[]:['cond'];
+  return ['cat',...x,'title','price','loc','desc','avail'];
+}
+const CH='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+function fld(k){
+  const f=F[k],v=S[k];let c;
+  if(k==='cat'){const e=(CATS.find(x=>x[0]===v)||[])[1];return `<div class="f"><label class="lb">Category</label><button class="cat ${v?'':'e'}" data-act="pick" data-k="cat"><em>${e||'🪟'}</em><b>${v||'Choose a category'}</b>${CH}</button></div>`}
+  if(f.chips)c=`<div class="chips">${f.chips.map(o=>`<button class="chip ${v===o?'on':''}" data-act="chip" data-k="${k}" data-v="${esc(o)}">${o}</button>`).join('')}</div>`;
+  else if(f.t==='txt')c=`<input class="in" value="${esc(v)}" oninput="S.${k}=this.value;meter()">`;
+  else if(f.t==='num')c=`<div class="pre"><span>$</span><input class="in" type="number" inputmode="decimal" min="0" value="${esc(v)}" oninput="S.${k}=this.value;meter()"></div>`;
+  else if(f.t==='area')c=`<textarea class="in" oninput="S.${k}=this.value">${v}</textarea>`;
+  else if(f.t==='loc')c=`<button class="sl" data-act="loc"><span>📍 ${S.loc}</span>${CH}</button>`;
+  else{const sw=(COL.find(x=>x[0]===v)||[])[1];c=`<button class="sl ${v?'':'e'}" data-act="pick" data-k="${k}"><span>${sw?`<i class="sw0" style="background:${sw}"></i>`:''}${v||'Select'}</span>${CH}</button>`}
+  return `<div class="f"><label class="lb">${f.l}</label>${c}</div>`;
+}
+function tg(id,t,sub,on){return `<div class="tg"><div class="t"><b>${t}</b>${sub?`<p>${sub}</p>`:''}</div><label class="sw"><input type="checkbox" ${on?'checked':''} onchange="S.${id}=this.checked"><i></i></label></div>`}
+function render(){
+  const L=layout(),i=L.indexOf('price'),a=L.slice(0,i),b=['price','loc'],d=L.slice(i+2);
+  const n=S.photos.length;
+  $('form').innerHTML=`
+  <section class="card"><div class="ch"><h2>Photos</h2><span class="pill">${n} / 10</span></div>
+    <input type="file" id="file" accept="image/*" multiple hidden onchange="addPh(event)">
+    ${n?'':`<button class="drop" onclick="$('file').click()"><span class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span><b>Add photos</b><small>Good light and a clean background sell faster. First photo is the cover.</small></button>`}
+    <div class="pg">${S.photos.map((u,j)=>`<div class="ph"><img src="${u}" alt=""><button class="x" aria-label="Remove photo" data-act="rm" data-i="${j}">&times;</button>${j===0?'<span class="cv">Cover</span>':''}</div>`).join('')}${n&&n<10?'<button class="ad" aria-label="Add photo" onclick="$(\'file\').click()">+</button>':''}</div>
+  </section>
+  <section class="card"><div class="ch"><h2>About the item</h2></div>${a.map(fld).join('')}</section>
+  <section class="card"><div class="ch"><h2>Price &amp; place</h2></div>${b.map(fld).join('')}</section>
+  <section class="card"><div class="ch"><h2>Description</h2></div>${d.map(fld).join('')}</section>
+  <section class="card"><div class="ch"><h2>Who can see it</h2></div>
+    ${S.cat==='Vehicles'?'':tg('ship','Offer shipping','Buyers can ask you to ship this item.',S.ship)}
+    ${tg('hide','Hide from friends','This listing is still public. If you hide it from friends, they won\'t see it in most cases. <a href="#" onclick="return false">Learn more</a>',S.hide)}
+    ${tg('cm','Allow comments','People can comment on your listing.',S.cm)}
+  </section>
+  <p class="note">Every listing goes through a quick review to make sure it follows our <a href="#" onclick="return false">Commerce policies</a>. Animals, drugs, weapons and counterfeits are not allowed.</p>`;
+  meter();
+}
+function meter(){
+  const v=S.cat==='Vehicles',done=[S.photos.length>0,!!S.cat,v?(S.type&&S.year):(S.title||'').trim(),S.price!==''].filter(Boolean).length;
+  $('mt').style.width=done*25+'%';
+}
+function choose(k,v){
+  if(k==='cat'&&v!==S.cat)S={...S,...BLANK,cat:v,price:S.price,title:S.title,desc:S.desc};
+  else S[k]=v;
+  if(k==='type')S.trans=v==='Cars & Trucks'?'Automatic transmission':'';
+}
+function openSheet(title,html){$('sh-t').textContent=title;$('sb').innerHTML=html;$('ov').classList.add('on')}
+function closeSheet(){$('ov').classList.remove('on')}
+function pick(k){
+  const f=F[k],v=S[k],o=(a,x)=>`data-act="opt" data-k="${k}" data-v="${esc(a)}"`;let h;
+  if(k==='cat')h='<div class="g2">'+CATS.map(c=>`<button class="cd ${v===c[0]?'on':''}" ${o(c[0])}><em>${c[1]}</em><b>${c[0]}</b></button>`).join('')+'</div>';
+  else if(f.kind==='cards')h='<div class="g2">'+f.o.map(c=>`<button class="cd ${v===c[0]?'on':''}" ${o(c[0])}><em>${c[2]}</em><b>${c[0]}</b><small>${c[1]}</small></button>`).join('')+'</div>';
+  else if(f.kind==='grid')h='<div class="g4">'+f.o.map(y=>`<button class="yr ${v===y?'on':''}" ${o(y)}>${y}</button>`).join('')+'</div>';
+  else h='<div class="g4">'+f.o.map(c=>`<button class="sq ${v===c[0]?'on':''}" ${o(c[0])}><i style="background:${c[1]}"></i>${c[0]}</button>`).join('')+'</div>';
+  openSheet(f.t||f.l,h);
+  if(k==='year'){const on=$('sb').querySelector('.on');if(on)on.scrollIntoView({block:'center'})}
+}
+/* location: live search (Google key or OpenStreetMap), saved list as fallback */
+const GOOGLE_API_KEY=''; // paste a Google Maps Platform key (Places API New) for Google suggestions
+let _t,_n=0;
+function openLoc(){openSheet('Change location','<input class="srch" id="ls" placeholder="Search any city or place" oninput="filt(this.value)"><div id="ll"></div>');showLocs(LOCS)}
+function showLocs(list,note){
+  $('ll').innerHTML=(list.length?list.map(l=>`<button class="li" data-act="setloc" data-v="${esc(l)}">📍 ${l}</button>`).join(''):'<p class="hint" style="margin:12px 4px">No places found</p>')+(note?`<p class="hint" style="margin:10px 4px">${note}</p>`:'');
+}
+const local=q=>LOCS.filter(l=>l.toLowerCase().includes(q.toLowerCase()));
+async function search(q){
+  if(GOOGLE_API_KEY){
+    const r=await fetch('https://places.googleapis.com/v1/places:autocomplete',{method:'POST',headers:{'Content-Type':'application/json','X-Goog-Api-Key':GOOGLE_API_KEY},body:JSON.stringify({input:q})});
+    return ((await r.json()).suggestions||[]).map(x=>x.placePrediction&&x.placePrediction.text.text).filter(Boolean);
+  }
+  const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=8&q='+encodeURIComponent(q));
+  return (await r.json()).map(x=>x.display_name);
+}
+function filt(q){
+  clearTimeout(_t);if(!q.trim())return showLocs(LOCS);
+  showLocs(local(q));
+  _t=setTimeout(async()=>{const n=++_n;try{const r=await search(q);if(n===_n)showLocs(r)}catch(e){if(n===_n)showLocs(local(q),'Live place search is not available here. Showing saved places.')}},350);
+}
+function addPh(e){for(const f of e.target.files){if(S.photos.length>=10){toast('You can add up to 10 photos');break}S.photos.push(URL.createObjectURL(f))}e.target.value='';render()}
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');if(!el)return;const a=el.dataset.act,k=el.dataset.k,v=el.dataset.v;
+  if(a==='chip'){S[k]=S[k]===v?'':v;render()}
+  else if(a==='pick')pick(k);
+  else if(a==='opt'){choose(k,v);closeSheet();render()}
+  else if(a==='loc')openLoc();
+  else if(a==='setloc'){S.loc=v;closeSheet();render()}
+  else if(a==='rm'){S.photos.splice(+el.dataset.i,1);render()}
+});
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),2200)}
+function publish(){
+  const v=S.cat==='Vehicles';
+  if(!S.cat)return toast('Choose a category first');
+  if(v&&(!S.type||!S.year))return toast('Choose the vehicle type and year');
+  if(!v&&!(S.title||'').trim())return toast('Tell us what you are selling');
+  if(S.price==='')return toast('Add a price');
+  $('ok').classList.add('on');
+}
+function reset(){S={...BLANK,avail:'List as Single Item',loc:S.loc,ship:false,hide:false,cm:true,photos:[]};$('ok').classList.remove('on');render();scrollTo(0,0)}
+render();
+</script>
+</body>
+</html>

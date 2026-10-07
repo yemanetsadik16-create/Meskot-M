@@ -3680,9 +3680,9 @@ class MeskotRepository(
 
     private val _marketplaceLocation = MutableStateFlow(
         MarketplaceLocation(
-            latitude = 9.0192,
-            longitude = 38.7525,
-            name = "Ariena",
+            latitude = 13.4967,
+            longitude = 39.4753,
+            name = "Mekelle",
             radiusKm = 65
         )
     )
@@ -3722,7 +3722,15 @@ class MeskotRepository(
         locationName: String,
         latitude: Double,
         longitude: Double,
-        imageUrls: List<String>
+        imageUrls: List<String>,
+        isNegotiable: Boolean = true,
+        deliveryOption: String = "Meetup · Bole",
+        sellerPhone: String = "+251 911 234 567",
+        allowChat: Boolean = true,
+        allowCall: Boolean = true,
+        allowWhatsApp: Boolean = false,
+        isPromoted: Boolean = false,
+        tags: List<String> = emptyList()
     ): ListingItem {
         val user = _currentUser.value
         val item = ListingItem(
@@ -3746,7 +3754,15 @@ class MeskotRepository(
             description = description.trim(),
             condition = condition,
             isAvailable = true,
-            createdAt = System.currentTimeMillis()
+            createdAt = System.currentTimeMillis(),
+            isNegotiable = isNegotiable,
+            deliveryOption = deliveryOption,
+            sellerPhone = sellerPhone,
+            allowChat = allowChat,
+            allowCall = allowCall,
+            allowWhatsApp = allowWhatsApp,
+            isPromoted = isPromoted,
+            tags = tags
         )
         _marketplaceListings.value = listOf(item) + _marketplaceListings.value
         FirebaseManager.createMarketplaceListing(item)
@@ -3784,15 +3800,35 @@ class MeskotRepository(
 
     private fun createMarketplaceCategories(): List<Category> {
         return listOf(
-            Category("all", "All Categories", "🛍️"),
+            Category("all", "All Categories", "🪟"),
             Category("vehicles", "Vehicles", "🚗"),
-            Category("property", "Property Rentals & Sales", "🏠"),
-            Category("electronics", "Electronics & Phones", "📱"),
-            Category("furniture", "Home & Furniture", "🛋️"),
-            Category("fashion", "Apparel & Habesha Kemis", "👗"),
+            Category("property", "Rentals", "🏠"),
+            Category("fashion_women", "Women's clothing & shoes", "👗"),
+            Category("fashion_men", "Men's clothing & shoes", "👔"),
+            Category("furniture", "Furniture", "🛋️"),
+            Category("electronics", "Electronics & computers", "💻"),
+            Category("mobile_phones", "Mobile phones", "📱"),
+            Category("home_sales", "Home sales", "🏡"),
+            Category("video_games", "Video Games", "🎮"),
+            Category("toys_games", "Toys & Games", "🧸"),
+            Category("appliances", "Appliances", "🔌"),
+            Category("coffee_cultural", "Antiques & Collectibles", "🏺"),
+            Category("arts_crafts", "Arts & Crafts", "🎨"),
+            Category("auto_parts", "Auto parts", "🔧"),
+            Category("baby_kids", "Baby & kids", "🍼"),
+            Category("bags_luggage", "Bags & Luggage", "🧳"),
+            Category("bicycles", "Bicycles", "🚲"),
+            Category("books_music", "Books, Movies & Music", "📚"),
+            Category("classifieds", "Garage Sale", "🏷️"),
+            Category("garden", "Garden", "🌿"),
+            Category("health_beauty", "Health & beauty", "💄"),
+            Category("household", "Household", "🧺"),
+            Category("jewelry", "Jewelry & Accessories", "💍"),
+            Category("miscellaneous", "Miscellaneous", "✨"),
             Category("musical", "Musical Instruments", "🎸"),
-            Category("coffee_cultural", "Coffee & Cultural Art", "☕"),
-            Category("classifieds", "Classifieds & Deals", "🏷️")
+            Category("pet_supplies", "Pet Supplies", "🐾"),
+            Category("sports_outdoors", "Sports & Outdoors", "⚽"),
+            Category("tools", "Tools", "🛠️")
         )
     }
 

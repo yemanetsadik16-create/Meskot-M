@@ -146,7 +146,7 @@ fun MarketplaceScreen(
                     item.location.latitude,
                     item.location.longitude
                 )
-                val effectiveDist = if (currentLocation.name.equals("Ariena", ignoreCase = true) && item.distanceKm > 0) {
+                val effectiveDist = if (item.distanceKm > 0 && (currentLocation.name.equals("Ariena", ignoreCase = true) || currentLocation.name.equals("Mekelle", ignoreCase = true))) {
                     item.distanceKm
                 } else {
                     computedDist
@@ -166,7 +166,8 @@ fun MarketplaceScreen(
                 matchesCategory && matchesQuery && matchesRadius
             }
             .sortedWith(
-                compareBy<ListingItem> { (it.distanceKm / 15.0).toInt() }
+                compareByDescending<ListingItem> { it.isPromoted }
+                    .thenBy { (it.distanceKm / 15.0).toInt() }
                     .thenByDescending { it.createdAt }
             )
     }
@@ -402,30 +403,34 @@ fun MarketplaceScreen(
                             color = FbDarkText
                         )
 
-                        // Interactive Location & Radius Filter Pill
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .clickable { showLocationDialog = true }
-                                .padding(horizontal = 6.dp, vertical = 4.dp)
-                                .testTag("marketplace_location_badge"),
-                            verticalAlignment = Alignment.CenterVertically
+                        // Interactive Location Pill matching Sell on Meskot (`📍 ${loc}` + gold chevron)
+                        Surface(
+                            onClick = { showLocationDialog = true },
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFFFBF8EF),
+                            border = BorderStroke(1.5.dp, Color(0xFFEADFC2)),
+                            modifier = Modifier.testTag("marketplace_location_badge")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.LocationOn,
-                                contentDescription = "Filter Location",
-                                tint = FbBlue,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "${currentLocation.name} · ${radiusKm.toInt()} km",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = FbBlue,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "📍 ${currentLocation.name.ifBlank { "Mekelle" }}",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF1D2419),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Change location",
+                                    tint = Color(0xFFA87B25),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
 
@@ -559,13 +564,13 @@ fun MarketplaceScreen(
         )
     }
 
-    // "Sell" Flow (Create Listing Modal)
+    // "Sell" Flow (Sell on Meskot · ሽያጭ በመስኮት Modal)
     if (showSellModal) {
-        CreateListingModal(
+        SellOnMeskotModal(
             categories = categories.filter { it.id != "all" },
             defaultLocation = currentLocation,
             onDismiss = { showSellModal = false },
-            onSubmit = { title, price, currency, categoryId, desc, imageUrls, loc, condition ->
+            onSubmit = { title, price, currency, categoryId, desc, imageUrls, loc, condition, isNegotiable, deliveryOption, sellerPhone, allowChat, allowCall, allowWhatsApp, isPromoted ->
                 viewModel.createMarketplaceListing(
                     title = title,
                     price = price,
@@ -574,7 +579,14 @@ fun MarketplaceScreen(
                     description = desc,
                     imageUrls = imageUrls,
                     location = loc,
-                    condition = condition
+                    condition = condition,
+                    isNegotiable = isNegotiable,
+                    deliveryOption = deliveryOption,
+                    sellerPhone = sellerPhone,
+                    allowChat = allowChat,
+                    allowCall = allowCall,
+                    allowWhatsApp = allowWhatsApp,
+                    isPromoted = isPromoted
                 ) {
                     showSellModal = false
                 }
@@ -751,6 +763,23 @@ private fun MarketplaceProductGridCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
+                if (item.isPromoted) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF96691F).copy(alpha = 0.92f),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                    ) {
+                        Text(
+                            text = "✨ Golden Meskot",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             }
         }
 
@@ -780,7 +809,7 @@ private fun MarketplaceProductGridCard(
 }
 
 /**
- * Categories Filter Bottom Sheet
+ * Categories Filter Bottom Sheet matching the HTML `.sheet` & `.g2 > .cd` design
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -790,72 +819,100 @@ private fun MarketplaceCategoriesBottomSheet(
     onSelectCategory: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val bg = Color(0xFFFBF8EF)
+    val paper = Color(0xFFFFFDF8)
+    val ink = Color(0xFF1D2419)
+    val line = Color(0xFFEADFC2)
+    val g2 = Color(0xFFA87B25)
+    val bz = Color(0xFF96691F)
+    val tint = Color(0xFFF6EDD2)
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = FbSurfaceBg
+        containerColor = paper,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(top = 10.dp)
+                    .width(44.dp)
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(line)
+            )
+        }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 28.dp)
+                .heightIn(max = 560.dp)
+                .padding(bottom = 18.dp)
         ) {
-            Text(
-                text = "Select Category",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = FbDarkText,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Category",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ink
+                )
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(tint)
+                        .clickable { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "×",
+                        fontSize = 20.sp,
+                        color = bz
+                    )
+                }
+            }
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.heightIn(max = 440.dp)
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 items(categories, key = { it.id }) { category ->
                     val isSelected = category.id == selectedCategoryId
                     Surface(
                         onClick = { onSelectCategory(category.id) },
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isSelected) FbBlue.copy(alpha = 0.1f) else Color.Transparent,
-                        modifier = Modifier.fillMaxWidth()
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (isSelected) tint else bg,
+                        border = BorderStroke(
+                            width = if (isSelected) 2.dp else 1.5.dp,
+                            color = if (isSelected) g2 else line
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 96.dp)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isSelected) FbBlue else FbPillBg),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = category.icon,
-                                        fontSize = 18.sp
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(14.dp))
-                                Text(
-                                    text = category.name,
-                                    fontSize = 16.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) FbBlue else FbDarkText
-                                )
-                            }
-
-                            if (isSelected) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Selected",
-                                    tint = FbBlue
-                                )
-                            }
+                            Text(
+                                text = category.icon,
+                                fontSize = 26.sp
+                            )
+                            Text(
+                                text = category.name,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = ink,
+                                lineHeight = 18.sp
+                            )
                         }
                     }
                 }
@@ -865,7 +922,7 @@ private fun MarketplaceCategoriesBottomSheet(
 }
 
 /**
- * Location & Distance Radius Filter Dialog powered by Real Google Maps & GPS
+ * Location Picker Bottom Sheet matching the HTML `openLoc()` (`Change location`, `.srch`, `#ll`)
  */
 @Composable
 private fun MarketplaceLocationDialog(
@@ -875,22 +932,22 @@ private fun MarketplaceLocationDialog(
     onDismiss: () -> Unit
 ) {
     RealLocationPickerDialog(
-        title = "Location & Distance (Google Maps)",
-        initialPlaceName = currentLocation.name,
+        title = "Change location",
+        initialPlaceName = currentLocation.name.ifBlank { "Mekelle" },
         initialLatitude = currentLocation.latitude,
         initialLongitude = currentLocation.longitude,
-        showRadiusSlider = true,
+        showRadiusSlider = false,
         initialRadiusKm = currentRadiusKm,
         onDismiss = onDismiss,
-        onLocationSelected = { place, radiusKm ->
+        onLocationSelected = { place, radius ->
             onApply(
                 MarketplaceLocation(
                     latitude = place.latitude,
                     longitude = place.longitude,
                     name = place.name,
-                    radiusKm = radiusKm.toInt()
+                    radiusKm = radius.toInt()
                 ),
-                radiusKm
+                radius
             )
         }
     )
@@ -1219,77 +1276,19 @@ private fun CreateListingModal(
                     }
                 }
 
-                // Location Name & Coordinates (Powered by Real Google Maps & GPS)
+                // Location Selector matching Sell on Meskot (`📍 ${S.loc}` + Change location sheet)
                 var showSellMapPicker by remember { mutableStateOf(false) }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Location (Google Maps)",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = FbDarkText
-                    )
-                    OutlinedButton(
-                        onClick = { showSellMapPicker = true },
-                        shape = RoundedCornerShape(18.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = Color(0xFFE41E3F),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Pick on Google Maps / GPS", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = FbBlue)
-                    }
-                }
-
-                InteractiveGoogleMapCard(
-                    latitude = latitudeInput.toDoubleOrNull() ?: defaultLocation.latitude,
-                    longitude = longitudeInput.toDoubleOrNull() ?: defaultLocation.longitude,
-                    placeName = locationName,
-                    height = 150.dp,
-                    showOpenButton = true
+                com.example.ui.components.MeskotLocationSelectorButton(
+                    locationName = locationName,
+                    placeholder = "Mekelle",
+                    label = "Location",
+                    onClick = { showSellMapPicker = true }
                 )
-
-                OutlinedTextField(
-                    value = locationName,
-                    onValueChange = { locationName = it },
-                    label = { Text("Location Name") },
-                    leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, tint = FbBlue) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedTextField(
-                        value = latitudeInput,
-                        onValueChange = { latitudeInput = it },
-                        label = { Text("Latitude") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = longitudeInput,
-                        onValueChange = { longitudeInput = it },
-                        label = { Text("Longitude") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
 
                 if (showSellMapPicker) {
                     RealLocationPickerDialog(
-                        title = "Listing Location (Google Maps)",
+                        title = "Change location",
                         initialPlaceName = locationName,
                         initialLatitude = latitudeInput.toDoubleOrNull() ?: defaultLocation.latitude,
                         initialLongitude = longitudeInput.toDoubleOrNull() ?: defaultLocation.longitude,
@@ -1460,6 +1459,36 @@ private fun MarketplaceProductDetailModal(
                             fontSize = 13.sp,
                             color = FbSecondaryText
                         )
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFFF6EDD2)
+                        ) {
+                            Text(
+                                text = "📍 ${item.deliveryOption}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF96691F),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (item.isNegotiable) Color(0xFFE7F3FF) else Color(0xFFF0F2F5)
+                        ) {
+                            Text(
+                                text = if (item.isNegotiable) "🤝 Negotiable" else "Fixed Price",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (item.isNegotiable) FbBlue else FbSecondaryText,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
                     }
 
                     // Direct Real-Time Chat Trigger Card (Send Seller a Message)

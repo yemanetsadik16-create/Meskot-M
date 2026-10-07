@@ -744,13 +744,13 @@ data class UserEngagementData(
 // ========================================================================
 
 data class MarketplaceLocation(
-    val latitude: Double = 9.0192,
-    val longitude: Double = 38.7525,
-    val name: String = "Ariena",
+    val latitude: Double = 13.4967,
+    val longitude: Double = 39.4753,
+    val name: String = "Mekelle",
     val radiusKm: Int = 65
 ) {
     val badgeLabel: String
-        get() = "$name · $radiusKm km"
+        get() = "📍 $name"
 }
 
 data class Category(
@@ -777,7 +777,15 @@ data class ListingItem(
     val isAvailable: Boolean = true,
     val isSaved: Boolean = false,
     val viewsCount: Int = 0,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val isNegotiable: Boolean = true,
+    val deliveryOption: String = "Meetup · Bole",
+    val sellerPhone: String = "+251 911 234 567",
+    val allowChat: Boolean = true,
+    val allowCall: Boolean = true,
+    val allowWhatsApp: Boolean = false,
+    val isPromoted: Boolean = false,
+    val tags: List<String> = emptyList()
 ) {
     val primaryImageUrl: String
         get() = imageUrls.firstOrNull() ?: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800"

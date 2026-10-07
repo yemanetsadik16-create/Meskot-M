@@ -529,14 +529,14 @@ fun ComposerDialog(
                         }
                     }
 
-                    // Add Location / Check-In (Facebook-style Google Maps Check-In)
+                    // Add Location / Check-In matching Sell on Meskot (`📍 ${loc}`)
                     Surface(
                         onClick = { showLocationPicker = true },
                         shape = RoundedCornerShape(10.dp),
-                        color = if (selectedLocationName.isNotBlank()) Color(0xFFE7F3FF) else Paper2,
+                        color = if (selectedLocationName.isNotBlank()) Color(0xFFF6EDD2) else Color(0xFFFBF8EF),
                         border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            if (selectedLocationName.isNotBlank()) Color(0xFF1877F2) else LineBorder
+                            1.5.dp,
+                            if (selectedLocationName.isNotBlank()) Color(0xFFA87B25) else Color(0xFFEADFC2)
                         ),
                         modifier = Modifier
                             .weight(1.1f)
@@ -547,18 +547,15 @@ fun ComposerDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.LocationOn,
-                                contentDescription = "Check In Location",
-                                tint = Color(0xFFE41E3F),
-                                modifier = Modifier.size(15.dp)
-                            )
+                            Text(text = "📍", fontSize = 13.sp)
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = if (selectedLocationName.isNotBlank()) "Pinned" else "Check in",
+                                text = selectedLocationName.ifBlank { "Location" },
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (selectedLocationName.isNotBlank()) Color(0xFF1877F2) else Ink
+                                color = if (selectedLocationName.isNotBlank()) Color(0xFF96691F) else Ink,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -636,10 +633,10 @@ fun ComposerDialog(
 
     if (showLocationPicker) {
         RealLocationPickerDialog(
-            title = "Check In · Search Places",
-            initialPlaceName = selectedLocationName,
-            initialLatitude = selectedLatitude ?: 9.0192,
-            initialLongitude = selectedLongitude ?: 38.7525,
+            title = "Change location",
+            initialPlaceName = selectedLocationName.ifBlank { "Mekelle" },
+            initialLatitude = selectedLatitude ?: 13.4967,
+            initialLongitude = selectedLongitude ?: 39.4753,
             showRadiusSlider = false,
             onDismiss = { showLocationPicker = false },
             onLocationSelected = { place, _ ->
@@ -1252,10 +1249,10 @@ fun BoostPostModal(
     var selectedCurrency by remember { mutableStateOf(PaymentCurrency.USD) }
     var dailyBudget by remember { mutableStateOf(2.0 * ExchangeRateManager.nbeUsdToEtbRate) }
     var selectedDuration by remember { mutableStateOf(7) }
-    var selectedLocation by remember { mutableStateOf("Addis Ababa + Hawassa") }
+    var selectedLocation by remember { mutableStateOf("Mekelle") }
+    var showBoostLocationPicker by remember { mutableStateOf(false) }
 
     val durations = listOf(1, 3, 7, 14, 30)
-    val locations = listOf("Addis Ababa + Hawassa", "All Ethiopia", "Global Diaspora (USA/Europe)")
 
     val totalBudget = dailyBudget * selectedDuration
     val hasEnoughBalance = userBalance >= totalBudget
@@ -1379,29 +1376,24 @@ fun BoostPostModal(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Targeting Location
-                Text(text = "Target Audience Geography:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-                Spacer(modifier = Modifier.height(6.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    locations.forEach { loc ->
-                        val isSel = selectedLocation == loc
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSel) GoldSurface else Paper2)
-                                .border(1.dp, if (isSel) GoldDeep else LineBorder, RoundedCornerShape(8.dp))
-                                .clickable { selectedLocation = loc }
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Text(
-                                text = (if (isSel) "✓ " else "") + loc,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSel) GoldDeep else Ink
-                            )
+                // Targeting Location matching Sell on Meskot (`📍 ${S.loc}` + Change location sheet)
+                MeskotLocationSelectorButton(
+                    locationName = selectedLocation,
+                    placeholder = "Mekelle",
+                    label = "Location",
+                    onClick = { showBoostLocationPicker = true }
+                )
+
+                if (showBoostLocationPicker) {
+                    RealLocationPickerDialog(
+                        title = "Change location",
+                        initialPlaceName = selectedLocation,
+                        onDismiss = { showBoostLocationPicker = false },
+                        onLocationSelected = { place, _ ->
+                            selectedLocation = place.name
+                            showBoostLocationPicker = false
                         }
-                    }
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -2074,164 +2066,46 @@ fun EditProfileDialog(
                 var showProfileCityPicker by remember { mutableStateOf(false) }
                 var showProfileHometownPicker by remember { mutableStateOf(false) }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = location,
-                        onValueChange = { location = it },
-                        label = { Text("Current City / Location (Lives in)") },
-                        placeholder = { Text("e.g. Addis Ababa, Ethiopia") },
-                        textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
-                        colors = com.example.ui.theme.meskotTextFieldColors(),
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    Surface(
-                        onClick = { showProfileCityPicker = true },
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFFE7F3FF),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1877F2))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.LocationOn,
-                                contentDescription = "Pick on Google Maps",
-                                tint = Color(0xFFE41E3F),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Map",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1877F2)
-                            )
-                        }
-                    }
-                }
+                // Current City / Location selector matching Sell on Meskot (`📍 ${loc}` + Change location sheet)
+                MeskotLocationSelectorButton(
+                    locationName = location,
+                    placeholder = "Mekelle",
+                    label = "Location",
+                    onClick = { showProfileCityPicker = true }
+                )
 
                 if (showProfileCityPicker) {
                     RealLocationPickerDialog(
-                        title = "Select Current City (Google Maps)",
-                        initialPlaceName = location,
+                        title = "Change location",
+                        initialPlaceName = location.ifBlank { "Mekelle" },
                         onDismiss = { showProfileCityPicker = false },
                         onLocationSelected = { place, _ ->
-                            location = place.displayLabel
+                            location = place.name
                             showProfileCityPicker = false
                         }
                     )
                 }
 
-                // Quick city suggestions
-                val citySuggestions = listOf("Addis Ababa, Ethiopia", "Mekelle, Ethiopia", "Hawassa, Ethiopia", "Bahir Dar, Ethiopia", "Asmara, Eritrea", "Washington, DC")
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    citySuggestions.take(3).forEach { city ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (location == city) GoldSurface else Color(0xFFF1F5F9))
-                                .border(1.dp, if (location == city) Gold else Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
-                                .clickable { location = city }
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
-                        ) {
-                            Text(
-                                text = city.substringBefore(","),
-                                fontSize = 11.sp,
-                                color = if (location == city) GoldDeep else Ink
-                            )
-                        }
-                    }
-                }
-
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = hometown,
-                        onValueChange = { hometown = it },
-                        label = { Text("Hometown (From)") },
-                        placeholder = { Text("e.g. Asmara, Eritrea") },
-                        textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
-                        colors = com.example.ui.theme.meskotTextFieldColors(),
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    Surface(
-                        onClick = { showProfileHometownPicker = true },
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFFE7F3FF),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1877F2))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.LocationOn,
-                                contentDescription = "Pick Hometown on Google Maps",
-                                tint = Color(0xFFE41E3F),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Map",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1877F2)
-                            )
-                        }
-                    }
-                }
+                // Hometown selector matching Sell on Meskot (`📍 ${loc}` + Change location sheet)
+                MeskotLocationSelectorButton(
+                    locationName = hometown,
+                    placeholder = "Mekelle",
+                    label = "Hometown (From)",
+                    onClick = { showProfileHometownPicker = true }
+                )
 
                 if (showProfileHometownPicker) {
                     RealLocationPickerDialog(
-                        title = "Select Hometown (Google Maps)",
-                        initialPlaceName = hometown,
+                        title = "Change location",
+                        initialPlaceName = hometown.ifBlank { "Mekelle" },
                         onDismiss = { showProfileHometownPicker = false },
                         onLocationSelected = { place, _ ->
-                            hometown = place.displayLabel
+                            hometown = place.name
                             showProfileHometownPicker = false
                         }
                     )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    citySuggestions.drop(1).take(3).forEach { city ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (hometown == city) GoldSurface else Color(0xFFF1F5F9))
-                                .border(1.dp, if (hometown == city) Gold else Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
-                                .clickable { hometown = city }
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
-                        ) {
-                            Text(
-                                text = city.substringBefore(","),
-                                fontSize = 11.sp,
-                                color = if (hometown == city) GoldDeep else Ink
-                            )
-                        }
-                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))

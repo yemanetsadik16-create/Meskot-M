@@ -2169,7 +2169,15 @@ object FirebaseManager {
             "condition" to item.condition,
             "isAvailable" to item.isAvailable,
             "viewsCount" to item.viewsCount,
-            "createdAt" to item.createdAt
+            "createdAt" to item.createdAt,
+            "isNegotiable" to item.isNegotiable,
+            "deliveryOption" to item.deliveryOption,
+            "sellerPhone" to item.sellerPhone,
+            "allowChat" to item.allowChat,
+            "allowCall" to item.allowCall,
+            "allowWhatsApp" to item.allowWhatsApp,
+            "isPromoted" to item.isPromoted,
+            "tags" to item.tags
         )
         db.collection(COL_MARKETPLACE_LISTINGS)
             .document(item.id)
@@ -2210,6 +2218,7 @@ object FirebaseManager {
 
     private fun parseListingItem(id: String, d: Map<String, Any?>): ListingItem {
         val imgs = (d["imageUrls"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+        val parsedTags = (d["tags"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
         val loc = MarketplaceLocation(
             latitude = (d["latitude"] as? Number)?.toDouble() ?: 9.0192,
             longitude = (d["longitude"] as? Number)?.toDouble() ?: 38.7525,
@@ -2233,7 +2242,15 @@ object FirebaseManager {
             condition = d["condition"] as? String ?: "Used - Like New",
             isAvailable = d["isAvailable"] as? Boolean ?: true,
             viewsCount = (d["viewsCount"] as? Number)?.toInt() ?: 0,
-            createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
+            createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+            isNegotiable = d["isNegotiable"] as? Boolean ?: true,
+            deliveryOption = d["deliveryOption"] as? String ?: "Meetup · Bole",
+            sellerPhone = d["sellerPhone"] as? String ?: "+251 911 234 567",
+            allowChat = d["allowChat"] as? Boolean ?: true,
+            allowCall = d["allowCall"] as? Boolean ?: true,
+            allowWhatsApp = d["allowWhatsApp"] as? Boolean ?: false,
+            isPromoted = d["isPromoted"] as? Boolean ?: false,
+            tags = parsedTags
         )
     }
 

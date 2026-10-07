@@ -1,26 +1,24 @@
 package com.example.ui.components
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,48 +26,33 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -81,7 +64,6 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.util.LocationHelper
 import com.example.util.RealPlaceResult
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.net.URLEncoder
 import java.util.Locale
 
@@ -110,7 +92,7 @@ fun InteractiveGoogleMapCard(
         val q = if (latitude != 0.0 || longitude != 0.0) {
             "$latitude,$longitude"
         } else {
-            URLEncoder.encode(placeName.ifBlank { "Addis Ababa" }, "UTF-8")
+            URLEncoder.encode(placeName.ifBlank { "Mekelle" }, "UTF-8")
         }
         "https://maps.google.com/maps?q=$q&z=$zoom&output=embed"
     }
@@ -119,7 +101,7 @@ fun InteractiveGoogleMapCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = FbLightSurface),
-        border = BorderStroke(1.dp, Color(0xFFDADDE1))
+        border = BorderStroke(1.dp, Color(0xFFEADFC2))
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Box(
@@ -148,7 +130,8 @@ fun InteractiveGoogleMapCard(
                 // Floating Coordinates & Pin Badge
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Color.White.copy(alpha = 0.94f),
+                    color = Color(0xFFFFFDF8).copy(alpha = 0.96f),
+                    border = BorderStroke(1.dp, Color(0xFFEADFC2)),
                     shadowElevation = 3.dp,
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -158,12 +141,7 @@ fun InteractiveGoogleMapCard(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = FbRedPin,
-                            modifier = Modifier.size(15.dp)
-                        )
+                        Text(text = "📍", fontSize = 13.sp)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = placeName.ifBlank {
@@ -171,7 +149,7 @@ fun InteractiveGoogleMapCard(
                             },
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = FbDarkInk,
+                            color = Color(0xFF1D2419),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -183,7 +161,7 @@ fun InteractiveGoogleMapCard(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color.White)
+                        .background(Color(0xFFFFFDF8))
                         .clickable {
                             LocationHelper.openInGoogleMaps(
                                 context = context,
@@ -200,23 +178,23 @@ fun InteractiveGoogleMapCard(
                         Icon(
                             imageVector = Icons.Default.Map,
                             contentDescription = null,
-                            tint = FbBluePin,
+                            tint = Color(0xFF96691F),
                             modifier = Modifier.size(17.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                text = placeName.ifBlank { "Pinned Location" },
+                                text = "📍 " + placeName.ifBlank { "Mekelle" },
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = FbDarkInk,
+                                color = Color(0xFF1D2419),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = String.format(Locale.US, "GPS: %.4f, %.4f · Google Maps", latitude, longitude),
                                 fontSize = 11.sp,
-                                color = FbSubtleText
+                                color = Color(0xFF7A7360)
                             )
                         }
                     }
@@ -226,13 +204,13 @@ fun InteractiveGoogleMapCard(
                             text = "Open Map",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = FbBluePin
+                            color = Color(0xFF96691F)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = Icons.Default.OpenInNew,
                             contentDescription = "Open in Google Maps",
-                            tint = FbBluePin,
+                            tint = Color(0xFF96691F),
                             modifier = Modifier.size(15.dp)
                         )
                     }
@@ -243,80 +221,148 @@ fun InteractiveGoogleMapCard(
 }
 
 /**
- * Full-screen Facebook-style "Search for location" / Google Maps Picker Dialog.
+ * Reusable "Sell on Meskot" Location Selector Button matching `<button class="sl" data-act="loc"><span>📍 ${S.loc}</span>${CH}</button>`
+ * Used across all parts of Meskot (Marketplace, Post Check-in, Profile Current City/Hometown, Boost Post, Ads Manager).
+ */
+@Composable
+fun MeskotLocationSelectorButton(
+    locationName: String,
+    placeholder: String = "Mekelle",
+    label: String? = null,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val bg = Color(0xFFFBF8EF)
+    val ink = Color(0xFF1D2419)
+    val mut = Color(0xFF7A7360)
+    val line = Color(0xFFEADFC2)
+    val g2 = Color(0xFFA87B25)
+    val bz = Color(0xFF96691F)
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (label != null) {
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = bz,
+                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+            )
+        }
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(16.dp),
+            color = bg,
+            border = BorderStroke(1.5.dp, line),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 50.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                val displayLoc = locationName.trim().ifBlank { placeholder }
+                Text(
+                    text = "📍 $displayLoc",
+                    fontSize = 16.sp,
+                    color = if (locationName.isNotBlank()) ink else mut,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = "Change location",
+                    tint = g2,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Exact "Change location" Bottom Sheet Dialog from "Sell on Meskot" HTML (`openLoc()`, `filt(q)`, `search(q)`, `showLocs(list, note)`).
  *
- * Used across Meskot for:
- * - Post Check-Ins ("is in Addis Ababa, Ethiopia")
- * - Marketplace Location & Radius filter ("Today's picks" feed)
- * - Marketplace Create Listing ("Sell" item location)
- * - Profile "Current City / Hometown" selection
+ * Used across ALL parts of Meskot:
+ * - Sell on Meskot (`SellOnMeskotModal`)
+ * - Marketplace feed location picker ("Today's picks · 📍 Mekelle")
+ * - Marketplace `CreateListingModal`
+ * - Post Check-Ins ("is in 📍 Mekelle")
+ * - Edit Profile ("Current City / Lives in" & "Hometown / From")
+ * - Boost Post & Ads Manager Audience Location Targeting
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RealLocationPickerDialog(
-    title: String = "Choose Location",
-    initialPlaceName: String = "",
-    initialLatitude: Double = 9.0192,
-    initialLongitude: Double = 38.7525,
+    title: String = "Change location",
+    initialPlaceName: String = "Mekelle",
+    initialLatitude: Double = 13.4967,
+    initialLongitude: Double = 39.4753,
     showRadiusSlider: Boolean = false,
     initialRadiusKm: Double = 65.0,
     onDismiss: () -> Unit,
     onLocationSelected: (place: RealPlaceResult, radiusKm: Double) -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+
+    // Exact light CSS color variables from Sell on Meskot HTML:
+    // :root{--bg:#fbf8ef;--paper:#fffdf8;--ink:#1d2419;--mut:#7a7360;--line:#eadfc2;--g1:#efd06c;--g2:#a87b25;--bz:#96691f;--mar:#8a1c2b;--tint:#f6edd2}
+    val bg = Color(0xFFFBF8EF)
+    val paper = Color(0xFFFFFDF8)
+    val ink = Color(0xFF1D2419)
+    val mut = Color(0xFF7A7360)
+    val line = Color(0xFFEADFC2)
+    val g2 = Color(0xFFA87B25)
+    val bz = Color(0xFF96691F)
+    val tint = Color(0xFFF6EDD2)
 
     var searchQuery by remember { mutableStateOf("") }
-    var selectedPlace by remember {
-        mutableStateOf(
-            RealPlaceResult(
-                name = initialPlaceName.ifBlank { "Addis Ababa, Ethiopia" },
-                fullAddress = initialPlaceName.ifBlank { "Addis Ababa, Ethiopia" },
-                latitude = if (initialLatitude == 0.0 && initialLongitude == 0.0) 9.0192 else initialLatitude,
-                longitude = if (initialLatitude == 0.0 && initialLongitude == 0.0) 38.7525 else initialLongitude
-            )
-        )
-    }
-    var radiusSlider by remember { mutableFloatStateOf(initialRadiusKm.toFloat().coerceIn(5f, 250f)) }
-    var searchResults by remember { mutableStateOf(LocationHelper.defaultVerifiedPlaces()) }
-    var isSearching by remember { mutableStateOf(false) }
-    var isDetectingGps by remember { mutableStateOf(false) }
-    var gpsStatusMessage by remember { mutableStateOf<String?>(null) }
+    var displayedLocations by remember { mutableStateOf(LocationHelper.MESKOT_HTML_LOCS) }
+    var livePlaceCache by remember { mutableStateOf<Map<String, RealPlaceResult>>(emptyMap()) }
+    var fallbackNote by remember { mutableStateOf<String?>(null) }
 
-    // Live debounced geocoding search as user types
+    // Exact HTML `filt(q)` logic:
+    // 1. If empty, show `LOCS`
+    // 2. Immediately filter `LOCS` locally: `showLocs(local(q))`
+    // 3. After 350ms debounce, query live Nominatim / Geocoder search (`search(q)`), fallback to `local(q)` with note on error
     LaunchedEffect(searchQuery) {
-        if (searchQuery.trim().length < 2) {
-            searchResults = LocationHelper.defaultVerifiedPlaces()
-            isSearching = false
+        val q = searchQuery.trim()
+        if (q.isEmpty()) {
+            displayedLocations = LocationHelper.MESKOT_HTML_LOCS
+            fallbackNote = null
             return@LaunchedEffect
         }
-        isSearching = true
-        delay(350)
-        val places = LocationHelper.searchPlaces(context, searchQuery)
-        searchResults = places
-        isSearching = false
-    }
+        val localMatches = LocationHelper.MESKOT_HTML_LOCS.filter {
+            it.contains(q, ignoreCase = true)
+        }
+        displayedLocations = localMatches
+        fallbackNote = null
 
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (granted) {
-            isDetectingGps = true
-            gpsStatusMessage = "Detecting your live GPS location..."
-            scope.launch {
-                val place = LocationHelper.fetchCurrentDevicePlace(context)
-                isDetectingGps = false
-                if (place != null) {
-                    selectedPlace = place
-                    gpsStatusMessage = "📍 Live GPS location detected: ${place.name}"
-                } else {
-                    gpsStatusMessage = "Could not lock GPS signal in emulator; showing map pin."
-                }
+        delay(350)
+        try {
+            val remoteResults = LocationHelper.searchPlaces(context, q)
+            if (remoteResults.isNotEmpty()) {
+                val newMap = mutableMapOf<String, RealPlaceResult>()
+                val remoteNames = remoteResults.map { place ->
+                    val label = place.fullAddress.ifBlank { place.displayLabel }
+                    newMap[label] = place
+                    newMap[place.name] = place
+                    label
+                }.distinct()
+                livePlaceCache = livePlaceCache + newMap
+                displayedLocations = (localMatches + remoteNames).distinct()
+                fallbackNote = null
+            } else if (localMatches.isEmpty()) {
+                displayedLocations = emptyList()
             }
-        } else {
-            gpsStatusMessage = "Location permission denied. You can search any city or landmark below."
+        } catch (_: Exception) {
+            displayedLocations = localMatches
+            fallbackNote = "Live place search is not available here. Showing saved places."
         }
     }
 
@@ -324,284 +370,183 @@ fun RealLocationPickerDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Scaffold(
+        // `.ov.on` overlay backdrop (`background:rgba(29,20,5,.5)`) aligned at bottom (`align-items:flex-end`)
+        Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color(0x801D1405))
+                .clickable { onDismiss() }
                 .testTag("real_location_picker_dialog"),
-            containerColor = Color.White,
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = title,
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = FbDarkInk
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = FbDarkInk
-                            )
-                        }
-                    },
-                    actions = {
-                        Button(
-                            onClick = {
-                                onLocationSelected(selectedPlace, radiusSlider.toDouble())
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = FbBluePin),
-                            shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier
-                                .padding(end = 10.dp)
-                                .testTag("confirm_location_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Apply", fontWeight = FontWeight.Bold)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
-                )
-            }
-        ) { paddingValues ->
-            Column(
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            // `.sheet` container (`border-radius:28px 28px 0 0; max-height:86vh; background:var(--paper)`)
+            Surface(
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                color = paper,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
+                    .fillMaxWidth()
+                    .heightIn(min = 380.dp, max = 640.dp)
+                    .clickable(enabled = false) {}
             ) {
-                // 1. Live Google Map Preview at Top
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
-                ) {
-                    InteractiveGoogleMapCard(
-                        latitude = selectedPlace.latitude,
-                        longitude = selectedPlace.longitude,
-                        placeName = selectedPlace.name,
-                        height = 185.dp,
-                        showOpenButton = true
-                    )
-                }
-
-                // 2. "Use my current GPS location" Button + Search Bar
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .navigationBarsPadding()
                 ) {
-                    OutlinedButton(
-                        onClick = {
-                            if (LocationHelper.hasLocationPermission(context)) {
-                                isDetectingGps = true
-                                gpsStatusMessage = "Fetching real GPS coordinates..."
-                                scope.launch {
-                                    val place = LocationHelper.fetchCurrentDevicePlace(context)
-                                    isDetectingGps = false
-                                    if (place != null) {
-                                        selectedPlace = place
-                                        gpsStatusMessage = "📍 Live GPS location locked: ${place.name}"
-                                    } else {
-                                        gpsStatusMessage = "GPS sensor unavailable; tap any place or search below."
-                                    }
-                                }
-                            } else {
-                                locationPermissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                    )
-                                )
-                            }
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.2.dp, FbBluePin),
+                    // Drag handle (`.sheet:before { width:44px; height:5px; border-radius:3px; background:var(--line); margin:10px auto 0 }`)
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("use_current_gps_button")
-                    ) {
-                        if (isDetectingGps) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = FbBluePin
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.MyLocation,
-                                contentDescription = "Use current GPS location",
-                                tint = FbBluePin,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (isDetectingGps) "Detecting GPS Location..." else "Use My Current GPS Location (Google Location)",
-                            color = FbBluePin,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.5.sp
-                        )
-                    }
-
-                    if (gpsStatusMessage != null) {
-                        Text(
-                            text = gpsStatusMessage!!,
-                            fontSize = 12.sp,
-                            color = FbBluePin,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    // Search Places Input Field
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search any city, neighborhood, or landmark on Google Maps...") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                tint = FbSubtleText
-                            )
-                        },
-                        trailingIcon = {
-                            if (isSearching) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                    color = FbBluePin
-                                )
-                            } else if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Clear")
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(24.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = FbLightSurface,
-                            unfocusedContainerColor = FbLightSurface,
-                            focusedBorderColor = FbBluePin,
-                            unfocusedBorderColor = Color.Transparent
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("location_search_input")
+                            .padding(top = 10.dp)
+                            .width(44.dp)
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(line)
+                            .align(Alignment.CenterHorizontally)
                     )
 
-                    // Optional Distance Radius Slider (used in Marketplace)
-                    if (showRadiusSlider) {
-                        Column(
+                    // Sheet header (`.sh { display:flex; justify-content:space-between; align-items:center; padding:12px 20px 10px }`)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (title.isBlank() || title.contains("Choose", ignoreCase = true) || title.contains("Select", ignoreCase = true) || title.contains("Check In", ignoreCase = true)) {
+                                "Change location"
+                            } else {
+                                title
+                            },
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ink
+                        )
+                        // Close button (`.sh button { width:34px; height:34px; border-radius:50%; background:var(--tint); color:var(--bz); font-size:20px }`)
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 2.dp)
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(tint)
+                                .clickable { onDismiss() },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "Search Radius",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = FbDarkInk
-                                )
-                                Text(
-                                    text = "${radiusSlider.toInt()} km",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = FbBluePin
-                                )
-                            }
-                            Slider(
-                                value = radiusSlider,
-                                onValueChange = { radiusSlider = it },
-                                valueRange = 5f..250f,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = FbBluePin,
-                                    activeTrackColor = FbBluePin
-                                ),
-                                modifier = Modifier.height(28.dp)
+                            Text(
+                                text = "×",
+                                fontSize = 20.sp,
+                                color = bz,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
-                }
 
-                HorizontalDivider(color = Color(0xFFE4E6EB))
-
-                // 3. Real Geocoded Place Results List
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentPadding = PaddingValues(vertical = 6.dp)
-                ) {
-                    items(searchResults, key = { "${it.name}_${it.latitude}_${it.longitude}" }) { place ->
-                        val isSelected = place.name.equals(selectedPlace.name, ignoreCase = true)
-                        Row(
+                    // Sheet body (`.sb { overflow-y:auto; padding:4px 16px 18px }`)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .padding(top = 4.dp, bottom = 18.dp)
+                    ) {
+                        // Search input (`<input class="srch" id="ls" placeholder="Search any city or place" oninput="filt(this.value)">`)
+                        var isSearchFocused by remember { mutableStateOf(false) }
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedPlace = place }
-                                .background(if (isSelected) FbBluePin.copy(alpha = 0.08f) else Color.Transparent)
-                                .padding(horizontal = 16.dp, vertical = 11.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(bottom = 8.dp)
+                                .height(48.dp)
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(bg)
+                                .border(
+                                    width = 1.5.dp,
+                                    color = if (isSearchFocused) g2 else line,
+                                    shape = RoundedCornerShape(24.dp)
+                                )
+                                .padding(horizontal = 18.dp),
+                            contentAlignment = Alignment.CenterStart
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isSelected) FbBluePin else FbLightSurface),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.LocationOn,
-                                    contentDescription = null,
-                                    tint = if (isSelected) Color.White else FbRedPin,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
+                            if (searchQuery.isEmpty()) {
                                 Text(
-                                    text = place.name,
+                                    text = "Search any city or place",
                                     fontSize = 15.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                    color = if (isSelected) FbBluePin else FbDarkInk,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = place.fullAddress,
-                                    fontSize = 12.sp,
-                                    color = FbSubtleText,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = String.format(Locale.US, "%.4f° N, %.4f° E", place.latitude, place.longitude),
-                                    fontSize = 11.sp,
-                                    color = FbSubtleText.copy(alpha = 0.8f)
+                                    color = mut
                                 )
                             }
+                            BasicTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                singleLine = true,
+                                textStyle = TextStyle(
+                                    fontSize = 15.sp,
+                                    color = ink
+                                ),
+                                cursorBrush = SolidColor(bz),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("location_search_input")
+                            )
+                        }
 
-                            if (isSelected) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Selected",
-                                    tint = FbBluePin
-                                )
+                        // Location list (`<div id="ll"></div>` -> `<button class="li" data-act="setloc" data-v="${esc(l)}">📍 ${l}</button>`)
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f, fill = false)
+                        ) {
+                            if (displayedLocations.isEmpty()) {
+                                item {
+                                    Text(
+                                        text = "No places found",
+                                        fontSize = 13.sp,
+                                        color = mut,
+                                        modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp)
+                                    )
+                                }
+                            } else {
+                                items(displayedLocations) { locItem ->
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                val cached = livePlaceCache[locItem]
+                                                val resolved = cached?.copy(
+                                                    name = locItem,
+                                                    fullAddress = locItem
+                                                ) ?: LocationHelper.resolvePlaceByName(
+                                                    placeName = locItem,
+                                                    fallbackLat = if (initialLatitude == 0.0) 13.4967 else initialLatitude,
+                                                    fallbackLng = if (initialLongitude == 0.0) 39.4753 else initialLongitude
+                                                )
+                                                onLocationSelected(resolved, initialRadiusKm)
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 6.dp, vertical = 13.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Text(text = "📍", fontSize = 15.sp)
+                                            Text(
+                                                text = locItem,
+                                                fontSize = 15.sp,
+                                                color = ink
+                                            )
+                                        }
+                                        HorizontalDivider(color = line, thickness = 1.dp)
+                                    }
+                                }
+                            }
+
+                            if (fallbackNote != null) {
+                                item {
+                                    Text(
+                                        text = fallbackNote.orEmpty(),
+                                        fontSize = 13.sp,
+                                        color = mut,
+                                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp)
+                                    )
+                                }
                             }
                         }
                     }

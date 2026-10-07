@@ -299,15 +299,6 @@ fun IconNavBar(
                 )
 
                 NavLuxuryItem(
-                    activeIcon = Icons.Filled.Groups,
-                    inactiveIcon = Icons.Outlined.Groups,
-                    label = "Groups",
-                    isSelected = currentTab == ScreenTab.GROUPS || currentTab == ScreenTab.GROUP_DETAIL,
-                    onClick = { onTabSelected(ScreenTab.GROUPS) },
-                    testTag = "tab_groups"
-                )
-
-                NavLuxuryItem(
                     activeIcon = Icons.Filled.OndemandVideo,
                     inactiveIcon = Icons.Outlined.OndemandVideo,
                     label = "Reels",

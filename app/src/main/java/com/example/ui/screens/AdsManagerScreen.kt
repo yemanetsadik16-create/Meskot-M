@@ -1912,7 +1912,10 @@ fun CreateAdScreen(
         var genderSelection by remember { mutableStateOf(state.audience.genderLabel) }
         var minAge by remember { mutableIntStateOf(state.audience.minAge) }
         var maxAge by remember { mutableIntStateOf(state.audience.maxAge) }
-        var locationText by remember { mutableStateOf(state.audience.locations.joinToString(", ")) }
+        var selectedLocName by remember {
+            mutableStateOf(state.audience.locations.firstOrNull()?.ifBlank { "Mekelle" } ?: "Mekelle")
+        }
+        var showAdLocationPicker by remember { mutableStateOf(false) }
 
         AlertDialog(
             onDismissRequest = { showAudienceDialog = false },
@@ -1944,20 +1947,18 @@ fun CreateAdScreen(
                         OutlinedButton(onClick = { maxAge = (maxAge + 5).coerceAtMost(65) }) { Text("+ Max") }
                     }
 
-                    OutlinedTextField(
-                        value = locationText,
-                        onValueChange = { locationText = it },
-                        label = { Text("Locations (comma-separated)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                    com.example.ui.components.MeskotLocationSelectorButton(
+                        locationName = selectedLocName,
+                        placeholder = "Mekelle",
+                        label = "Location",
+                        onClick = { showAdLocationPicker = true }
                     )
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        val locs = locationText.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                            .ifEmpty { listOf("Ethiopia") }
+                        val locs = listOf(selectedLocName.trim().ifBlank { "Mekelle" })
                         onStateChange(
                             state.copy(
                                 audience = AudienceTargetingConfig(
@@ -1981,6 +1982,18 @@ fun CreateAdScreen(
                 }
             }
         )
+
+        if (showAdLocationPicker) {
+            com.example.ui.components.RealLocationPickerDialog(
+                title = "Change location",
+                initialPlaceName = selectedLocName,
+                onDismiss = { showAdLocationPicker = false },
+                onLocationSelected = { place, _ ->
+                    selectedLocName = place.name
+                    showAdLocationPicker = false
+                }
+            )
+        }
     }
 
     // Full-screen "Debit or credit card" Screen (Matches Screenshot)
