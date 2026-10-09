@@ -41,6 +41,7 @@ object FirebaseManager {
     const val COL_PROFILE_VIEWS = "profile_views"
     const val COL_MARKETPLACE_LISTINGS = "marketplace_listings"
     const val COL_MARKETPLACE_CHATS = "marketplace_chats"
+    const val COL_AD_CAMPAIGNS = "ad_campaigns"
 
     fun initialize(context: Context) {
         if (isInitialized) return
@@ -2216,6 +2217,70 @@ object FirebaseManager {
             }
     }
 
+    fun listenToMarketplaceChats(onUpdated: (List<MarketplaceChatMessage>) -> Unit): ListenerRegistration? {
+        val db = firestore ?: return null
+        return try {
+            db.collection(COL_MARKETPLACE_CHATS)
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .limit(120)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e(TAG, "listenToMarketplaceChats error: ${error.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null) {
+                        val chats = snapshot.documents.mapNotNull { doc ->
+                            doc.data?.let { d ->
+                                MarketplaceChatMessage(
+                                    chatId = d["chatId"] as? String ?: doc.id,
+                                    senderId = d["senderId"] as? String ?: "",
+                                    senderName = d["senderName"] as? String ?: "Meskot User",
+                                    senderPhoto = d["senderPhoto"] as? String ?: "",
+                                    receiverId = d["receiverId"] as? String ?: "",
+                                    receiverName = d["receiverName"] as? String ?: "",
+                                    receiverPhoto = d["receiverPhoto"] as? String ?: "",
+                                    itemId = d["itemId"] as? String ?: "",
+                                    itemTitle = d["itemTitle"] as? String ?: "",
+                                    itemPriceLabel = d["itemPriceLabel"] as? String ?: "",
+                                    itemThumbUrl = d["itemThumbUrl"] as? String ?: "",
+                                    messageText = d["messageText"] as? String ?: "",
+                                    timestamp = (d["timestamp"] as? Number)?.toLong() ?: System.currentTimeMillis()
+                                )
+                            }
+                        }
+                        onUpdated(chats)
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "listenToMarketplaceChats exception: ${e.message}")
+            null
+        }
+    }
+
+    fun updateMarketplaceListing(item: ListingItem, onComplete: (Boolean) -> Unit = {}) {
+        createMarketplaceListing(item, onComplete)
+    }
+
+    fun deleteMarketplaceListing(listingId: String, onComplete: (Boolean) -> Unit = {}) {
+        val db = firestore ?: run { onComplete(false); return }
+        db.collection(COL_MARKETPLACE_LISTINGS)
+            .document(listingId)
+            .delete()
+            .addOnSuccessListener { onComplete(true) }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "deleteMarketplaceListing error: ${e.message}")
+                onComplete(false)
+            }
+    }
+
+    fun incrementMarketplaceListingViews(listingId: String, nextViews: Int) {
+        val db = firestore ?: return
+        db.collection(COL_MARKETPLACE_LISTINGS)
+            .document(listingId)
+            .update("viewsCount", nextViews)
+            .addOnFailureListener { /* ignore if seed item not yet in Firestore */ }
+    }
+
     private fun parseListingItem(id: String, d: Map<String, Any?>): ListingItem {
         val imgs = (d["imageUrls"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
         val parsedTags = (d["tags"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
@@ -2251,6 +2316,188 @@ object FirebaseManager {
             allowWhatsApp = d["allowWhatsApp"] as? Boolean ?: false,
             isPromoted = d["isPromoted"] as? Boolean ?: false,
             tags = parsedTags
+        )
+    }
+
+    // FIRESTORE: AD CAMPAIGNS (Real-time Facebook Ads Manager Backend)
+    fun listenToAdCampaigns(onCampaignsUpdated: (List<AdCampaign>) -> Unit): ListenerRegistration? {
+        val db = firestore ?: return null
+        return try {
+            db.collection(COL_AD_CAMPAIGNS)
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .limit(100)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e(TAG, "Error listening to ad campaigns: ${error.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null) {
+                        val campaigns = snapshot.documents.mapNotNull { doc ->
+                            doc.data?.let { parseAdCampaign(doc.id, it) }
+                        }
+                        onCampaignsUpdated(campaigns)
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "listenToAdCampaigns error: ${e.message}")
+            null
+        }
+    }
+
+    fun fetchAdCampaignsOnce(onComplete: (List<AdCampaign>) -> Unit) {
+        val db = firestore ?: run { onComplete(emptyList()); return }
+        db.collection(COL_AD_CAMPAIGNS)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(100)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val campaigns = snapshot.documents.mapNotNull { doc ->
+                    doc.data?.let { parseAdCampaign(doc.id, it) }
+                }
+                onComplete(campaigns)
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "fetchAdCampaignsOnce error: ${e.message}")
+                onComplete(emptyList())
+            }
+    }
+
+    fun saveAdCampaign(campaign: AdCampaign, onComplete: (Boolean) -> Unit = {}) {
+        val db = firestore ?: run { onComplete(false); return }
+        val data = mapOf(
+            "name" to campaign.name,
+            "objective" to campaign.objective,
+            "status" to campaign.status,
+            "dailyBudgetEtb" to campaign.dailyBudgetEtb,
+            "totalSpentEtb" to campaign.totalSpentEtb,
+            "impressions" to campaign.impressions,
+            "clicks" to campaign.clicks,
+            "conversions" to campaign.conversions,
+            "ctr" to campaign.ctr,
+            "avgCpcEtb" to campaign.avgCpcEtb,
+            "cpmEtb" to campaign.cpmEtb,
+            "headline" to campaign.headline,
+            "primaryText" to campaign.primaryText,
+            "mediaUrl" to campaign.mediaUrl,
+            "ctaText" to campaign.ctaText,
+            "destinationUrl" to campaign.destinationUrl,
+            "advertiserName" to campaign.advertiserName,
+            "advertiserAvatar" to campaign.advertiserAvatar,
+            "advertiserUid" to campaign.advertiserUid,
+            "durationDays" to campaign.durationDays,
+            "targetAudience" to campaign.targetAudience,
+            "paymentMethod" to campaign.paymentMethod,
+            "paymentRef" to campaign.paymentRef,
+            "totalPaidEtb" to campaign.totalPaidEtb,
+            "createdAt" to campaign.createdAt
+        )
+        db.collection(COL_AD_CAMPAIGNS)
+            .document(campaign.id)
+            .set(data, SetOptions.merge())
+            .addOnSuccessListener {
+                Log.d(TAG, "Ad campaign saved to Firestore server: ${campaign.id}")
+                onComplete(true)
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "saveAdCampaign error: ${e.message}")
+                onComplete(false)
+            }
+    }
+
+    fun updateAdCampaignStatus(campaignId: String, newStatus: String, onComplete: (Boolean) -> Unit = {}) {
+        val db = firestore ?: run { onComplete(false); return }
+        db.collection(COL_AD_CAMPAIGNS)
+            .document(campaignId)
+            .update("status", newStatus)
+            .addOnSuccessListener { onComplete(true) }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "updateAdCampaignStatus error: ${e.message}")
+                onComplete(false)
+            }
+    }
+
+    fun recordAdImpression(campaignId: String, cpmEtb: Double = 25.0) {
+        val db = firestore ?: return
+        val costPerImp = (cpmEtb / 1000.0).coerceAtLeast(0.025)
+        db.collection(COL_AD_CAMPAIGNS)
+            .document(campaignId)
+            .update(
+                mapOf(
+                    "impressions" to FieldValue.increment(1),
+                    "totalSpentEtb" to FieldValue.increment(costPerImp)
+                )
+            )
+            .addOnFailureListener { e ->
+                Log.w(TAG, "recordAdImpression error: ${e.message}")
+            }
+    }
+
+    fun recordAdClick(campaignId: String, avgCpcEtb: Double = 1.45, recordConversion: Boolean = false) {
+        val db = firestore ?: return
+        val updates = mutableMapOf<String, Any>(
+            "clicks" to FieldValue.increment(1),
+            "totalSpentEtb" to FieldValue.increment(avgCpcEtb)
+        )
+        if (recordConversion) {
+            updates["conversions"] = FieldValue.increment(1)
+        }
+        db.collection(COL_AD_CAMPAIGNS)
+            .document(campaignId)
+            .update(updates)
+            .addOnFailureListener { e ->
+                Log.w(TAG, "recordAdClick error: ${e.message}")
+            }
+    }
+
+    fun deleteAdCampaign(campaignId: String, onComplete: (Boolean) -> Unit = {}) {
+        val db = firestore ?: run { onComplete(false); return }
+        db.collection(COL_AD_CAMPAIGNS)
+            .document(campaignId)
+            .delete()
+            .addOnSuccessListener { onComplete(true) }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "deleteAdCampaign error: ${e.message}")
+                onComplete(false)
+            }
+    }
+
+    private fun parseAdCampaign(id: String, d: Map<String, Any?>): AdCampaign {
+        val impressions = (d["impressions"] as? Number)?.toInt() ?: 0
+        val clicks = (d["clicks"] as? Number)?.toInt() ?: 0
+        val computedCtr = if (impressions > 0) {
+            ((clicks.toDouble() / impressions.toDouble()) * 100.0).let {
+                Math.round(it * 100.0) / 100.0
+            }
+        } else {
+            (d["ctr"] as? Number)?.toDouble() ?: 0.0
+        }
+        return AdCampaign(
+            id = id,
+            name = d["name"] as? String ?: "Meskot Ad Campaign",
+            objective = d["objective"] as? String ?: "TRAFFIC",
+            status = d["status"] as? String ?: "ACTIVE",
+            dailyBudgetEtb = (d["dailyBudgetEtb"] as? Number)?.toDouble() ?: 600.0,
+            totalSpentEtb = (d["totalSpentEtb"] as? Number)?.toDouble() ?: 0.0,
+            impressions = impressions,
+            clicks = clicks,
+            conversions = (d["conversions"] as? Number)?.toInt() ?: 0,
+            ctr = computedCtr,
+            avgCpcEtb = (d["avgCpcEtb"] as? Number)?.toDouble() ?: 1.45,
+            cpmEtb = (d["cpmEtb"] as? Number)?.toDouble() ?: 25.0,
+            headline = d["headline"] as? String ?: "EXAMPLE.COM",
+            primaryText = d["primaryText"] as? String ?: "",
+            mediaUrl = d["mediaUrl"] as? String ?: "",
+            ctaText = d["ctaText"] as? String ?: "Learn More",
+            destinationUrl = d["destinationUrl"] as? String ?: "https://example.com",
+            advertiserName = d["advertiserName"] as? String ?: "Yemane Tsadik",
+            advertiserAvatar = d["advertiserAvatar"] as? String ?: "",
+            advertiserUid = d["advertiserUid"] as? String ?: "",
+            durationDays = (d["durationDays"] as? Number)?.toInt() ?: 5,
+            targetAudience = d["targetAudience"] as? String ?: "Ethiopia & Global Diaspora (18-65+)",
+            paymentMethod = d["paymentMethod"] as? String ?: "Chapa Checkout (USD/ETB)",
+            paymentRef = d["paymentRef"] as? String ?: "",
+            totalPaidEtb = (d["totalPaidEtb"] as? Number)?.toDouble() ?: 0.0,
+            createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
         )
     }
 

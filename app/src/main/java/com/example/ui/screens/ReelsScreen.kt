@@ -150,7 +150,10 @@ fun ReelsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(34.dp)
@@ -170,13 +173,14 @@ fun ReelsScreen(
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = "Reels",
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Box(
@@ -189,39 +193,28 @@ fun ReelsScreen(
                                         text = "LIVE FEED",
                                         fontSize = 8.5.sp,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = Ink
+                                        color = Ink,
+                                        maxLines = 1
                                     )
                                 }
                             }
                             Text(
                                 text = "Habesha creators & viral videos",
                                 fontSize = 11.5.sp,
-                                color = Gold.copy(alpha = 0.8f)
+                                color = Gold.copy(alpha = 0.8f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.width(10.dp))
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        IconButton(
-                            onClick = { viewModel.openInterestEngine() },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(Color(0xFF29241E), CircleShape)
-                                .border(1.dp, GoldBorder.copy(alpha = 0.5f), CircleShape)
-                                .testTag("reels_ai_tuning_btn")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Psychology,
-                                contentDescription = "AI Interest Tuning",
-                                tint = Gold,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        // "+ Create Reel" Quick Action Button
+                        // "+ Create Reel" Quick Action Button (AI Interest Tuning runs internally in the background)
                         Surface(
                             onClick = { viewModel.openCreateReel() },
                             shape = RoundedCornerShape(20.dp),
@@ -244,7 +237,9 @@ fun ReelsScreen(
                                     text = "Create",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = GoldDeep
+                                    color = GoldDeep,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }

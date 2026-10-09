@@ -61,12 +61,16 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.*
 
-private val FbBlue = Color(0xFF1877F2)
-private val FbPillBg = Color(0xFFE4E6EB)
-private val FbDarkText = Color(0xFF050505)
-private val FbSecondaryText = Color(0xFF65676B)
-private val FbSurfaceBg = Color(0xFFFFFFFF)
-private val FbLightDivider = Color(0xFFCED0D4)
+private val FbBlue = Color(0xFF96691F) // Meskot Bronze Gold
+private val FbPillBg = Color(0xFFF6EDD2) // Meskot Warm Gold Tint
+private val FbDarkText = Color(0xFF1D2419) // Meskot Deep Ink
+private val FbSecondaryText = Color(0xFF7A7360) // Meskot Warm Muted Text
+private val FbSurfaceBg = Color(0xFFFBF8EF) // Meskot Warm Parchment Background
+private val FbLightDivider = Color(0xFFEADFC2) // Meskot Gold Line Border
+private val MeskotCardPaper = Color(0xFFFFFDF8)
+private val MeskotGold1 = Color(0xFFEFD06C)
+private val MeskotGold2 = Color(0xFFA87B25)
+private val MeskotMaroon = Color(0xFF8A1C2B)
 
 /**
  * Facebook Marketplace-style Main Screen (`MarketplaceScreen`)
@@ -87,6 +91,14 @@ private val FbLightDivider = Color(0xFFCED0D4)
  *    - Formatted currency price tag + 1-line truncated title with ellipsis
  * 5. Product Details Modal with direct real-time Seller Chat & Inbox integration.
  */
+enum class MarketplaceSortOption(val label: String) {
+    RECOMMENDED("Recommended"),
+    NEWEST("Newest First"),
+    NEAREST("Distance: Nearest"),
+    PRICE_LOW_HIGH("Price: Low to High"),
+    PRICE_HIGH_LOW("Price: High to Low")
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MarketplaceScreen(
@@ -96,6 +108,7 @@ fun MarketplaceScreen(
     val currentUser by viewModel.currentUser.collectAsState()
     val categories by viewModel.marketplaceCategories.collectAsState()
     val allListings by viewModel.marketplaceListings.collectAsState()
+    val savedListingIds by viewModel.savedListingIds.collectAsState()
     val marketplaceChatList by viewModel.marketplaceChats.collectAsState()
     val currentLocation by viewModel.marketplaceCurrentLocation.collectAsState()
     val radiusKm = currentLocation.radiusKm.toDouble()
@@ -109,25 +122,39 @@ fun MarketplaceScreen(
     var selectedCategoryId by remember { mutableStateOf("all") }
     var searchQuery by remember { mutableStateOf("") }
     var isSearchBarVisible by remember { mutableStateOf(false) }
+    var showOnlySaved by remember { mutableStateOf(false) }
+    var selectedConditionFilter by remember { mutableStateOf("All") }
+    var selectedSortOption by remember { mutableStateOf(MarketplaceSortOption.RECOMMENDED) }
+    var minPriceFilter by remember { mutableStateOf("") }
+    var maxPriceFilter by remember { mutableStateOf("") }
 
     // Modal / Sheet States
     var showCategoriesSheet by remember { mutableStateOf(false) }
+    var showFilterSortSheet by remember { mutableStateOf(false) }
     var showLocationDialog by remember { mutableStateOf(false) }
     var showSellModal by remember { mutableStateOf(false) }
     var showInboxModal by remember { mutableStateOf(false) }
     var showSellerProfileSheet by remember { mutableStateOf(false) }
-    var selectedListing by remember { mutableStateOf<ListingItem?>(null) }
+    var selectedListingId by remember { mutableStateOf<String?>(null) }
     var activeChatThreadId by remember { mutableStateOf<String?>(null) }
+
+    val selectedListing = remember(allListings, selectedListingId, savedListingIds) {
+        allListings.find { it.id == selectedListingId }?.let {
+            it.copy(isSaved = savedListingIds.contains(it.id))
+        }
+    }
 
     val focusManager = LocalFocusManager.current
 
     BackHandler {
         when {
             activeChatThreadId != null -> activeChatThreadId = null
-            selectedListing != null -> selectedListing = null
+            selectedListingId != null -> selectedListingId = null
             showSellModal -> showSellModal = false
             showInboxModal -> showInboxModal = false
             showSellerProfileSheet -> showSellerProfileSheet = false
+            showFilterSortSheet -> showFilterSortSheet = false
+            showOnlySaved -> showOnlySaved = false
             isSearchBarVisible -> {
                 isSearchBarVisible = false
                 searchQuery = ""
@@ -136,9 +163,33 @@ fun MarketplaceScreen(
         }
     }
 
-    // Filtered & proximity/date sorted listings for "Today's picks"
-    val filteredListings = remember(allListings, selectedCategoryId, searchQuery, currentLocation, radiusKm) {
-        allListings
+    val activeFilterCount = remember(selectedConditionFilter, selectedSortOption, minPriceFilter, maxPriceFilter) {
+        var count = 0
+        if (selectedConditionFilter != "All") count++
+        if (selectedSortOption != MarketplaceSortOption.RECOMMENDED) count++
+        if (minPriceFilter.isNotBlank() || maxPriceFilter.isNotBlank()) count++
+        count
+    }
+
+    // Filtered & proximity/date/price sorted listings for "Today's picks"
+    val filteredListings = remember(
+        allListings,
+        savedListingIds,
+        selectedCategoryId,
+        searchQuery,
+        currentLocation,
+        radiusKm,
+        showOnlySaved,
+        selectedConditionFilter,
+        selectedSortOption,
+        minPriceFilter,
+        maxPriceFilter
+    ) {
+        val minUsd = minPriceFilter.toDoubleOrNull()
+        val maxUsd = maxPriceFilter.toDoubleOrNull()
+        val nbeRate = ExchangeRateManager.usdToEtbRate
+
+        val baseList = allListings
             .map { item ->
                 val computedDist = calculateHaversineDistanceKm(
                     currentLocation.latitude,
@@ -151,25 +202,53 @@ fun MarketplaceScreen(
                 } else {
                     computedDist
                 }
-                item.copy(distanceKm = effectiveDist)
+                item.copy(
+                    distanceKm = effectiveDist,
+                    isSaved = savedListingIds.contains(item.id)
+                )
             }
             .filter { item ->
+                val matchesSaved = !showOnlySaved || item.isSaved
                 val matchesCategory = selectedCategoryId == "all" ||
                         item.categoryId.equals(selectedCategoryId, ignoreCase = true)
+                val matchesCondition = selectedConditionFilter == "All" ||
+                        item.condition.equals(selectedConditionFilter, ignoreCase = true)
                 val q = searchQuery.trim().lowercase()
                 val matchesQuery = q.isEmpty() ||
                         item.title.lowercase().contains(q) ||
                         item.description.lowercase().contains(q) ||
                         item.location.name.lowercase().contains(q) ||
-                        item.categoryId.lowercase().contains(q)
+                        item.categoryId.lowercase().contains(q) ||
+                        item.sellerName.lowercase().contains(q)
                 val matchesRadius = radiusKm >= 250.0 || item.distanceKm <= radiusKm
-                matchesCategory && matchesQuery && matchesRadius
+
+                val itemPriceInUsd = if (item.currency.equals("USD", ignoreCase = true)) {
+                    item.price
+                } else {
+                    item.price / nbeRate
+                }
+                val matchesMinPrice = minUsd == null || itemPriceInUsd >= minUsd
+                val matchesMaxPrice = maxUsd == null || itemPriceInUsd <= maxUsd
+
+                matchesSaved && matchesCategory && matchesCondition && matchesQuery && matchesRadius && matchesMinPrice && matchesMaxPrice
             }
-            .sortedWith(
-                compareByDescending<ListingItem> { it.isPromoted }
+
+        when (selectedSortOption) {
+            MarketplaceSortOption.RECOMMENDED -> baseList.sortedWith(
+                compareByDescending<ListingItem> { it.isAvailable }
+                    .thenByDescending { it.isPromoted }
                     .thenBy { (it.distanceKm / 15.0).toInt() }
                     .thenByDescending { it.createdAt }
             )
+            MarketplaceSortOption.NEWEST -> baseList.sortedByDescending { it.createdAt }
+            MarketplaceSortOption.NEAREST -> baseList.sortedBy { it.distanceKm }
+            MarketplaceSortOption.PRICE_LOW_HIGH -> baseList.sortedBy {
+                if (it.currency.equals("USD", ignoreCase = true)) it.price else it.price / nbeRate
+            }
+            MarketplaceSortOption.PRICE_HIGH_LOW -> baseList.sortedByDescending {
+                if (it.currency.equals("USD", ignoreCase = true)) it.price else it.price / nbeRate
+            }
+        }
     }
 
     Scaffold(
@@ -183,51 +262,102 @@ fun MarketplaceScreen(
                     .fillMaxWidth()
                     .background(FbSurfaceBg)
             ) {
-                // 1. Top App Bar (Matches Screenshot)
+                // Meskot Brand Gold Top Accent Bar
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .background(
+                            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                listOf(MeskotGold1, MeskotGold2, FbBlue)
+                            )
+                        )
+                )
+
+                // 1. Top App Bar (Meskot Brand Styled)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        IconButton(
+                        Surface(
                             onClick = onBack,
+                            shape = CircleShape,
+                            color = MeskotCardPaper,
+                            border = BorderStroke(1.8.dp, MeskotGold1),
                             modifier = Modifier
-                                .size(48.dp)
+                                .size(42.dp)
                                 .testTag("marketplace_back_button")
                         ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = FbDarkText,
-                                modifier = Modifier.size(26.dp)
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = FbBlue,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Column {
+                            Text(
+                                text = "Meskot Marketplace",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = FbDarkText
+                            )
+                            Text(
+                                text = "ገበያ በመስኮት · Buy, Sell & Escrow Locally",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = FbBlue
                             )
                         }
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Marketplace",
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = FbDarkText
-                        )
                     }
 
-                    IconButton(
-                        onClick = { isSearchBarVisible = !isSearchBarVisible },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("marketplace_top_search_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Search Marketplace",
-                            tint = FbDarkText,
-                            modifier = Modifier.size(26.dp)
-                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(
+                            onClick = { showFilterSortSheet = true },
+                            shape = CircleShape,
+                            color = if (activeFilterCount > 0) MeskotGold2 else FbPillBg,
+                            border = BorderStroke(1.5.dp, MeskotGold1),
+                            modifier = Modifier
+                                .size(42.dp)
+                                .testTag("marketplace_filter_button")
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = "Filter & Sort Marketplace",
+                                    tint = if (activeFilterCount > 0) Color.White else FbBlue,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        Surface(
+                            onClick = { isSearchBarVisible = !isSearchBarVisible },
+                            shape = CircleShape,
+                            color = FbPillBg,
+                            border = BorderStroke(1.5.dp, MeskotGold1),
+                            modifier = Modifier
+                                .size(42.dp)
+                                .testTag("marketplace_top_search_button")
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Search Marketplace",
+                                    tint = FbBlue,
+                                    modifier = Modifier.size(21.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -251,7 +381,7 @@ fun MarketplaceScreen(
                             Icon(
                                 imageVector = Icons.Default.Search,
                                 contentDescription = null,
-                                tint = FbSecondaryText
+                                tint = FbBlue
                             )
                         },
                         trailingIcon = {
@@ -260,7 +390,7 @@ fun MarketplaceScreen(
                                     Icon(
                                         imageVector = Icons.Default.Close,
                                         contentDescription = "Clear search",
-                                        tint = FbSecondaryText
+                                        tint = FbBlue
                                     )
                                 }
                             }
@@ -268,10 +398,10 @@ fun MarketplaceScreen(
                         singleLine = true,
                         shape = RoundedCornerShape(24.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color(0xFFF0F2F5),
-                            unfocusedContainerColor = Color(0xFFF0F2F5),
-                            focusedBorderColor = FbBlue,
-                            unfocusedBorderColor = Color.Transparent
+                            focusedContainerColor = MeskotCardPaper,
+                            unfocusedContainerColor = MeskotCardPaper,
+                            focusedBorderColor = MeskotGold2,
+                            unfocusedBorderColor = FbLightDivider
                         ),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(
@@ -309,31 +439,48 @@ fun MarketplaceScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Pill 1: Profile / User Account Icon Chip
+                        // Pill 1: Profile / Seller Commerce Hub Chip
                         item {
                             Surface(
                                 onClick = { showSellerProfileSheet = true },
                                 shape = RoundedCornerShape(22.dp),
-                                color = FbPillBg,
+                                color = MeskotCardPaper,
+                                border = BorderStroke(1.2.dp, FbLightDivider),
                                 modifier = Modifier
                                     .height(38.dp)
                                     .testTag("pill_profile")
                             ) {
-                                Box(
-                                    modifier = Modifier.padding(horizontal = 14.dp),
-                                    contentAlignment = Alignment.Center
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Person,
                                         contentDescription = "Your Marketplace Profile",
-                                        tint = FbDarkText,
-                                        modifier = Modifier.size(20.dp)
+                                        tint = FbBlue,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "You",
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = FbDarkText
                                     )
                                 }
                             }
                         }
 
-                        // Pill 2: "Inbox" Chip
+                        // Pill 2: "Sell" Chip
+                        item {
+                            MarketplaceActionChip(
+                                label = "Sell",
+                                onClick = { showSellModal = true },
+                                testTag = "pill_sell"
+                            )
+                        }
+
+                        // Pill 3: "Inbox" Chip
                         item {
                             MarketplaceActionChip(
                                 label = "Inbox",
@@ -343,16 +490,18 @@ fun MarketplaceScreen(
                             )
                         }
 
-                        // Pill 3: "Sell" Chip
+                        // Pill 4: "Saved" Chip
                         item {
                             MarketplaceActionChip(
-                                label = "Sell",
-                                onClick = { showSellModal = true },
-                                testTag = "pill_sell"
+                                label = "Saved",
+                                badgeCount = savedListingIds.size,
+                                isSelected = showOnlySaved,
+                                onClick = { showOnlySaved = !showOnlySaved },
+                                testTag = "pill_saved"
                             )
                         }
 
-                        // Pill 4: "Categories" Chip
+                        // Pill 5: "Categories" Chip
                         item {
                             val activeCategory = categories.find { it.id == selectedCategoryId }
                             val categoryChipLabel = if (selectedCategoryId == "all" || activeCategory == null) {
@@ -368,23 +517,61 @@ fun MarketplaceScreen(
                             )
                         }
 
-                        // Pill 5: "Search" Chip
+                        // Pill 6: "Sort & Filter" Chip
                         item {
                             MarketplaceActionChip(
-                                label = "Search",
-                                isSelected = isSearchBarVisible || searchQuery.isNotEmpty(),
-                                onClick = { isSearchBarVisible = !isSearchBarVisible },
-                                testTag = "pill_search"
+                                label = if (selectedSortOption == MarketplaceSortOption.RECOMMENDED) "Sort & Filter" else selectedSortOption.label,
+                                badgeCount = activeFilterCount,
+                                isSelected = activeFilterCount > 0,
+                                onClick = { showFilterSortSheet = true },
+                                testTag = "pill_filter_sort"
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    // Quick Horizontal Category Strip (Facebook Marketplace style)
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(categories.take(9), key = { it.id }) { cat ->
+                            val isSelected = selectedCategoryId == cat.id
+                            Surface(
+                                onClick = {
+                                    selectedCategoryId = if (isSelected && cat.id != "all") "all" else cat.id
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (isSelected) FbPillBg else Color.Transparent,
+                                border = BorderStroke(
+                                    width = 1.dp,
+                                    color = if (isSelected) MeskotGold2 else FbLightDivider.copy(alpha = 0.8f)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(text = cat.icon, fontSize = 13.sp)
+                                    Text(
+                                        text = cat.name,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) FbBlue else FbSecondaryText
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     HorizontalDivider(color = FbLightDivider.copy(alpha = 0.6f), thickness = 0.8.dp)
                 }
             }
 
-            // 3. Feed Header ("Today's picks" + Location Badge e.g. "Ariena · 65 km")
+            // 3. Feed Header ("Today's picks" / "Saved items" + Location Badge)
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(
                     modifier = Modifier
@@ -396,12 +583,19 @@ fun MarketplaceScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Today's picks",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = FbDarkText
-                        )
+                        Column {
+                            Text(
+                                text = if (showOnlySaved) "Saved Marketplace Items" else "Today's picks",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = FbDarkText
+                            )
+                            Text(
+                                text = "${filteredListings.size} items available · NBE Rate 1 USD = ${String.format(Locale.US, "%.0f", ExchangeRateManager.usdToEtbRate)} ETB",
+                                fontSize = 11.5.sp,
+                                color = FbSecondaryText
+                            )
+                        }
 
                         // Interactive Location Pill matching Sell on Meskot (`📍 ${loc}` + gold chevron)
                         Surface(
@@ -434,41 +628,81 @@ fun MarketplaceScreen(
                         }
                     }
 
-                    // Active filter chips banner if user filtered by category or search
-                    if (selectedCategoryId != "all" || searchQuery.isNotBlank()) {
+                    // Active filter chips banner if user filtered by category, saved, condition, or search
+                    if (selectedCategoryId != "all" || searchQuery.isNotBlank() || showOnlySaved || activeFilterCount > 0) {
                         Spacer(modifier = Modifier.height(6.dp))
-                        Row(
+                        LazyRow(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            if (showOnlySaved) {
+                                item {
+                                    InputChip(
+                                        selected = true,
+                                        onClick = { showOnlySaved = false },
+                                        label = { Text("Saved Only", fontSize = 12.sp) },
+                                        trailingIcon = {
+                                            Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(14.dp))
+                                        }
+                                    )
+                                }
+                            }
                             if (selectedCategoryId != "all") {
-                                val catName = categories.find { it.id == selectedCategoryId }?.name ?: selectedCategoryId
-                                InputChip(
-                                    selected = true,
-                                    onClick = { selectedCategoryId = "all" },
-                                    label = { Text(catName, fontSize = 12.sp) },
-                                    trailingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Clear category",
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                )
+                                item {
+                                    val catName = categories.find { it.id == selectedCategoryId }?.name ?: selectedCategoryId
+                                    InputChip(
+                                        selected = true,
+                                        onClick = { selectedCategoryId = "all" },
+                                        label = { Text(catName, fontSize = 12.sp) },
+                                        trailingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Clear category",
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                            if (selectedConditionFilter != "All") {
+                                item {
+                                    InputChip(
+                                        selected = true,
+                                        onClick = { selectedConditionFilter = "All" },
+                                        label = { Text(selectedConditionFilter, fontSize = 12.sp) },
+                                        trailingIcon = {
+                                            Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(14.dp))
+                                        }
+                                    )
+                                }
+                            }
+                            if (selectedSortOption != MarketplaceSortOption.RECOMMENDED) {
+                                item {
+                                    InputChip(
+                                        selected = true,
+                                        onClick = { selectedSortOption = MarketplaceSortOption.RECOMMENDED },
+                                        label = { Text(selectedSortOption.label, fontSize = 12.sp) },
+                                        trailingIcon = {
+                                            Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(14.dp))
+                                        }
+                                    )
+                                }
                             }
                             if (searchQuery.isNotBlank()) {
-                                InputChip(
-                                    selected = true,
-                                    onClick = { searchQuery = "" },
-                                    label = { Text("\"$searchQuery\"", fontSize = 12.sp) },
-                                    trailingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Clear search",
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                )
+                                item {
+                                    InputChip(
+                                        selected = true,
+                                        onClick = { searchQuery = "" },
+                                        label = { Text("\"$searchQuery\"", fontSize = 12.sp) },
+                                        trailingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Clear search",
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -485,21 +719,22 @@ fun MarketplaceScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Storefront,
+                            imageVector = if (showOnlySaved) Icons.Outlined.BookmarkBorder else Icons.Outlined.Storefront,
                             contentDescription = null,
                             tint = FbSecondaryText,
                             modifier = Modifier.size(56.dp)
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "No listings match your filter",
+                            text = if (showOnlySaved) "No saved listings yet" else "No listings match your filter",
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = FbDarkText
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Try expanding your distance radius or clearing the category filter.",
+                            text = if (showOnlySaved) "Tap the bookmark icon on any Marketplace listing to save it for later."
+                            else "Try expanding your distance radius or clearing the category and price filters.",
                             fontSize = 14.sp,
                             color = FbSecondaryText
                         )
@@ -508,6 +743,11 @@ fun MarketplaceScreen(
                             onClick = {
                                 selectedCategoryId = "all"
                                 searchQuery = ""
+                                showOnlySaved = false
+                                selectedConditionFilter = "All"
+                                selectedSortOption = MarketplaceSortOption.RECOMMENDED
+                                minPriceFilter = ""
+                                maxPriceFilter = ""
                                 viewModel.updateMarketplaceLocationFilter(
                                     MarketplaceLocation(9.0192, 38.7525, "Ariena", 65),
                                     65.0
@@ -515,20 +755,24 @@ fun MarketplaceScreen(
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = FbBlue)
                         ) {
-                            Text("Reset Filters")
+                            Text("Reset All Filters")
                         }
                     }
                 }
             }
 
-            // 4. 2-Column Product Grid Cards (Matches Screenshot)
+            // 4. 2-Column Product Grid Cards with Save Toggle & Sold/Promoted Badges
             items(
                 items = filteredListings,
                 key = { it.id }
             ) { item ->
                 MarketplaceProductGridCard(
                     item = item,
-                    onClick = { selectedListing = item }
+                    onToggleSave = { viewModel.toggleSaveListing(item.id) },
+                    onClick = {
+                        viewModel.incrementMarketplaceListingViews(item.id)
+                        selectedListingId = item.id
+                    }
                 )
             }
         }
@@ -548,6 +792,31 @@ fun MarketplaceScreen(
                 showCategoriesSheet = false
             },
             onDismiss = { showCategoriesSheet = false }
+        )
+    }
+
+    // Sort & Filter Bottom Sheet (Price range, Condition, Sort order)
+    if (showFilterSortSheet) {
+        MarketplaceFilterSortBottomSheet(
+            selectedSort = selectedSortOption,
+            selectedCondition = selectedConditionFilter,
+            minPriceUsd = minPriceFilter,
+            maxPriceUsd = maxPriceFilter,
+            onApply = { sort, cond, minP, maxP ->
+                selectedSortOption = sort
+                selectedConditionFilter = cond
+                minPriceFilter = minP
+                maxPriceFilter = maxP
+                showFilterSortSheet = false
+            },
+            onReset = {
+                selectedSortOption = MarketplaceSortOption.RECOMMENDED
+                selectedConditionFilter = "All"
+                minPriceFilter = ""
+                maxPriceFilter = ""
+                showFilterSortSheet = false
+            },
+            onDismiss = { showFilterSortSheet = false }
         )
     }
 
@@ -621,7 +890,7 @@ fun MarketplaceScreen(
                 },
                 onOpenFullMessenger = {
                     activeChatThreadId = null
-                    selectedListing = null
+                    selectedListingId = null
                     showInboxModal = false
                     viewModel.startChatWithSeller(relatedItem)
                 },
@@ -632,27 +901,68 @@ fun MarketplaceScreen(
 
     // Product Detail & Direct Seller Chat Trigger Modal
     selectedListing?.let { listing ->
+        val similarItems = remember(allListings, listing.id, listing.categoryId) {
+            allListings.filter { it.id != listing.id && it.categoryId == listing.categoryId }.take(6)
+        }
         MarketplaceProductDetailModal(
             item = listing,
-            onDismiss = { selectedListing = null },
+            currentUser = currentUser,
+            similarItems = similarItems,
+            onDismiss = { selectedListingId = null },
+            onToggleSave = { viewModel.toggleSaveListing(listing.id) },
             onSendQuickMessage = { messageText ->
                 viewModel.sendMarketplaceInquiry(listing, messageText)
                 val uid = currentUser?.uid ?: "usr_current"
                 activeChatThreadId = "mkt_chat_${uid}_${listing.sellerId}_${listing.id}"
             },
+            onSendOffer = { offerAmt, offerCurr ->
+                viewModel.sendMarketplaceOffer(listing, offerAmt, offerCurr)
+                val uid = currentUser?.uid ?: "usr_current"
+                activeChatThreadId = "mkt_chat_${uid}_${listing.sellerId}_${listing.id}"
+            },
+            onBuyWithChapa = {
+                viewModel.buyMarketplaceItemWithChapa(listing)
+            },
             onMessageSellerInMessenger = { initialText ->
-                selectedListing = null
+                selectedListingId = null
                 viewModel.startChatWithSeller(listing, initialText)
+            },
+            onToggleSoldStatus = {
+                viewModel.toggleMarketplaceListingAvailability(listing.id)
+            },
+            onUpdateListing = { newTitle, newPrice, newCurrency, newCond, newDesc, newNeg ->
+                viewModel.updateMarketplaceListingDetails(
+                    itemId = listing.id,
+                    newTitle = newTitle,
+                    newPrice = newPrice,
+                    newCurrency = newCurrency,
+                    newCondition = newCond,
+                    newDescription = newDesc,
+                    newIsNegotiable = newNeg
+                )
+            },
+            onBoostListing = {
+                viewModel.boostMarketplaceListing(listing)
+            },
+            onDeleteListing = {
+                selectedListingId = null
+                viewModel.deleteMarketplaceListing(listing.id, listing.title)
+            },
+            onSelectSimilarItem = { sim ->
+                viewModel.incrementMarketplaceListingViews(sim.id)
+                selectedListingId = sim.id
             }
         )
     }
 
     // Seller / Account Commerce Profile Sheet
     if (showSellerProfileSheet) {
-        val myListings = allListings.filter { it.sellerId == currentUser?.uid }
+        val myListings = allListings.filter { it.sellerId == currentUser?.uid || it.sellerId == "usr_current" }
+        val savedListings = allListings.filter { savedListingIds.contains(it.id) }
         MarketplaceAccountSheet(
             currentUser = currentUser,
             myListings = myListings,
+            savedListings = savedListings,
             inboxCount = marketplaceChats.size,
             onOpenCreateListing = {
                 showSellerProfileSheet = false
@@ -664,7 +974,17 @@ fun MarketplaceScreen(
             },
             onSelectListing = { item ->
                 showSellerProfileSheet = false
-                selectedListing = item
+                selectedListingId = item.id
+            },
+            onToggleSold = { item ->
+                viewModel.toggleMarketplaceListingAvailability(item.id)
+            },
+            onBoostListing = { item ->
+                showSellerProfileSheet = false
+                viewModel.boostMarketplaceListing(item)
+            },
+            onDeleteListing = { item ->
+                viewModel.deleteMarketplaceListing(item.id, item.title)
             },
             onDismiss = { showSellerProfileSheet = false }
         )
@@ -682,10 +1002,19 @@ private fun MarketplaceActionChip(
     onClick: () -> Unit,
     testTag: String
 ) {
+    val isPrimarySell = label.equals("Sell", ignoreCase = true)
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(22.dp),
-        color = if (isSelected) FbBlue.copy(alpha = 0.14f) else FbPillBg,
+        color = when {
+            isPrimarySell -> MeskotGold2
+            isSelected -> FbPillBg
+            else -> MeskotCardPaper
+        },
+        border = BorderStroke(
+            width = if (isSelected || isPrimarySell) 1.5.dp else 1.2.dp,
+            color = if (isSelected || isPrimarySell) MeskotGold2 else FbLightDivider
+        ),
         modifier = Modifier
             .height(38.dp)
             .testTag(testTag)
@@ -696,10 +1025,14 @@ private fun MarketplaceActionChip(
             horizontalArrangement = Arrangement.Center
         ) {
             Text(
-                text = label,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isSelected) FbBlue else FbDarkText
+                text = if (isPrimarySell) "+ Sell" else label,
+                fontSize = 14.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = when {
+                    isPrimarySell -> Color.White
+                    isSelected -> FbBlue
+                    else -> FbDarkText
+                }
             )
             if (badgeCount > 0) {
                 Spacer(modifier = Modifier.width(6.dp))
@@ -707,7 +1040,7 @@ private fun MarketplaceActionChip(
                     modifier = Modifier
                         .size(20.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFE41E3F)),
+                        .background(MeskotMaroon),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -723,35 +1056,42 @@ private fun MarketplaceActionChip(
 }
 
 /**
- * 2-Column Product Grid Card matching the Facebook Marketplace screenshot:
- * - Rounded image card with Coil memory/disk caching
- * - Formatted Price + 1-line truncated Title ("ETB 150,000 · 53" or "$800 · 4K Smart TV...")
+ * 2-Column Product Grid Card styled with Meskot Brand Palette:
+ * - Warm ivory card with delicate gold border & cached product thumbnail
+ * - Save/Bookmark heart icon in top-right + Sold/Promoted badges
+ * - Formatted Price in Meskot Gold + 1-line truncated Title
  */
 @Composable
 private fun MarketplaceProductGridCard(
     item: ListingItem,
+    onToggleSave: () -> Unit,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
     val primaryImageUrl = item.primaryImageUrl
 
-    Column(
+    Card(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MeskotCardPaper),
+        border = BorderStroke(
+            width = if (item.isPromoted) 1.5.dp else 1.dp,
+            color = if (item.isPromoted) MeskotGold2 else FbLightDivider
+        ),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
             .padding(horizontal = 4.dp)
             .testTag("marketplace_item_${item.id}")
     ) {
-        // Square / Aspect-Ratio Tailored Product Thumbnail with Rounded Corners
-        Card(
-            shape = RoundedCornerShape(10.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F2F5)),
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Square / Aspect-Ratio Tailored Product Thumbnail
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .background(FbPillBg)
+            ) {
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(primaryImageUrl)
@@ -763,10 +1103,28 @@ private fun MarketplaceProductGridCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-                if (item.isPromoted) {
+
+                // Top-start badge: SOLD or Promoted
+                if (!item.isAvailable) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF96691F).copy(alpha = 0.92f),
+                        color = MeskotMaroon.copy(alpha = 0.94f),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                    ) {
+                        Text(
+                            text = "SOLD",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                } else if (item.isPromoted) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = FbBlue.copy(alpha = 0.94f),
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .padding(6.dp)
@@ -776,35 +1134,251 @@ private fun MarketplaceProductGridCard(
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                // Top-end Bookmark / Save Button
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.48f))
+                        .clickable { onToggleSave() }
+                        .testTag("save_listing_${item.id}"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (item.isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = if (item.isSaved) "Remove from Saved" else "Save Listing",
+                        tint = if (item.isSaved) MeskotGold1 else Color.White,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+
+                // Bottom-start photo count pill if multiple images
+                if (item.imageUrls.size > 1) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color.Black.copy(alpha = 0.55f),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(6.dp)
+                    ) {
+                        Text(
+                            text = "📷 ${item.imageUrls.size}",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                 }
             }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                // Price Tag in Meskot Bronze Gold + Condition badge
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (item.isAvailable) item.formattedPrice else "SOLD · ${item.formattedPrice}",
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (item.isAvailable) FbBlue else MeskotMaroon,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (item.sellerVerified) {
+                        VerifiedBadge(size = 13.dp)
+                    }
+                }
+
+                // Title (1-line truncation with ellipsis)
+                Text(
+                    text = item.title,
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = FbDarkText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                // Secondary Currency Conversion / Location Hint
+                Text(
+                    text = "📍 ${item.location.name} · ${item.secondaryPriceFormatted}",
+                    fontSize = 11.5.sp,
+                    color = FbSecondaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(6.dp))
+/**
+ * Sort & Filter Bottom Sheet (Sort Order, Condition, and USD Price Range)
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MarketplaceFilterSortBottomSheet(
+    selectedSort: MarketplaceSortOption,
+    selectedCondition: String,
+    minPriceUsd: String,
+    maxPriceUsd: String,
+    onApply: (MarketplaceSortOption, String, String, String) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var tempSort by remember { mutableStateOf(selectedSort) }
+    var tempCondition by remember { mutableStateOf(selectedCondition) }
+    var tempMin by remember { mutableStateOf(minPriceUsd) }
+    var tempMax by remember { mutableStateOf(maxPriceUsd) }
 
-        // Price Tag + Shortened Title / Description line (1-line truncation with ellipsis)
-        Text(
-            text = "${item.formattedPrice} · ${item.title}",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = FbDarkText,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 2.dp)
-        )
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MeskotCardPaper,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp, vertical = 8.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Sort & Filter Marketplace",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = FbDarkText
+                )
+                TextButton(onClick = onReset) {
+                    Text("Reset", color = MeskotMaroon, fontWeight = FontWeight.Bold)
+                }
+            }
 
-        // Secondary Currency Conversion / Location Hint
-        Text(
-            text = "${item.secondaryPriceFormatted} · ${item.location.name}",
-            fontSize = 12.sp,
-            color = FbSecondaryText,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 2.dp)
-        )
+            Text(
+                text = "Sort By",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = FbBlue
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                MarketplaceSortOption.values().forEach { opt ->
+                    val isSelected = tempSort == opt
+                    Surface(
+                        onClick = { tempSort = opt },
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (isSelected) FbPillBg else FbSurfaceBg,
+                        border = BorderStroke(
+                            width = if (isSelected) 1.5.dp else 1.dp,
+                            color = if (isSelected) MeskotGold2 else FbLightDivider
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = opt.label,
+                                fontSize = 14.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = FbDarkText
+                            )
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = FbBlue,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Text(
+                text = "Condition",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = FbBlue
+            )
+
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(listOf("All", "New", "Used - Like New", "Used - Good", "Used - Fair")) { cond ->
+                    FilterChip(
+                        selected = tempCondition == cond,
+                        onClick = { tempCondition = cond },
+                        label = { Text(cond) }
+                    )
+                }
+            }
+
+            Text(
+                text = "Price Range (USD Equivalent)",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = FbBlue
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    value = tempMin,
+                    onValueChange = { tempMin = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                    label = { Text("Min ($)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    value = tempMax,
+                    onValueChange = { tempMax = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                    label = { Text("Max ($)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Button(
+                onClick = { onApply(tempSort, tempCondition, tempMin, tempMax) },
+                colors = ButtonDefaults.buttonColors(containerColor = FbBlue),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                Text("Apply Filters", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            }
+        }
     }
 }
 
@@ -1320,18 +1894,39 @@ private fun CreateListingModal(
 }
 
 /**
- * Product Details Modal with Direct Real-Time Chat Trigger to the Seller
+ * Product Details Modal with Full Buyer & Seller Commerce Actions:
+ * - Multi-photo gallery viewer
+ * - Save/Bookmark, Make Offer Dialog, Chapa Escrow Buy Now, Call Seller, Share Listing
+ * - Quick canned replies + custom inquiry chat trigger
+ * - Seller Management Toolbar (Mark as Sold/Available, Edit Listing, Boost Listing, Delete Listing)
+ * - Similar Items recommendation carousel
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MarketplaceProductDetailModal(
     item: ListingItem,
+    currentUser: User?,
+    similarItems: List<ListingItem>,
     onDismiss: () -> Unit,
+    onToggleSave: () -> Unit,
     onSendQuickMessage: (String) -> Unit,
-    onMessageSellerInMessenger: (String?) -> Unit
+    onSendOffer: (Double, String) -> Unit,
+    onBuyWithChapa: () -> Unit,
+    onMessageSellerInMessenger: (String?) -> Unit,
+    onToggleSoldStatus: () -> Unit,
+    onUpdateListing: (String, Double, String, String, String, Boolean) -> Unit,
+    onBoostListing: () -> Unit,
+    onDeleteListing: () -> Unit,
+    onSelectSimilarItem: (ListingItem) -> Unit
 ) {
-    var quickMessage by remember { mutableStateOf("Hi ${item.sellerName}, is this still available?") }
-    var selectedImageIndex by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    var quickMessage by remember(item.id) { mutableStateOf("Hi ${item.sellerName}, is this still available?") }
+    var selectedImageIndex by remember(item.id) { mutableIntStateOf(0) }
+    var showMakeOfferDialog by remember { mutableStateOf(false) }
+    var showEditListingDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+
+    val isOwner = item.sellerId == currentUser?.uid || item.sellerId == "usr_current"
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1354,6 +1949,29 @@ private fun MarketplaceProductDetailModal(
                     navigationIcon = {
                         IconButton(onClick = onDismiss) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onToggleSave) {
+                            Icon(
+                                imageVector = if (item.isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = if (item.isSaved) "Remove from Saved" else "Save Listing",
+                                tint = if (item.isSaved) FbBlue else FbDarkText
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(
+                                        android.content.Intent.EXTRA_TEXT,
+                                        "Check out \"${item.title}\" (${item.formattedPrice}) on Meskot Marketplace in ${item.location.name}!"
+                                    )
+                                }
+                                context.startActivity(android.content.Intent.createChooser(sendIntent, "Share Listing"))
+                            }
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = "Share Listing", tint = FbDarkText)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = FbSurfaceBg)
@@ -1382,6 +2000,40 @@ private fun MarketplaceProductDetailModal(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
+
+                    if (!item.isAvailable) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MeskotMaroon,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(12.dp)
+                        ) {
+                            Text(
+                                text = "SOLD",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    } else if (item.isPromoted) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = FbBlue,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(12.dp)
+                        ) {
+                            Text(
+                                text = "✨ Golden Meskot Featured",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
 
                     if (images.size > 1) {
                         LazyRow(
@@ -1433,10 +2085,10 @@ private fun MarketplaceProductDetailModal(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = item.formattedPrice,
+                            text = if (item.isAvailable) item.formattedPrice else "SOLD · ${item.formattedPrice}",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = FbDarkText
+                            color = if (item.isAvailable) FbBlue else MeskotMaroon
                         )
                         Text(
                             text = "(${item.secondaryPriceFormatted})",
@@ -1455,7 +2107,7 @@ private fun MarketplaceProductDetailModal(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Listed in ${item.location.name} · ${item.distanceKm.toInt()} km away · ${item.condition}",
+                            text = "Listed in ${item.location.name} · ${item.distanceKm.toInt()} km away · ${item.condition} · ${item.viewsCount} views",
                             fontSize = 13.sp,
                             color = FbSecondaryText
                         )
@@ -1479,7 +2131,8 @@ private fun MarketplaceProductDetailModal(
                         }
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = if (item.isNegotiable) Color(0xFFE7F3FF) else Color(0xFFF0F2F5)
+                            color = if (item.isNegotiable) FbPillBg else Color(0xFFF3EFE4),
+                            border = BorderStroke(1.dp, FbLightDivider)
                         ) {
                             Text(
                                 text = if (item.isNegotiable) "🤝 Negotiable" else "Fixed Price",
@@ -1491,10 +2144,169 @@ private fun MarketplaceProductDetailModal(
                         }
                     }
 
+                    // Primary Buyer Action Bar (Facebook Marketplace Action Buttons)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (item.isAvailable) {
+                            Button(
+                                onClick = onBuyWithChapa,
+                                colors = ButtonDefaults.buttonColors(containerColor = FbBlue),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .weight(1.25f)
+                                    .height(44.dp)
+                                    .testTag("marketplace_buy_chapa_button")
+                            ) {
+                                Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Buy via Chapa", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = { showMakeOfferDialog = true },
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.4.dp, MeskotGold2),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp)
+                                    .testTag("marketplace_make_offer_button")
+                            ) {
+                                Icon(Icons.Default.LocalOffer, contentDescription = null, tint = FbBlue, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Make Offer", color = FbDarkText, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = onToggleSave,
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.2.dp, FbLightDivider),
+                            modifier = Modifier.height(44.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (item.isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = "Save",
+                                tint = FbBlue,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        if (item.allowCall && item.sellerPhone.isNotBlank()) {
+                            OutlinedButton(
+                                onClick = {
+                                    val dialIntent = android.content.Intent(
+                                        android.content.Intent.ACTION_DIAL,
+                                        android.net.Uri.parse("tel:${item.sellerPhone}")
+                                    )
+                                    context.startActivity(dialIntent)
+                                },
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.2.dp, FbLightDivider),
+                                modifier = Modifier.height(44.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Call,
+                                    contentDescription = "Call Seller",
+                                    tint = FbBlue,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Seller Management Card (Visible if current user is the seller, or via Seller Tools)
+                    if (isOwner) {
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = FbPillBg),
+                            border = BorderStroke(1.2.dp, MeskotGold2),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = "Seller Listing Controls",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = FbDarkText
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = onToggleSoldStatus,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (item.isAvailable) MeskotMaroon else FbBlue
+                                        ),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            text = if (item.isAvailable) "Mark as Sold" else "Mark Available",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    OutlinedButton(
+                                        onClick = { showEditListingDialog = true },
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Edit", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = onBoostListing,
+                                        colors = ButtonDefaults.buttonColors(containerColor = MeskotGold2),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.RocketLaunch, contentDescription = null, modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (item.isPromoted) "Boosted ✨" else "Boost Listing",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    OutlinedButton(
+                                        onClick = { showDeleteConfirmDialog = true },
+                                        shape = RoundedCornerShape(12.dp),
+                                        border = BorderStroke(1.dp, MeskotMaroon),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.DeleteOutline,
+                                            contentDescription = null,
+                                            tint = MeskotMaroon,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Delete", color = MeskotMaroon, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Direct Real-Time Chat Trigger Card (Send Seller a Message)
                     Card(
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F2F5)),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MeskotCardPaper),
+                        border = BorderStroke(1.dp, FbLightDivider),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -1517,6 +2329,32 @@ private fun MarketplaceProductDetailModal(
                                     fontWeight = FontWeight.Bold,
                                     color = FbDarkText
                                 )
+                            }
+
+                            // Quick canned message pills (Facebook Marketplace style)
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                val quickTemplates = listOf(
+                                    "Is this still available?",
+                                    "What is your lowest price?",
+                                    "Can we meet today in ${item.location.name}?",
+                                    "Do you accept Chapa or Telebirr?"
+                                )
+                                items(quickTemplates) { tpl ->
+                                    Surface(
+                                        onClick = { quickMessage = tpl },
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = FbPillBg,
+                                        border = BorderStroke(1.dp, FbLightDivider)
+                                    ) {
+                                        Text(
+                                            text = tpl,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = FbDarkText,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                        )
+                                    }
+                                }
                             }
 
                             Row(
@@ -1643,9 +2481,240 @@ private fun MarketplaceProductDetailModal(
                         height = 180.dp,
                         showOpenButton = true
                     )
+
+                    // Similar Items Carousel (Facebook Marketplace "Similar listings")
+                    if (similarItems.isNotEmpty()) {
+                        HorizontalDivider(color = FbLightDivider.copy(alpha = 0.6f))
+                        Text(
+                            text = "Similar Items Nearby",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = FbDarkText
+                        )
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            items(similarItems, key = { it.id }) { sim ->
+                                Card(
+                                    onClick = { onSelectSimilarItem(sim) },
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MeskotCardPaper),
+                                    border = BorderStroke(1.dp, FbLightDivider),
+                                    modifier = Modifier.width(148.dp)
+                                ) {
+                                    Column {
+                                        AsyncImage(
+                                            model = sim.primaryImageUrl,
+                                            contentDescription = sim.title,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(110.dp)
+                                        )
+                                        Column(modifier = Modifier.padding(8.dp)) {
+                                            Text(
+                                                text = sim.formattedPrice,
+                                                fontSize = 13.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = FbBlue,
+                                                maxLines = 1
+                                            )
+                                            Text(
+                                                text = sim.title,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = FbDarkText,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = "📍 ${sim.location.name}",
+                                                fontSize = 11.sp,
+                                                color = FbSecondaryText,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
+
+    // Make an Offer Dialog
+    if (showMakeOfferDialog) {
+        val suggested90 = (item.price * 0.90).roundToInt().toDouble()
+        val suggested85 = (item.price * 0.85).roundToInt().toDouble()
+        val suggested80 = (item.price * 0.80).roundToInt().toDouble()
+        var offerText by remember { mutableStateOf(suggested90.toLong().toString()) }
+
+        AlertDialog(
+            onDismissRequest = { showMakeOfferDialog = false },
+            containerColor = MeskotCardPaper,
+            title = {
+                Text(
+                    text = "Make an Offer to ${item.sellerName}",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Listed price: ${item.formattedPrice} (${item.secondaryPriceFormatted})",
+                        fontSize = 13.sp,
+                        color = FbSecondaryText
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(
+                            "-10%" to suggested90,
+                            "-15%" to suggested85,
+                            "-20%" to suggested80
+                        ).forEach { (pct, amt) ->
+                            FilterChip(
+                                selected = offerText == amt.toLong().toString(),
+                                onClick = { offerText = amt.toLong().toString() },
+                                label = { Text("$pct (${item.currency} ${amt.toLong()})") }
+                            )
+                        }
+                    }
+                    OutlinedTextField(
+                        value = offerText,
+                        onValueChange = { offerText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                        label = { Text("Your Offer (${item.currency})") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val amt = offerText.toDoubleOrNull() ?: 0.0
+                        if (amt > 0) {
+                            showMakeOfferDialog = false
+                            onSendOffer(amt, item.currency)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = FbBlue)
+                ) {
+                    Text("Send Offer", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMakeOfferDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Edit Listing Dialog
+    if (showEditListingDialog) {
+        var editTitle by remember { mutableStateOf(item.title) }
+        var editPrice by remember { mutableStateOf(item.price.toString()) }
+        var editCurrency by remember { mutableStateOf(item.currency) }
+        var editCondition by remember { mutableStateOf(item.condition) }
+        var editDesc by remember { mutableStateOf(item.description) }
+        var editNeg by remember { mutableStateOf(item.isNegotiable) }
+
+        AlertDialog(
+            onDismissRequest = { showEditListingDialog = false },
+            containerColor = MeskotCardPaper,
+            title = { Text("Edit Listing", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = editTitle,
+                        onValueChange = { editTitle = it },
+                        label = { Text("Title") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = editPrice,
+                            onValueChange = { editPrice = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                            label = { Text("Price") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = editCurrency == "USD",
+                            onClick = { editCurrency = if (editCurrency == "USD") "ETB" else "USD" },
+                            label = { Text(editCurrency) }
+                        )
+                    }
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(listOf("New", "Used - Like New", "Used - Good", "Used - Fair")) { cond ->
+                            FilterChip(
+                                selected = editCondition == cond,
+                                onClick = { editCondition = cond },
+                                label = { Text(cond, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+                    OutlinedTextField(
+                        value = editDesc,
+                        onValueChange = { editDesc = it },
+                        label = { Text("Description") },
+                        minLines = 3,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val p = editPrice.toDoubleOrNull() ?: item.price
+                        onUpdateListing(editTitle, p, editCurrency, editCondition, editDesc, editNeg)
+                        showEditListingDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = FbBlue)
+                ) {
+                    Text("Save Changes", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditListingDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Delete Listing Confirmation Dialog
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            containerColor = MeskotCardPaper,
+            title = { Text("Delete Listing?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Are you sure you want to permanently remove \"${item.title}\" from Meskot Marketplace?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        onDeleteListing()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MeskotMaroon)
+                ) {
+                    Text("Delete", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
@@ -1735,8 +2804,9 @@ private fun MarketplaceInboxModal(
                         val thumbUrl = lastMsg.itemThumbUrl.ifBlank { item?.primaryImageUrl.orEmpty() }
                         Card(
                             onClick = { onOpenThread(chatId) },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F8FA)),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = MeskotCardPaper),
+                            border = BorderStroke(1.dp, FbLightDivider),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -1856,37 +2926,67 @@ private fun MarketplaceConversationDialog(
                     color = FbSurfaceBg,
                     tonalElevation = 3.dp
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        OutlinedTextField(
-                            value = draft,
-                            onValueChange = { draft = it },
-                            placeholder = { Text("Write a message to ${item.sellerName}...") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(24.dp),
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(
-                            onClick = {
-                                if (draft.isNotBlank()) {
-                                    onSendMessage(draft.trim())
-                                    draft = ""
-                                }
-                            },
-                            modifier = Modifier
-                                .size(46.dp)
-                                .background(FbBlue, CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Send,
-                                contentDescription = "Send",
-                                tint = Color.White
+                        // Quick negotiation chips inside chat
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            val chatQuickReplies = listOf(
+                                "I can pick it up today",
+                                "Would you accept ${(item.price * 0.9).toInt()} ${item.currency}?",
+                                "Please share exact location pin",
+                                "I'll pay via Chapa Escrow"
                             )
+                            items(chatQuickReplies) { qr ->
+                                Surface(
+                                    onClick = { onSendMessage(qr) },
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = FbPillBg,
+                                    border = BorderStroke(1.dp, FbLightDivider)
+                                ) {
+                                    Text(
+                                        text = qr,
+                                        fontSize = 11.sp,
+                                        color = FbDarkText,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = draft,
+                                onValueChange = { draft = it },
+                                placeholder = { Text("Write a message to ${item.sellerName}...") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(24.dp),
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = {
+                                    if (draft.isNotBlank()) {
+                                        onSendMessage(draft.trim())
+                                        draft = ""
+                                    }
+                                },
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .background(FbBlue, CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = "Send",
+                                    tint = Color.White
+                                )
+                            }
                         }
                     }
                 }
@@ -1902,7 +3002,7 @@ private fun MarketplaceConversationDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(sortedMessages, key = { "${it.chatId}_${it.timestamp}" }) { msg ->
-                    val isMe = msg.senderId == currentUser?.uid
+                    val isMe = msg.senderId == currentUser?.uid || msg.senderId == "usr_current"
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
@@ -1941,19 +3041,25 @@ private fun MarketplaceConversationDialog(
 }
 
 /**
- * Seller Commerce Profile Bottom Sheet (triggered by clicking the Profile Icon Chip)
+ * Seller Commerce Profile Bottom Sheet (triggered by clicking the "You" Profile Chip)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MarketplaceAccountSheet(
     currentUser: User?,
     myListings: List<ListingItem>,
+    savedListings: List<ListingItem>,
     inboxCount: Int,
     onOpenCreateListing: () -> Unit,
     onOpenInbox: () -> Unit,
     onSelectListing: (ListingItem) -> Unit,
+    onToggleSold: (ListingItem) -> Unit,
+    onBoostListing: (ListingItem) -> Unit,
+    onDeleteListing: (ListingItem) -> Unit,
     onDismiss: () -> Unit
 ) {
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Your Listings, 1 = Saved Items
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = FbSurfaceBg
@@ -1972,16 +3078,17 @@ private fun MarketplaceAccountSheet(
                     size = 52
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = currentUser?.displayName ?: "Commerce Profile",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = FbDarkText
                     )
+                    val totalViews = myListings.sumOf { it.viewsCount }
                     Text(
-                        text = "${myListings.size} Active Listings · $inboxCount Active Chats",
-                        fontSize = 13.sp,
+                        text = "${myListings.size} Listings · ${savedListings.size} Saved · $totalViews Views",
+                        fontSize = 12.5.sp,
                         color = FbSecondaryText
                     )
                 }
@@ -2006,47 +3113,137 @@ private fun MarketplaceAccountSheet(
                 ) {
                     Icon(Icons.Outlined.Forum, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Buyer Inbox ($inboxCount)")
+                    Text("Inbox ($inboxCount)")
                 }
             }
 
-            if (myListings.isNotEmpty()) {
-                Text(
-                    text = "Your Listings",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = FbDarkText
+            // Tab Switcher: Your Listings vs Saved Items
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    label = { Text("Your Listings (${myListings.size})", fontWeight = FontWeight.Bold) }
                 )
+                FilterChip(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    label = { Text("Saved Items (${savedListings.size})", fontWeight = FontWeight.Bold) }
+                )
+            }
+
+            val listToShow = if (selectedTab == 0) myListings else savedListings
+
+            if (listToShow.isEmpty()) {
+                Text(
+                    text = if (selectedTab == 0) "You haven't posted any listings yet. Tap 'Create Listing' to start selling!"
+                    else "You haven't saved any items yet.",
+                    fontSize = 13.sp,
+                    color = FbSecondaryText,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            } else {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(myListings, key = { it.id }) { item ->
+                    items(listToShow, key = { it.id }) { item ->
                         Card(
                             onClick = { onSelectListing(item) },
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.width(135.dp)
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = MeskotCardPaper),
+                            border = BorderStroke(1.dp, FbLightDivider),
+                            modifier = Modifier.width(165.dp)
                         ) {
                             Column {
-                                AsyncImage(
-                                    model = item.primaryImageUrl,
-                                    contentDescription = item.title,
-                                    contentScale = ContentScale.Crop,
+                                Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(100.dp)
-                                )
-                                Column(modifier = Modifier.padding(8.dp)) {
+                                        .height(105.dp)
+                                ) {
+                                    AsyncImage(
+                                        model = item.primaryImageUrl,
+                                        contentDescription = item.title,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    if (!item.isAvailable) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = MeskotMaroon,
+                                            modifier = Modifier
+                                                .align(Alignment.TopStart)
+                                                .padding(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "SOLD",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                Column(
+                                    modifier = Modifier.padding(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
                                     Text(
                                         text = item.formattedPrice,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
+                                        fontSize = 13.5.sp,
+                                        color = FbBlue,
                                         maxLines = 1
                                     )
                                     Text(
                                         text = item.title,
                                         fontSize = 12.sp,
-                                        color = FbSecondaryText,
+                                        color = FbDarkText,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
+                                    if (selectedTab == 0) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            TextButton(
+                                                onClick = { onToggleSold(item) },
+                                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                                modifier = Modifier.height(26.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (item.isAvailable) "Mark Sold" else "Relist",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = FbBlue
+                                                )
+                                            }
+                                            TextButton(
+                                                onClick = { onBoostListing(item) },
+                                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                                modifier = Modifier.height(26.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Boost",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MeskotGold2
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = { onDeleteListing(item) },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.DeleteOutline,
+                                                    contentDescription = "Delete",
+                                                    tint = MeskotMaroon,
+                                                    modifier = Modifier.size(15.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -134,6 +134,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.filled.BookmarkAdded
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Diversity3
+import androidx.compose.material.icons.filled.DynamicFeed
+import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.PeopleAlt
+import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.WorkspacePremium
+import com.example.ui.theme.MeskotLogoBrush
+import com.example.ui.theme.MeskotLogoHorizontalBrush
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -3119,237 +3134,480 @@ fun MenuScreen(
 ) {
     var showMetaVerifiedModal by remember { mutableStateOf(false) }
 
+    val friends by viewModel.friends.collectAsState()
+    val groups by viewModel.groups.collectAsState()
+    val savedPostIds by viewModel.savedPostIds.collectAsState()
+    val adCampaigns by viewModel.adCampaigns.collectAsState()
+    val walletBalanceEtb by viewModel.creatorNetBalance.collectAsState()
+    val unreadNotifsCount by viewModel.unreadNotifsCount.collectAsState()
+    val unreadMsgCount by viewModel.unreadMsgCount.collectAsState()
+
+    val darkObsidianTop = Color(0xFF132019)
+    val darkObsidianBottom = Color(0xFF1D3126)
+    val darkCardBrush = Brush.linearGradient(listOf(darkObsidianTop, darkObsidianBottom))
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(14.dp)
-            .testTag("menu_screen")
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Paper,
+                        GoldSurface.copy(alpha = 0.65f),
+                        Paper
+                    )
+                )
+            )
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .testTag("menu_screen"),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // User Profile Banner
+        // 1. ROYAL IDENTITY & WALLET PASSPORT HERO CARD (Distinctive Meskot Luxury vs Facebook)
         if (currentUser != null) {
             item {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { viewModel.openProfile(currentUser) },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardBg),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder)
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = darkObsidianTop),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, GoldLight.copy(alpha = 0.65f))
                 ) {
-                    Row(
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .background(darkCardBrush)
                     ) {
-                        UserAvatar(photoUrl = currentUser.photoUrl, name = currentUser.displayName, size = 52)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            ProfileName(
-                                name = currentUser.displayName,
-                                isVerified = currentUser.isVerified,
-                                isAdmin = currentUser.isAdmin,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Ink
-                            )
-                            Text(text = MeskotStrings.get("viewProfile", currentLanguage), fontSize = 12.sp, color = GoldDeep, fontWeight = FontWeight.SemiBold)
+                        // Top Tibeb Royal Gold Shimmer Strip
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(GoldDeep, GoldLight, CrossRed, GoldLight, GoldDeep)
+                                    )
+                                )
+                        )
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    // Double-ringed Gold Medallion Avatar
+                                    Box(
+                                        modifier = Modifier
+                                            .size(62.dp)
+                                            .clip(CircleShape)
+                                            .background(MeskotLogoBrush)
+                                            .padding(2.5.dp)
+                                            .clip(CircleShape)
+                                            .background(darkObsidianTop)
+                                            .padding(2.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        UserAvatar(
+                                            photoUrl = currentUser.photoUrl,
+                                            name = currentUser.displayName,
+                                            size = 54
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(14.dp))
+
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Gold.copy(alpha = 0.22f),
+                                                border = androidx.compose.foundation.BorderStroke(
+                                                    0.8.dp,
+                                                    GoldLight.copy(alpha = 0.6f)
+                                                )
+                                            ) {
+                                                Text(
+                                                    text = "✦ MESKOT ROYAL PASSPORT",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = GoldLight,
+                                                    letterSpacing = 0.8.sp,
+                                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(5.dp))
+
+                                        ProfileName(
+                                            name = currentUser.displayName,
+                                            isVerified = currentUser.isVerified,
+                                            isAdmin = currentUser.isAdmin,
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color.White
+                                        )
+
+                                        Spacer(modifier = Modifier.height(2.dp))
+
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = MeskotStrings.get("viewProfile", currentLanguage),
+                                                fontSize = 12.sp,
+                                                color = GoldLight,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                                contentDescription = null,
+                                                tint = GoldLight,
+                                                modifier = Modifier.size(11.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Luxury Gold Crest Emblem on the right
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color.White.copy(alpha = 0.08f))
+                                        .border(1.dp, GoldLight.copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    MeskotLogoBadge(size = 28.dp)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Live Royal Telemetry & Wallet Strip inside the Passport Card
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color.Black.copy(alpha = 0.28f),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    0.8.dp,
+                                    GoldBorder.copy(alpha = 0.35f)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    LuxuryPassportMetricPill(
+                                        label = "CIRCLE",
+                                        value = "${friends.size} Friends",
+                                        onClick = { viewModel.navigateTo(ScreenTab.FRIENDS) }
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .width(1.dp)
+                                            .height(24.dp)
+                                            .background(GoldBorder.copy(alpha = 0.3f))
+                                    )
+                                    LuxuryPassportMetricPill(
+                                        label = "STARS",
+                                        value = "${currentUser.starBalance} ⭐",
+                                        onClick = { viewModel.openBuyStars() }
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .width(1.dp)
+                                            .height(24.dp)
+                                            .background(GoldBorder.copy(alpha = 0.3f))
+                                    )
+                                    LuxuryPassportMetricPill(
+                                        label = "WALLET",
+                                        value = PaymentCurrency.USD.formatFromEtb(walletBalanceEtb),
+                                        onClick = { viewModel.openChapaDeposit() }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(10.dp))
             }
 
-            // Dedicated Meskot Verified Shortcut in Menu
+            // 2. MESKOT VERIFIED IMPERIAL CROWN BANNER
             item {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { showMetaVerifiedModal = true },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (currentUser.isVerified) GoldSurface else CardBg
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (currentUser.isVerified) GoldBorder else LineBorder
-                    )
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = GoldSurface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.4.dp, Gold)
                 ) {
-                    Row(
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Gold),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Verified,
-                                contentDescription = "Meskot Verified",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "Meskot Verified",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (currentUser.isVerified) GoldDeep else Ink
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(if (currentUser.isVerified) ActiveGreen else Gold)
-                                        .padding(horizontal = 5.dp, vertical = 1.dp)
-                                ) {
-                                    Text(
-                                        text = if (currentUser.isVerified) "SUBSCRIBED" else "NEW",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        Color(0xFFFDF6E4),
+                                        Color(0xFFFFFBF0),
+                                        Color(0xFFF9EBD0)
                                     )
-                                }
-                            }
-                            Text(
-                                text = if (currentUser.isVerified) "Active golden badge & account protection" else "Subscribe for a golden badge, protection & support",
-                                fontSize = 12.sp,
-                                color = MutedText
+                                )
                             )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(MeskotLogoBrush)
+                                    .border(1.dp, GoldLight, RoundedCornerShape(14.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Verified,
+                                    contentDescription = "Meskot Verified",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(25.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Meskot Verified",
+                                        fontSize = 15.5.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Ink
+                                    )
+                                    Spacer(modifier = Modifier.width(7.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(
+                                                if (currentUser.isVerified) {
+                                                    Brush.horizontalGradient(listOf(ActiveGreen, ActiveGreen))
+                                                } else {
+                                                    MeskotLogoHorizontalBrush
+                                                }
+                                            )
+                                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = if (currentUser.isVerified) "IMPERIAL VIP" else "GOLD SEAL",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color.White,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (currentUser.isVerified) {
+                                        "Active golden seal, priority ranking & account protection"
+                                    } else {
+                                        "Unlock the royal golden seal, priority feed reach & VIP support"
+                                    },
+                                    fontSize = 12.sp,
+                                    color = GoldDeep,
+                                    fontWeight = FontWeight.Medium,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Gold.copy(alpha = 0.16f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                    contentDescription = null,
+                                    tint = GoldDeep,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
                         }
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                            contentDescription = null,
-                            tint = if (currentUser.isVerified) GoldDeep else MutedText,
-                            modifier = Modifier.size(14.dp)
-                        )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(14.dp))
             }
         }
 
-        // Grid Menu Options
+        // 3. EXECUTIVE BUSINESS & MONETIZATION LOUNGE (3 Distinctive Pillar Cards — completely unlike Facebook's flat grid)
         item {
-            val menuItems = listOf(
-                Triple("🛍️", "Marketplace", ScreenTab.MARKETPLACE),
-                Triple("🏠", MeskotStrings.get("navFeed", currentLanguage), ScreenTab.FEED),
-                Triple("👥", MeskotStrings.get("navFriends", currentLanguage), ScreenTab.FRIENDS),
-                Triple("💬", MeskotStrings.get("navMessages", currentLanguage), ScreenTab.MESSAGES),
-                Triple("👪", MeskotStrings.get("navGroups", currentLanguage), ScreenTab.GROUPS),
-                Triple("🖼️", MeskotStrings.get("navPhotos", currentLanguage), ScreenTab.PHOTOS),
-                Triple("🔔", MeskotStrings.get("navNotifs", currentLanguage), ScreenTab.NOTIFICATIONS),
-                Triple("📊", "Dashboard", ScreenTab.DASHBOARD),
-                Triple("🔖", MeskotStrings.get("savedPosts", currentLanguage), ScreenTab.SAVED),
-                Triple("📢", "Ads Manager", ScreenTab.ADS_MANAGER),
-                Triple("👑", "Creator Studio", ScreenTab.CREATOR_STUDIO),
-                Triple("🔴", "Live Streaming", ScreenTab.LIVE)
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                menuItems.take(2).forEach { item ->
-                    MenuShortcutCard(
-                        emoji = item.first,
-                        title = item.second,
-                        onClick = { viewModel.navigateTo(item.third) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                menuItems.drop(2).take(2).forEach { item ->
-                    MenuShortcutCard(
-                        emoji = item.first,
-                        title = item.second,
-                        onClick = { viewModel.navigateTo(item.third) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                menuItems.drop(4).take(2).forEach { item ->
-                    MenuShortcutCard(
-                        emoji = item.first,
-                        title = item.second,
-                        onClick = { viewModel.navigateTo(item.third) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                menuItems.drop(6).take(2).forEach { item ->
-                    MenuShortcutCard(
-                        emoji = item.first,
-                        title = item.second,
-                        onClick = { viewModel.navigateTo(item.third) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                menuItems.drop(8).take(2).forEach { item ->
-                    MenuShortcutCard(
-                        emoji = item.first,
-                        title = item.second,
-                        onClick = { viewModel.navigateTo(item.third) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            if (menuItems.size > 10) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                LuxuryMenuSectionHeader(
+                    eyebrow = "EXECUTIVE SUITE · የንግድ ማዕከል",
+                    title = "Commerce & Creator Lounge"
+                )
                 Spacer(modifier = Modifier.height(10.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    menuItems.drop(10).forEach { item ->
-                        MenuShortcutCard(
-                            emoji = item.first,
-                            title = item.second,
-                            onClick = { viewModel.navigateTo(item.third) },
-                            modifier = Modifier.weight(1f)
-                        )
+                    LuxuryExecutivePillarCard(
+                        icon = Icons.Default.Storefront,
+                        title = "Marketplace",
+                        amharicTag = "ገበያ",
+                        metricBadge = "NBE Live",
+                        isDarkObsidian = false,
+                        onClick = { viewModel.navigateTo(ScreenTab.MARKETPLACE) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    LuxuryExecutivePillarCard(
+                        icon = Icons.Default.Campaign,
+                        title = "Ads Manager",
+                        amharicTag = "ማስታወቂያ",
+                        metricBadge = "${adCampaigns.count { it.status == "ACTIVE" }} Active",
+                        isDarkObsidian = true,
+                        onClick = { viewModel.navigateTo(ScreenTab.ADS_MANAGER) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    LuxuryExecutivePillarCard(
+                        icon = Icons.Default.WorkspacePremium,
+                        title = "Creator Studio",
+                        amharicTag = "ፈጣሪዎች",
+                        metricBadge = "Chapa Pay",
+                        isDarkObsidian = false,
+                        onClick = { viewModel.navigateTo(ScreenTab.CREATOR_STUDIO) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        // 4. COMMUNITY & CULTURAL PORTALS (Curated Luxury 2-Column Gallery with Vector Medallions & Subtitles)
+        item {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                LuxuryMenuSectionHeader(
+                    eyebrow = "MESKOT PORTALS · የማህበረሰብ መስኮቶች",
+                    title = "Community & Experiences"
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                val communityItems = listOf(
+                    LuxuryPortalItem(
+                        icon = Icons.Default.DynamicFeed,
+                        title = MeskotStrings.get("navFeed", currentLanguage),
+                        subtitle = "Stories, Reels & Pulse",
+                        badgeText = "LIVE",
+                        tab = ScreenTab.FEED,
+                        isFeaturedGold = false
+                    ),
+                    LuxuryPortalItem(
+                        icon = Icons.Default.Diversity3,
+                        title = MeskotStrings.get("navGroups", currentLanguage),
+                        subtitle = "${groups.size} Cultural Circles",
+                        badgeText = "HUB",
+                        tab = ScreenTab.GROUPS,
+                        isFeaturedGold = true
+                    ),
+                    LuxuryPortalItem(
+                        icon = Icons.Default.PeopleAlt,
+                        title = MeskotStrings.get("navFriends", currentLanguage),
+                        subtitle = "${friends.size} Connected",
+                        badgeText = null,
+                        tab = ScreenTab.FRIENDS,
+                        isFeaturedGold = false
+                    ),
+                    LuxuryPortalItem(
+                        icon = Icons.Default.Forum,
+                        title = MeskotStrings.get("navMessages", currentLanguage),
+                        subtitle = "Direct & Voice Chat",
+                        badgeText = if (unreadMsgCount > 0) "$unreadMsgCount NEW" else null,
+                        tab = ScreenTab.MESSAGES,
+                        isFeaturedGold = false
+                    ),
+                    LuxuryPortalItem(
+                        icon = Icons.Default.PhotoLibrary,
+                        title = MeskotStrings.get("navPhotos", currentLanguage),
+                        subtitle = "Visual Heritage Albums",
+                        badgeText = null,
+                        tab = ScreenTab.PHOTOS,
+                        isFeaturedGold = false
+                    ),
+                    LuxuryPortalItem(
+                        icon = Icons.Default.Podcasts,
+                        title = "Live Streaming",
+                        subtitle = "Broadcast & Coffee Gifts",
+                        badgeText = "ON AIR",
+                        tab = ScreenTab.LIVE,
+                        isFeaturedGold = true
+                    ),
+                    LuxuryPortalItem(
+                        icon = Icons.Default.NotificationsActive,
+                        title = MeskotStrings.get("navNotifs", currentLanguage),
+                        subtitle = "Alerts & Activity",
+                        badgeText = if (unreadNotifsCount > 0) "$unreadNotifsCount" else null,
+                        tab = ScreenTab.NOTIFICATIONS,
+                        isFeaturedGold = false
+                    ),
+                    LuxuryPortalItem(
+                        icon = Icons.Default.Insights,
+                        title = "Dashboard",
+                        subtitle = "Audience & Reach Analytics",
+                        badgeText = "PRO",
+                        tab = ScreenTab.DASHBOARD,
+                        isFeaturedGold = false
+                    ),
+                    LuxuryPortalItem(
+                        icon = Icons.Default.BookmarkAdded,
+                        title = MeskotStrings.get("savedPosts", currentLanguage),
+                        subtitle = "${savedPostIds.size} Curated Bookmarks",
+                        badgeText = null,
+                        tab = ScreenTab.SAVED,
+                        isFeaturedGold = false
+                    ),
+                    LuxuryPortalItem(
+                        icon = Icons.Default.VerifiedUser,
+                        title = "Ads & Promotions",
+                        subtitle = "Boost Meskot Content",
+                        badgeText = "GOLD",
+                        tab = ScreenTab.ADS_MANAGER,
+                        isFeaturedGold = true
+                    )
+                )
+
+                communityItems.chunked(2).forEachIndexed { index, rowPair ->
+                    if (index > 0) {
+                        Spacer(modifier = Modifier.height(10.dp))
                     }
-                    if (menuItems.size % 2 != 0) {
-                        Spacer(modifier = Modifier.weight(1f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        rowPair.forEach { portal ->
+                            LuxuryPortalShortcutCard(
+                                item = portal,
+                                onClick = { viewModel.navigateTo(portal.tab) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (rowPair.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
                     }
                 }
             }
@@ -3358,40 +3616,80 @@ fun MenuScreen(
         // Admin Panel if Admin
         if (currentUser?.isAdmin == true) {
             item {
-                Spacer(modifier = Modifier.height(10.dp))
                 MenuShortcutCard(
                     emoji = "🛡️",
                     title = MeskotStrings.get("adminPanel", currentLanguage),
                     onClick = { viewModel.navigateTo(ScreenTab.ADMIN) },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    isBrandFeatured = true
                 )
             }
         }
 
-
-        // Brand Badge in Menu
+        // 5. LUXURY ROYAL SEAL FOOTER
         item {
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Modern Meskot Brand Badge in Menu
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = GoldSurface.copy(alpha = 0.85f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                MeskotLogoBadge(size = 42.dp)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Meskot",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Ink
-                )
-                Text(
-                    text = "መስኮት · Ethiopian & Habesha Community Network\nVersion 2.4",
-                    fontSize = 11.sp,
-                    color = MutedText,
-                    textAlign = TextAlign.Center
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 18.dp, horizontal = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Decorative Ethiopian Tibeb Diamond Divider
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(36.dp)
+                                .height(1.dp)
+                                .background(GoldBorder)
+                        )
+                        Text(
+                            text = "❖",
+                            fontSize = 12.sp,
+                            color = GoldDeep
+                        )
+                        MeskotLogoBadge(size = 44.dp)
+                        Text(
+                            text = "❖",
+                            fontSize = 12.sp,
+                            color = GoldDeep
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(36.dp)
+                                .height(1.dp)
+                                .background(GoldBorder)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "MESKOT ROYAL CONCIERGE",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = GoldDeep,
+                        letterSpacing = 1.2.sp
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "መስኮት · Premier Ethiopian & Habesha Global Network\nEdition 2.4 · Crafted with Heritage & Gold",
+                        fontSize = 11.sp,
+                        color = MutedText,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 16.sp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(80.dp))
@@ -3412,28 +3710,379 @@ fun MenuScreen(
     }
 }
 
+private data class LuxuryPortalItem(
+    val icon: ImageVector,
+    val title: String,
+    val subtitle: String,
+    val badgeText: String?,
+    val tab: ScreenTab,
+    val isFeaturedGold: Boolean
+)
+
+@Composable
+private fun LuxuryPassportMetricPill(
+    label: String,
+    value: String,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = label,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            color = GoldBorder,
+            letterSpacing = 0.7.sp
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = value,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = Color.White
+        )
+    }
+}
+
+@Composable
+private fun LuxuryMenuSectionHeader(
+    eyebrow: String,
+    title: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column {
+            Text(
+                text = eyebrow,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = GoldDeep,
+                letterSpacing = 0.9.sp
+            )
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Ink
+            )
+        }
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(GoldSurface)
+                .border(1.dp, GoldBorder, RoundedCornerShape(10.dp))
+                .padding(horizontal = 8.dp, vertical = 3.dp)
+        ) {
+            Text(
+                text = "✦ मेስኮት",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = GoldDeep
+            )
+        }
+    }
+}
+
+@Composable
+private fun LuxuryExecutivePillarCard(
+    icon: ImageVector,
+    title: String,
+    amharicTag: String,
+    metricBadge: String,
+    isDarkObsidian: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val bgBrush = if (isDarkObsidian) {
+        Brush.verticalGradient(listOf(Color(0xFF14221A), Color(0xFF21362B)))
+    } else {
+        Brush.verticalGradient(listOf(Color(0xFFFFFDF8), Color(0xFFF9EFE0)))
+    }
+
+    Card(
+        modifier = modifier.clickable { onClick() },
+        shape = RoundedCornerShape(18.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkObsidian) 5.dp else 2.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.3.dp,
+            color = if (isDarkObsidian) GoldLight.copy(alpha = 0.75f) else GoldBorder
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(bgBrush)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(MeskotLogoHorizontalBrush)
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isDarkObsidian) MeskotLogoBrush
+                            else Brush.linearGradient(listOf(GoldSurface, Color(0xFFF3E2C3)))
+                        )
+                        .border(
+                            1.dp,
+                            if (isDarkObsidian) GoldLight else Gold,
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = if (isDarkObsidian) Color.White else GoldDeep,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = title,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (isDarkObsidian) Color.White else Ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Text(
+                    text = amharicTag,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isDarkObsidian) GoldLight else GoldDeep
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isDarkObsidian) Gold.copy(alpha = 0.25f) else GoldSurface,
+                    border = androidx.compose.foundation.BorderStroke(
+                        0.7.dp,
+                        if (isDarkObsidian) GoldLight.copy(alpha = 0.5f) else GoldBorder
+                    )
+                ) {
+                    Text(
+                        text = metricBadge,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDarkObsidian) GoldLight else GoldDeep,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LuxuryPortalShortcutCard(
+    item: LuxuryPortalItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cardBgBrush = if (item.isFeaturedGold) {
+        Brush.linearGradient(listOf(Color(0xFFFFFBF2), Color(0xFFF9EDD6)))
+    } else {
+        Brush.linearGradient(listOf(CardBg, Color(0xFFFAF6EE)))
+    }
+
+    Card(
+        modifier = modifier.clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (item.isFeaturedGold) 3.dp else 1.5.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (item.isFeaturedGold) 1.4.dp else 1.dp,
+            color = if (item.isFeaturedGold) Gold else GoldBorder.copy(alpha = 0.75f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(cardBgBrush)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.5.dp)
+                    .background(
+                        if (item.isFeaturedGold) {
+                            MeskotLogoHorizontalBrush
+                        } else {
+                            Brush.horizontalGradient(listOf(GoldBorder.copy(alpha = 0.5f), GoldLight.copy(alpha = 0.5f)))
+                        }
+                    )
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Luxury Arched Medallion Icon Container
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = 10.dp, bottomEnd = 10.dp))
+                            .background(
+                                if (item.isFeaturedGold) MeskotLogoBrush
+                                else Brush.linearGradient(listOf(GoldSurface, Color(0xFFF5E6C8)))
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (item.isFeaturedGold) GoldLight else GoldBorder,
+                                shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = 10.dp, bottomEnd = 10.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = item.title,
+                            tint = if (item.isFeaturedGold) Color.White else GoldDeep,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+
+                    if (item.badgeText != null) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (item.badgeText == "ON AIR") CrossRed else GoldSurface,
+                            border = androidx.compose.foundation.BorderStroke(
+                                0.8.dp,
+                                if (item.badgeText == "ON AIR") CrossRed else GoldBorder
+                            )
+                        ) {
+                            Text(
+                                text = item.badgeText,
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (item.badgeText == "ON AIR") Color.White else GoldDeep,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                            contentDescription = null,
+                            tint = GoldDeep.copy(alpha = 0.55f),
+                            modifier = Modifier.size(11.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = item.title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (item.isFeaturedGold) GoldDeep else Ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = item.subtitle,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MutedText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun MenuShortcutCard(
     emoji: String,
     title: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isBrandFeatured: Boolean = false
 ) {
     Card(
         modifier = modifier.clickable { onClick() },
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isBrandFeatured) com.example.ui.theme.GoldSurface else CardBg
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (isBrandFeatured) 1.4.dp else 1.dp,
+            color = if (isBrandFeatured) com.example.ui.theme.Gold else com.example.ui.theme.GoldBorder
+        )
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = emoji, fontSize = 20.sp)
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(text = title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(com.example.ui.theme.MeskotLogoHorizontalBrush)
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(com.example.ui.theme.GoldSurface)
+                            .border(1.dp, com.example.ui.theme.GoldBorder, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = emoji, fontSize = 17.sp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = title,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (isBrandFeatured) com.example.ui.theme.GoldDeep else Ink
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                    contentDescription = null,
+                    tint = com.example.ui.theme.GoldDeep,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
         }
     }
 }

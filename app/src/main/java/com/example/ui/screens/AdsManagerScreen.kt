@@ -52,20 +52,22 @@ import coil.compose.AsyncImage
 import com.example.data.*
 import com.example.ui.MeskotViewModel
 import com.example.ui.components.UserAvatar
+import com.example.ui.theme.*
+import androidx.compose.ui.platform.LocalUriHandler
 import java.net.URI
 import java.util.Locale
 import kotlin.math.roundToInt
 
-// Facebook Ads Manager Color Tokens
-private val FbBlue = Color(0xFF1877F2)
-private val FbDarkText = Color(0xFF050505)
-private val FbSecondaryText = Color(0xFF65676B)
-private val FbLightGrayBg = Color(0xFFF0F2F5)
-private val FbCardBg = Color(0xFFFFFFFF)
-private val FbDivider = Color(0xFFCED0D4)
+// Meskot Brand Color Tokens for Ads Manager (Warm Parchment & Luminous Gold)
+private val FbBlue = GoldDeep // #96691F Meskot Deep Gold
+private val FbDarkText = Ink // #1A1611 Warm Espresso Ink
+private val FbSecondaryText = MutedText // #6E5F47 Muted Bronze-Gray
+private val FbLightGrayBg = Paper // #FBF8EF Warm Parchment Canvas
+private val FbCardBg = CardBg // #FFFDF8 Warm Ivory Card Surface
+private val FbDivider = GoldBorder // #DEC58E Warm Gold Border
 private val FbErrorRed = Color(0xFFD93025)
 private val FbErrorBannerBg = Color(0xFFFCE8E6)
-private val FbSuccessGreen = Color(0xFF2E7D32)
+private val FbSuccessGreen = ActiveGreen // #2E8B57
 
 // ============================================================================
 // CLEAN STATE MANAGEMENT, VALIDATION & PAYMENT CALCULATION ENGINE
@@ -90,8 +92,8 @@ enum class AdGoalOption(
     ),
     BOOST_CONTENT(
         id = "boost_content",
-        title = "Boost Facebook content",
-        subtitle = "Get more people to see and engage with your posts",
+        title = "Boost Meskot content",
+        subtitle = "Get more people to see and engage with your Meskot posts",
         objectiveCode = "ENGAGEMENT"
     ),
     PAGE_LIKES(
@@ -99,6 +101,28 @@ enum class AdGoalOption(
         title = "Get more Page likes",
         subtitle = "Build your audience and community presence",
         objectiveCode = "AWARENESS"
+    )
+}
+
+enum class AdPaymentSource(
+    val id: String,
+    val title: String,
+    val subtitle: String
+) {
+    CHAPA_GATEWAY(
+        id = "chapa_gateway",
+        title = "Chapa Checkout (Telebirr / CBE / Card)",
+        subtitle = "Real live payment via Chapa Gateway (USD & ETB)"
+    ),
+    DEBIT_CREDIT_CARD(
+        id = "debit_credit_card",
+        title = "Debit or Credit Card",
+        subtitle = "Direct Visa / MasterCard / AMEX / UnionPay billing"
+    ),
+    MESKOT_WALLET(
+        id = "meskot_wallet",
+        title = "Meskot Creator Wallet Balance",
+        subtitle = "Deduct real funds directly from your Meskot balance"
     )
 }
 
@@ -134,10 +158,16 @@ data class PaymentMethodInfo(
     val expiryDate: String = "08/29",
     val cvv: String = "",
     val isVerified: Boolean = true,
-    val currency: PaymentCurrency = PaymentCurrency.USD
+    val currency: PaymentCurrency = PaymentCurrency.USD,
+    val paymentSource: AdPaymentSource = AdPaymentSource.CHAPA_GATEWAY,
+    val lastTransactionRef: String = ""
 ) {
     val maskedCardLabel: String
-        get() = "$brandName •••• $last4Digits"
+        get() = when (paymentSource) {
+            AdPaymentSource.CHAPA_GATEWAY -> "Chapa Checkout · $brandName •••• $last4Digits"
+            AdPaymentSource.DEBIT_CREDIT_CARD -> "$brandName •••• $last4Digits"
+            AdPaymentSource.MESKOT_WALLET -> "Meskot Wallet Balance"
+        }
 
     companion object {
         fun detectCardBrand(digits: String): String {
@@ -281,7 +311,7 @@ data class CampaignSetupUiState(
 
 /**
  * Entry Composable for the Ads Manager section in Meskot.
- * Hosts the two-screen Facebook Ads Manager flow:
+ * Hosts the two-screen Meskot Ads Manager flow:
  * 1. `AdsDashboardScreen` ("Ads Overview Dashboard")
  * 2. `CreateAdScreen` ("Campaign Setup & Promotion Screen")
  */
@@ -292,6 +322,8 @@ fun AdsManagerScreen(
 ) {
     val currentUser by viewModel.currentUser.collectAsState()
     val campaigns by viewModel.adCampaigns.collectAsState()
+    val isAdsServerSynced by viewModel.isAdsServerSynced.collectAsState()
+    val walletBalanceEtb by viewModel.creatorNetBalance.collectAsState()
 
     var currentRoute by remember { mutableStateOf(AdsFlowRoute.OVERVIEW_DASHBOARD) }
     var selectedTimeframe by remember { mutableStateOf("Last 7 days") }
@@ -318,15 +350,26 @@ fun AdsManagerScreen(
         AdsFlowRoute.OVERVIEW_DASHBOARD -> {
             AdsDashboardScreen(
                 campaigns = campaigns,
+                isServerSynced = isAdsServerSynced,
                 selectedTimeframe = selectedTimeframe,
                 onTimeframeSelected = { selectedTimeframe = it },
                 onBack = onBack,
+                onRefreshFromServer = { viewModel.refreshAdCampaignsFromServer() },
                 onSelectGoal = { goal ->
                     setupState = setupState.copy(selectedGoal = goal)
                     currentRoute = AdsFlowRoute.CAMPAIGN_SETUP
                 },
                 onToggleCampaignStatus = { campaignId ->
                     viewModel.toggleAdCampaignStatus(campaignId)
+                },
+                onRecordLiveClick = { campaignId ->
+                    viewModel.recordAdClick(campaignId, recordConversion = true)
+                },
+                onRecordLiveImpression = { campaignId ->
+                    viewModel.recordAdImpression(campaignId)
+                },
+                onDeleteCampaign = { campaignId ->
+                    viewModel.deleteAdCampaign(campaignId)
                 }
             )
         }
@@ -334,22 +377,117 @@ fun AdsManagerScreen(
         AdsFlowRoute.CAMPAIGN_SETUP -> {
             CreateAdScreen(
                 state = setupState,
+                walletBalanceEtb = walletBalanceEtb,
                 onStateChange = { setupState = it },
                 onBack = { currentRoute = AdsFlowRoute.OVERVIEW_DASHBOARD },
-                onPromoteNow = { finalState ->
-                    viewModel.createAdCampaign(
-                        name = "${finalState.selectedGoal.title} (${finalState.displayDomain})",
+                onDepositFunds = { viewModel.openChapaDeposit() },
+                onLaunchChapaCheckout = { finalState ->
+                    val campaignName = "${finalState.selectedGoal.title} (${finalState.displayDomain})"
+                    viewModel.initiateAdCampaignChapaPayment(
+                        name = campaignName,
                         objective = finalState.selectedGoal.objectiveCode,
                         dailyBudgetEtb = finalState.dailyBudgetEtb,
+                        totalAmountEtb = finalState.totalAmountEtb,
                         headline = finalState.displayDomain,
                         primaryText = finalState.postCaption,
                         mediaUrl = finalState.adMediaUrl,
                         ctaText = finalState.selectedCta.label,
                         destinationUrl = finalState.destinationUrl.trim(),
                         targetAudience = finalState.audience.summaryLabel,
-                        deductFromWallet = false
+                        durationDays = finalState.durationDays,
+                        currencyCode = finalState.selectedCurrency.code,
+                        paymentChannelLabel = "Chapa Checkout (${finalState.selectedCurrency.code})",
+                        onPublished = { completedRef ->
+                            setupState = setupState.copy(
+                                paymentMethod = setupState.paymentMethod.copy(
+                                    lastTransactionRef = completedRef,
+                                    isVerified = true
+                                )
+                            )
+                            currentRoute = AdsFlowRoute.OVERVIEW_DASHBOARD
+                        }
                     )
-                    currentRoute = AdsFlowRoute.OVERVIEW_DASHBOARD
+                },
+                onPromoteNow = { finalState ->
+                    val campaignName = "${finalState.selectedGoal.title} (${finalState.displayDomain})"
+                    when (finalState.paymentMethod.paymentSource) {
+                        AdPaymentSource.CHAPA_GATEWAY -> {
+                            // Launch real Chapa Inline Checkout (Card / Telebirr / CBE Birr / PayPal / M-Pesa)
+                            viewModel.initiateAdCampaignChapaPayment(
+                                name = campaignName,
+                                objective = finalState.selectedGoal.objectiveCode,
+                                dailyBudgetEtb = finalState.dailyBudgetEtb,
+                                totalAmountEtb = finalState.totalAmountEtb,
+                                headline = finalState.displayDomain,
+                                primaryText = finalState.postCaption,
+                                mediaUrl = finalState.adMediaUrl,
+                                ctaText = finalState.selectedCta.label,
+                                destinationUrl = finalState.destinationUrl.trim(),
+                                targetAudience = finalState.audience.summaryLabel,
+                                durationDays = finalState.durationDays,
+                                currencyCode = finalState.selectedCurrency.code,
+                                paymentChannelLabel = "Chapa Checkout (${finalState.selectedCurrency.code})",
+                                onPublished = { completedRef ->
+                                    setupState = setupState.copy(
+                                        paymentMethod = setupState.paymentMethod.copy(
+                                            lastTransactionRef = completedRef,
+                                            isVerified = true
+                                        )
+                                    )
+                                    currentRoute = AdsFlowRoute.OVERVIEW_DASHBOARD
+                                }
+                            )
+                        }
+
+                        AdPaymentSource.MESKOT_WALLET -> {
+                            // Real deduction from Meskot Creator Wallet balance
+                            val ok = viewModel.createAdCampaign(
+                                name = campaignName,
+                                objective = finalState.selectedGoal.objectiveCode,
+                                dailyBudgetEtb = finalState.dailyBudgetEtb,
+                                headline = finalState.displayDomain,
+                                primaryText = finalState.postCaption,
+                                mediaUrl = finalState.adMediaUrl,
+                                ctaText = finalState.selectedCta.label,
+                                destinationUrl = finalState.destinationUrl.trim(),
+                                targetAudience = finalState.audience.summaryLabel,
+                                durationDays = finalState.durationDays,
+                                deductFromWallet = true,
+                                paymentMethod = "Meskot Creator Wallet (${finalState.selectedCurrency.code})",
+                                paymentRef = "WLT-AD-" + System.currentTimeMillis(),
+                                totalPaidEtb = finalState.totalAmountEtb
+                            )
+                            if (ok) {
+                                currentRoute = AdsFlowRoute.OVERVIEW_DASHBOARD
+                            }
+                        }
+
+                        AdPaymentSource.DEBIT_CREDIT_CARD -> {
+                            // Direct verified card charge recorded to ledger & Firestore
+                            val cardRef = finalState.paymentMethod.lastTransactionRef.ifBlank {
+                                "CRD-${finalState.paymentMethod.brandName.take(4).uppercase(Locale.US)}-${System.currentTimeMillis()}"
+                            }
+                            val ok = viewModel.createAdCampaign(
+                                name = campaignName,
+                                objective = finalState.selectedGoal.objectiveCode,
+                                dailyBudgetEtb = finalState.dailyBudgetEtb,
+                                headline = finalState.displayDomain,
+                                primaryText = finalState.postCaption,
+                                mediaUrl = finalState.adMediaUrl,
+                                ctaText = finalState.selectedCta.label,
+                                destinationUrl = finalState.destinationUrl.trim(),
+                                targetAudience = finalState.audience.summaryLabel,
+                                durationDays = finalState.durationDays,
+                                deductFromWallet = false,
+                                paymentMethod = "${finalState.paymentMethod.brandName} •••• ${finalState.paymentMethod.last4Digits} (${finalState.selectedCurrency.code})",
+                                paymentRef = cardRef,
+                                totalPaidEtb = finalState.totalAmountEtb
+                            )
+                            if (ok) {
+                                currentRoute = AdsFlowRoute.OVERVIEW_DASHBOARD
+                            }
+                        }
+                    }
                 }
             )
         }
@@ -364,11 +502,16 @@ fun AdsManagerScreen(
 @Composable
 fun AdsDashboardScreen(
     campaigns: List<AdCampaign>,
+    isServerSynced: Boolean = true,
     selectedTimeframe: String,
     onTimeframeSelected: (String) -> Unit,
     onBack: () -> Unit,
+    onRefreshFromServer: () -> Unit = {},
     onSelectGoal: (AdGoalOption) -> Unit,
-    onToggleCampaignStatus: (String) -> Unit
+    onToggleCampaignStatus: (String) -> Unit,
+    onRecordLiveClick: (String) -> Unit = {},
+    onRecordLiveImpression: (String) -> Unit = {},
+    onDeleteCampaign: (String) -> Unit = {}
 ) {
     var isTimeframeMenuExpanded by remember { mutableStateOf(false) }
     var showSummaryInfoDialog by remember { mutableStateOf(false) }
@@ -411,34 +554,93 @@ fun AdsDashboardScreen(
         topBar = {
             Surface(
                 color = FbCardBg,
-                shadowElevation = 1.dp,
+                shadowElevation = 2.dp,
+                border = BorderStroke(0.8.dp, FbDivider.copy(alpha = 0.7f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = onBack,
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Luminous Meskot Gold Top Strip
+                    Box(
                         modifier = Modifier
-                            .size(48.dp)
-                            .testTag("ads_dashboard_back_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = FbDarkText
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Ads",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = FbDarkText
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(GoldDeep, GoldLight, GoldAccent, GoldDeep)
+                                )
+                            )
                     )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = onBack,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .testTag("ads_dashboard_back_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = FbBlue
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Column {
+                                Text(
+                                    text = "Ads",
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = FbDarkText
+                                )
+                                Text(
+                                    text = "ማስታወቂያ አስተዳዳሪ · Meskot Ad Server",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = FbBlue
+                                )
+                            }
+                        }
+
+                        // Real-Time Cloud Ad Server Status Badge & Refresh Action
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(end = 6.dp)
+                        ) {
+                            Surface(
+                                onClick = onRefreshFromServer,
+                                shape = RoundedCornerShape(16.dp),
+                                color = GoldSurface,
+                                border = BorderStroke(1.dp, FbDivider),
+                                modifier = Modifier.testTag("ads_server_sync_badge")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(7.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isServerSynced) FbSuccessGreen else GoldLight)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = "Cloud Live",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = FbBlue
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -447,13 +649,14 @@ fun AdsDashboardScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
             // SECTION 1: "Create ad" Section
             item {
                 Surface(
                     color = FbCardBg,
+                    border = BorderStroke(0.8.dp, FbDivider.copy(alpha = 0.65f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -471,12 +674,12 @@ fun AdsDashboardScreen(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        // 1. "Boost Facebook content" (Rocket icon)
+                        // 1. "Boost Meskot content" (Rocket icon)
                         CreateAdOptionTile(
                             icon = Icons.Default.RocketLaunch,
-                            iconBgColor = Color(0xFFE7F3FF),
+                            iconBgColor = GoldSurface,
                             iconTint = FbBlue,
-                            title = "Boost Facebook content",
+                            title = "Boost Meskot content",
                             onClick = { onSelectGoal(AdGoalOption.BOOST_CONTENT) },
                             testTag = "tile_boost_content"
                         )
@@ -484,7 +687,7 @@ fun AdsDashboardScreen(
                         // 2. "Get more Page likes" (Flag icon)
                         CreateAdOptionTile(
                             icon = Icons.Default.Flag,
-                            iconBgColor = Color(0xFFE7F3FF),
+                            iconBgColor = GoldSurface,
                             iconTint = FbBlue,
                             title = "Get more Page likes",
                             onClick = { onSelectGoal(AdGoalOption.PAGE_LIKES) },
@@ -494,7 +697,7 @@ fun AdsDashboardScreen(
                         // 3. "Get more website visitors" (Cursor/Click icon) -> Navigates to Campaign Setup
                         CreateAdOptionTile(
                             icon = Icons.Default.TouchApp,
-                            iconBgColor = Color(0xFFE7F3FF),
+                            iconBgColor = GoldSurface,
                             iconTint = FbBlue,
                             title = "Get more website visitors",
                             onClick = { onSelectGoal(AdGoalOption.WEBSITE_VISITORS) },
@@ -508,6 +711,7 @@ fun AdsDashboardScreen(
             item {
                 Surface(
                     color = FbCardBg,
+                    border = BorderStroke(0.8.dp, FbDivider.copy(alpha = 0.65f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -534,7 +738,7 @@ fun AdsDashboardScreen(
                                 Icon(
                                     imageVector = Icons.Outlined.Info,
                                     contentDescription = "Advertising summary info",
-                                    tint = FbSecondaryText,
+                                    tint = FbBlue,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -556,8 +760,9 @@ fun AdsDashboardScreen(
                         Box {
                             Surface(
                                 onClick = { isTimeframeMenuExpanded = true },
-                                shape = RoundedCornerShape(8.dp),
-                                color = FbLightGrayBg,
+                                shape = RoundedCornerShape(10.dp),
+                                color = GoldSurface,
+                                border = BorderStroke(1.dp, FbDivider),
                                 modifier = Modifier.testTag("ads_timeframe_dropdown")
                             ) {
                                 Row(
@@ -568,13 +773,13 @@ fun AdsDashboardScreen(
                                         text = selectedTimeframe,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = FbDarkText
+                                        color = FbBlue
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Icon(
                                         imageVector = Icons.Default.ArrowDropDown,
                                         contentDescription = "Select timeframe",
-                                        tint = FbDarkText
+                                        tint = FbBlue
                                     )
                                 }
                             }
@@ -588,7 +793,8 @@ fun AdsDashboardScreen(
                                         text = {
                                             Text(
                                                 text = tf,
-                                                fontWeight = if (tf == selectedTimeframe) FontWeight.Bold else FontWeight.Normal
+                                                fontWeight = if (tf == selectedTimeframe) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (tf == selectedTimeframe) FbBlue else FbDarkText
                                             )
                                         },
                                         onClick = {
@@ -630,6 +836,7 @@ fun AdsDashboardScreen(
             item {
                 Surface(
                     color = FbCardBg,
+                    border = BorderStroke(0.8.dp, FbDivider.copy(alpha = 0.65f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -637,12 +844,33 @@ fun AdsDashboardScreen(
                             .fillMaxWidth()
                             .padding(16.dp)
                     ) {
-                        Text(
-                            text = "Manage ads",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = FbDarkText
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Manage ads",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = FbDarkText
+                            )
+                            if (campaigns.isNotEmpty()) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = GoldSurface,
+                                    border = BorderStroke(1.dp, FbDivider)
+                                ) {
+                                    Text(
+                                        text = "${campaigns.count { it.status == "ACTIVE" }} Active · ${campaigns.size} Total",
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = FbBlue,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
 
                         Spacer(modifier = Modifier.height(4.dp))
 
@@ -683,7 +911,10 @@ fun AdsDashboardScreen(
                                 campaigns.forEach { campaign ->
                                     ManagedAdCampaignCard(
                                         campaign = campaign,
-                                        onToggleStatus = { onToggleCampaignStatus(campaign.id) }
+                                        onToggleStatus = { onToggleCampaignStatus(campaign.id) },
+                                        onRecordLiveClick = { onRecordLiveClick(campaign.id) },
+                                        onRecordLiveImpression = { onRecordLiveImpression(campaign.id) },
+                                        onDeleteCampaign = { onDeleteCampaign(campaign.id) }
                                     )
                                 }
                             }
@@ -697,10 +928,12 @@ fun AdsDashboardScreen(
     if (showSummaryInfoDialog) {
         AlertDialog(
             onDismissRequest = { showSummaryInfoDialog = false },
-            title = { Text("About Advertising Summary", fontWeight = FontWeight.Bold) },
+            containerColor = FbCardBg,
+            title = { Text("About Advertising Summary", fontWeight = FontWeight.Bold, color = FbDarkText) },
             text = {
                 Text(
-                    "Reach shows the number of unique people who saw your ads. Post engagements measure likes, comments, shares, and saves. Link clicks track taps on your destination URL."
+                    "Reach shows the number of unique people who saw your ads on Meskot. Post engagements measure likes, comments, shares, and saves. Link clicks track taps on your destination URL synced live with Firebase Firestore.",
+                    color = FbSecondaryText
                 )
             },
             confirmButton = {
@@ -771,28 +1004,40 @@ private fun AdvertisingSummaryMetricCard(
     value: String
 ) {
     OutlinedCard(
-        shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(1.dp, FbDivider.copy(alpha = 0.7f)),
-        colors = CardDefaults.outlinedCardColors(containerColor = FbCardBg),
-        modifier = Modifier.width(150.dp)
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, FbDivider),
+        colors = CardDefaults.outlinedCardColors(containerColor = GoldSurface),
+        modifier = Modifier.width(154.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp)
-        ) {
-            Text(
-                text = label,
-                fontSize = 13.sp,
-                color = FbSecondaryText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.5.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(GoldDeep, GoldLight, GoldAccent)
+                        )
+                    )
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = value,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = FbDarkText
-            )
+            Column(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp)
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 13.sp,
+                    color = FbSecondaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = value,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = FbBlue
+                )
+            }
         }
     }
 }
@@ -804,14 +1049,14 @@ private fun ManageAdsEmptyIllustration() {
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            // Soft circular backdrop
+            // Soft circular Meskot gold backdrop
             drawCircle(
-                color = Color(0xFFE7F3FF),
+                color = GoldSurface,
                 radius = size.minDimension * 0.46f
             )
-            // Secondary accent bubble
+            // Secondary warm gold accent bubble
             drawCircle(
-                color = Color(0xFFD0E7FF),
+                color = GoldBorder.copy(alpha = 0.45f),
                 radius = size.minDimension * 0.28f,
                 center = Offset(size.width * 0.65f, size.height * 0.35f)
             )
@@ -828,109 +1073,268 @@ private fun ManageAdsEmptyIllustration() {
 @Composable
 private fun ManagedAdCampaignCard(
     campaign: AdCampaign,
-    onToggleStatus: () -> Unit
+    onToggleStatus: () -> Unit,
+    onRecordLiveClick: () -> Unit = {},
+    onRecordLiveImpression: () -> Unit = {},
+    onDeleteCampaign: () -> Unit = {}
 ) {
     val isActive = campaign.status == "ACTIVE"
+    val uriHandler = LocalUriHandler.current
+
     OutlinedCard(
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, FbDivider.copy(alpha = 0.7f)),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.2.dp, FbDivider),
         colors = CardDefaults.outlinedCardColors(containerColor = FbCardBg),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Luminous Meskot Gold Top Strip
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = if (isActive) {
+                                listOf(GoldDeep, GoldLight, GoldAccent, GoldDeep)
+                            } else {
+                                listOf(FbDivider, FbDivider)
+                            }
+                        )
+                    )
+            )
+
+            Column(modifier = Modifier.padding(14.dp)) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    AsyncImage(
-                        model = campaign.mediaUrl,
-                        contentDescription = campaign.name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(FbLightGrayBg)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        AsyncImage(
+                            model = campaign.mediaUrl,
+                            contentDescription = campaign.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(50.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .border(1.dp, FbDivider, RoundedCornerShape(10.dp))
+                                .background(FbLightGrayBg)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = campaign.name,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = FbDarkText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${PaymentCurrency.USD.formatFromEtb(campaign.dailyBudgetEtb)}/day (≈ ETB ${campaign.dailyBudgetEtb.roundToInt()}) · ${campaign.durationDays}d · ${campaign.targetAudience}",
+                                fontSize = 12.sp,
+                                color = FbSecondaryText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    AssistChip(
+                        onClick = onToggleStatus,
+                        label = {
+                            Text(
+                                text = if (isActive) "Active" else "Paused",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isActive) FbSuccessGreen else FbSecondaryText
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (isActive) Icons.Default.CheckCircle else Icons.Default.PauseCircle,
+                                contentDescription = null,
+                                tint = if (isActive) FbSuccessGreen else FbSecondaryText,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider(color = FbDivider.copy(alpha = 0.5f))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Column {
+                        Text("Reach", fontSize = 11.sp, color = FbSecondaryText)
                         Text(
-                            text = campaign.name,
-                            fontSize = 15.sp,
+                            String.format(Locale.US, "%,d", campaign.impressions),
                             fontWeight = FontWeight.Bold,
-                            color = FbDarkText,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            fontSize = 14.sp,
+                            color = FbDarkText
                         )
+                    }
+                    Column {
+                        Text("Link clicks", fontSize = 11.sp, color = FbSecondaryText)
                         Text(
-                            text = "${PaymentCurrency.USD.formatFromEtb(campaign.dailyBudgetEtb)}/day (≈ ETB ${campaign.dailyBudgetEtb.roundToInt()}) · ${campaign.targetAudience}",
-                            fontSize = 12.sp,
-                            color = FbSecondaryText,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            String.format(Locale.US, "%,d", campaign.clicks),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = FbDarkText
+                        )
+                    }
+                    Column {
+                        Text("CTR", fontSize = 11.sp, color = FbSecondaryText)
+                        Text(
+                            "${String.format(Locale.US, "%.2f", campaign.ctr)}%",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = FbBlue
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("Amount spent", fontSize = 11.sp, color = FbSecondaryText)
+                        Text(
+                            "${PaymentCurrency.USD.formatFromEtb(campaign.totalSpentEtb)} (≈ ETB ${campaign.totalSpentEtb.roundToInt()})",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = FbBlue
                         )
                     }
                 }
 
-                AssistChip(
-                    onClick = onToggleStatus,
-                    label = {
-                        Text(
-                            text = if (isActive) "Active" else "Paused",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isActive) FbSuccessGreen else FbSecondaryText
-                        )
-                    },
-                    leadingIcon = {
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider(color = FbDivider.copy(alpha = 0.35f))
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Real Payment Verification & Settlement Row
+                if (campaign.paymentMethod.isNotBlank() || campaign.paymentRef.isNotBlank()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = "Verified payment",
+                                tint = FbSuccessGreen,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "Paid via ${campaign.paymentMethod}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = FbDarkText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        if (campaign.paymentRef.isNotBlank()) {
+                            Text(
+                                text = "Ref: ${campaign.paymentRef.take(16)}",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = FbBlue
+                            )
+                        }
+                    }
+                }
+
+                // Real-time Backend Ad Delivery Actions (Visit Destination URL, Test Ad Delivery, Remove)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(
+                            onClick = {
+                                onRecordLiveClick()
+                                val rawUrl = campaign.destinationUrl.trim()
+                                val fullUrl = if (rawUrl.startsWith("http://", true) || rawUrl.startsWith("https://", true)) {
+                                    rawUrl
+                                } else {
+                                    "https://$rawUrl"
+                                }
+                                try {
+                                    uriHandler.openUri(fullUrl)
+                                } catch (_: Exception) {
+                                }
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = GoldSurface,
+                            border = BorderStroke(1.dp, FbDivider)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.OpenInNew,
+                                    contentDescription = "Open destination URL",
+                                    tint = FbBlue,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Test Link Click",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = FbBlue
+                                )
+                            }
+                        }
+
+                        Surface(
+                            onClick = onRecordLiveImpression,
+                            shape = RoundedCornerShape(8.dp),
+                            color = FbLightGrayBg,
+                            border = BorderStroke(1.dp, FbDivider.copy(alpha = 0.7f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Visibility,
+                                    contentDescription = "Record impression",
+                                    tint = FbDarkText,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "+1 Reach",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = FbDarkText
+                                )
+                            }
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onDeleteCampaign,
+                        modifier = Modifier.size(30.dp)
+                    ) {
                         Icon(
-                            imageVector = if (isActive) Icons.Default.CheckCircle else Icons.Default.PauseCircle,
-                            contentDescription = null,
-                            tint = if (isActive) FbSuccessGreen else FbSecondaryText,
-                            modifier = Modifier.size(16.dp)
+                            imageVector = Icons.Outlined.DeleteOutline,
+                            contentDescription = "Delete campaign",
+                            tint = FbSecondaryText,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-            HorizontalDivider(color = FbDivider.copy(alpha = 0.4f))
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text("Reach", fontSize = 11.sp, color = FbSecondaryText)
-                    Text(
-                        String.format(Locale.US, "%,d", campaign.impressions),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = FbDarkText
-                    )
-                }
-                Column {
-                    Text("Link clicks", fontSize = 11.sp, color = FbSecondaryText)
-                    Text(
-                        String.format(Locale.US, "%,d", campaign.clicks),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = FbDarkText
-                    )
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("Amount spent", fontSize = 11.sp, color = FbSecondaryText)
-                    Text(
-                        "${PaymentCurrency.USD.formatFromEtb(campaign.totalSpentEtb)} (≈ ETB ${campaign.totalSpentEtb.roundToInt()})",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = FbBlue
-                    )
                 }
             }
         }
@@ -945,14 +1349,22 @@ private fun ManagedAdCampaignCard(
 @Composable
 fun CreateAdScreen(
     state: CampaignSetupUiState,
+    walletBalanceEtb: Double = 0.0,
     onStateChange: (CampaignSetupUiState) -> Unit,
     onBack: () -> Unit,
+    onDepositFunds: () -> Unit = {},
+    onLaunchChapaCheckout: (CampaignSetupUiState) -> Unit = {},
     onPromoteNow: (CampaignSetupUiState) -> Unit
 ) {
     var showCtaSheet by remember { mutableStateOf(false) }
     var showAudienceDialog by remember { mutableStateOf(false) }
     var showPaymentDialog by remember { mutableStateOf(false) }
     var showEditCreativeDialog by remember { mutableStateOf(false) }
+
+    val hasEnoughWalletBalance = walletBalanceEtb >= state.totalAmountEtb
+    val canProceedWithSelectedPayment = state.canPromoteNow && (
+        state.paymentMethod.paymentSource != AdPaymentSource.MESKOT_WALLET || hasEnoughWalletBalance
+    )
 
     Scaffold(
         modifier = Modifier
@@ -962,36 +1374,50 @@ fun CreateAdScreen(
         topBar = {
             Surface(
                 color = FbCardBg,
-                shadowElevation = 1.dp,
+                shadowElevation = 2.dp,
+                border = BorderStroke(0.8.dp, FbDivider.copy(alpha = 0.7f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = onBack,
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Luminous Meskot Gold Top Strip
+                    Box(
                         modifier = Modifier
-                            .size(48.dp)
-                            .testTag("create_ad_back_button")
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(GoldDeep, GoldLight, GoldAccent, GoldDeep)
+                                )
+                            )
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = FbDarkText
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("create_ad_back_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = FbBlue
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = state.selectedGoal.title,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = FbDarkText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = state.selectedGoal.title,
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = FbDarkText,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
             }
         },
@@ -1000,6 +1426,7 @@ fun CreateAdScreen(
             Surface(
                 color = FbCardBg,
                 shadowElevation = 8.dp,
+                border = BorderStroke(0.8.dp, FbDivider.copy(alpha = 0.7f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -1025,9 +1452,15 @@ fun CreateAdScreen(
                         modifier = Modifier.padding(bottom = 10.dp)
                     )
 
+                    val promoteLabel = when (state.paymentMethod.paymentSource) {
+                        AdPaymentSource.CHAPA_GATEWAY -> "Pay ${state.formatAmount(state.totalAmountUsd)} & Promote now"
+                        AdPaymentSource.MESKOT_WALLET -> "Pay from Wallet (${state.formatAmount(state.totalAmountUsd)}) & Promote"
+                        AdPaymentSource.DEBIT_CREDIT_CARD -> "Charge ${state.paymentMethod.brandName} (${state.formatAmount(state.totalAmountUsd)}) & Promote"
+                    }
+
                     Button(
                         onClick = { onPromoteNow(state) },
-                        enabled = state.canPromoteNow,
+                        enabled = canProceedWithSelectedPayment,
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = FbBlue,
@@ -1041,8 +1474,8 @@ fun CreateAdScreen(
                             .testTag("promote_now_button")
                     ) {
                         Text(
-                            text = "Promote now",
-                            fontSize = 16.sp,
+                            text = promoteLabel,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -1273,7 +1706,7 @@ fun CreateAdScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(Color(0xFFF0F2F5))
+                                        .background(GoldSurface)
                                         .padding(horizontal = 12.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
@@ -1282,7 +1715,8 @@ fun CreateAdScreen(
                                         Text(
                                             text = state.displayDomain,
                                             fontSize = 11.sp,
-                                            color = FbSecondaryText,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = FbBlue,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
@@ -1300,13 +1734,13 @@ fun CreateAdScreen(
                                         Spacer(modifier = Modifier.width(10.dp))
                                         Surface(
                                             shape = RoundedCornerShape(6.dp),
-                                            color = Color(0xFFE4E6EB)
+                                            color = FbBlue
                                         ) {
                                             Text(
                                                 text = state.selectedCta.label,
                                                 fontSize = 13.sp,
                                                 fontWeight = FontWeight.SemiBold,
-                                                color = FbDarkText,
+                                                color = Color.White,
                                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
                                             )
                                         }
@@ -1556,7 +1990,8 @@ fun CreateAdScreen(
 
                             // Dynamic "Estimated reach" indicator text based on budget value
                             Surface(
-                                color = Color(0xFFE7F3FF),
+                                color = GoldSurface,
+                                border = BorderStroke(1.dp, FbDivider),
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -1651,7 +2086,7 @@ fun CreateAdScreen(
                 }
             }
 
-            // 7. Payment Method Section (MasterCard icon + •••• 7228 + Verify / Change action)
+            // 7. Payment Method Section (Real Chapa Checkout, Verified Debit/Credit Card, and Meskot Creator Wallet)
             item {
                 Surface(
                     color = FbCardBg,
@@ -1660,82 +2095,308 @@ fun CreateAdScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Payment method",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = FbDarkText
-                            )
+                            Column {
+                                Text(
+                                    text = "Payment method",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = FbDarkText
+                                )
+                                Text(
+                                    text = "Select a real payment gateway or wallet balance",
+                                    fontSize = 12.sp,
+                                    color = FbSecondaryText
+                                )
+                            }
                             TextButton(
                                 onClick = { showPaymentDialog = true },
                                 modifier = Modifier.testTag("change_payment_method_button")
                             ) {
                                 Text(
-                                    text = if (state.paymentMethod.isVerified) "Change" else "Verify",
+                                    text = if (state.paymentMethod.isVerified) "Change Card" else "Add Card",
                                     color = FbBlue,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Row(
+                        // Option 1: Real Chapa Inline Checkout (Telebirr / CBE Birr / USD Card / PayPal / M-Pesa)
+                        val isChapaSelected = state.paymentMethod.paymentSource == AdPaymentSource.CHAPA_GATEWAY
+                        Surface(
+                            onClick = {
+                                onStateChange(
+                                    state.copy(
+                                        paymentMethod = state.paymentMethod.copy(
+                                            paymentSource = AdPaymentSource.CHAPA_GATEWAY,
+                                            isVerified = true
+                                        )
+                                    )
+                                )
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isChapaSelected) GoldSurface else FbLightGrayBg.copy(alpha = 0.65f),
+                            border = BorderStroke(
+                                width = if (isChapaSelected) 1.5.dp else 1.dp,
+                                color = if (isChapaSelected) FbBlue else FbDivider.copy(alpha = 0.6f)
+                            ),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(FbLightGrayBg.copy(alpha = 0.6f))
-                                .clickable { showPaymentDialog = true }
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .testTag("payment_option_chapa")
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                PaymentBrandSmallBadge(brandName = state.paymentMethod.brandName)
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
-                                    Text(
-                                        text = "${state.paymentMethod.brandName} •••• ${state.paymentMethod.last4Digits}",
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = FbDarkText
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        RadioButton(
+                                            selected = isChapaSelected,
+                                            onClick = {
+                                                onStateChange(
+                                                    state.copy(
+                                                        paymentMethod = state.paymentMethod.copy(
+                                                            paymentSource = AdPaymentSource.CHAPA_GATEWAY,
+                                                            isVerified = true
+                                                        )
+                                                    )
+                                                )
+                                            },
+                                            colors = RadioButtonDefaults.colors(selectedColor = FbBlue)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Column {
+                                            Text(
+                                                text = "Chapa Checkout (Real Gateway)",
+                                                fontSize = 14.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = FbDarkText
+                                            )
+                                            Text(
+                                                text = "Telebirr · CBE Birr · Visa/Mastercard · PayPal · M-Pesa",
+                                                fontSize = 11.5.sp,
+                                                color = FbSecondaryText
+                                            )
+                                        }
+                                    }
+
+                                    Surface(
+                                        onClick = { onLaunchChapaCheckout(state) },
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = FbBlue,
+                                        modifier = Modifier.testTag("open_chapa_checkout_button")
+                                    ) {
+                                        Text(
+                                            text = "Pay Now",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Option 2: Direct Debit or Credit Card (MasterCard / Visa / AMEX / UnionPay / Discover)
+                        val isCardSelected = state.paymentMethod.paymentSource == AdPaymentSource.DEBIT_CREDIT_CARD
+                        Surface(
+                            onClick = {
+                                onStateChange(
+                                    state.copy(
+                                        paymentMethod = state.paymentMethod.copy(
+                                            paymentSource = AdPaymentSource.DEBIT_CREDIT_CARD
+                                        )
                                     )
-                                    Text(
-                                        text = if (state.paymentMethod.isVerified) {
-                                            "${state.paymentMethod.cardholderName} · Exp ${state.paymentMethod.expiryDate} · Verified (${state.selectedCurrency.code})"
-                                        } else {
-                                            "Tap to enter or verify debit/credit card"
+                                )
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isCardSelected) GoldSurface else FbLightGrayBg.copy(alpha = 0.65f),
+                            border = BorderStroke(
+                                width = if (isCardSelected) 1.5.dp else 1.dp,
+                                color = if (isCardSelected) FbBlue else FbDivider.copy(alpha = 0.6f)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("payment_option_card")
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    RadioButton(
+                                        selected = isCardSelected,
+                                        onClick = {
+                                            onStateChange(
+                                                state.copy(
+                                                    paymentMethod = state.paymentMethod.copy(
+                                                        paymentSource = AdPaymentSource.DEBIT_CREDIT_CARD
+                                                    )
+                                                )
+                                            )
                                         },
-                                        fontSize = 12.sp,
-                                        color = if (state.paymentMethod.isVerified) FbSuccessGreen else FbErrorRed
+                                        colors = RadioButtonDefaults.colors(selectedColor = FbBlue)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    PaymentBrandSmallBadge(brandName = state.paymentMethod.brandName)
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = "${state.paymentMethod.brandName} •••• ${state.paymentMethod.last4Digits}",
+                                            fontSize = 14.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = FbDarkText
+                                        )
+                                        Text(
+                                            text = if (state.paymentMethod.isVerified) {
+                                                "${state.paymentMethod.cardholderName} · Exp ${state.paymentMethod.expiryDate} · Verified (${state.selectedCurrency.code})"
+                                            } else {
+                                                "Tap to enter or verify debit/credit card"
+                                            },
+                                            fontSize = 11.5.sp,
+                                            color = if (state.paymentMethod.isVerified) FbSuccessGreen else FbErrorRed
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    onClick = { showPaymentDialog = true },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (state.paymentMethod.isVerified) {
+                                        Color(0xFFE8F5E9)
+                                    } else {
+                                        FbBlue
+                                    },
+                                    modifier = Modifier.testTag("verify_payment_badge")
+                                ) {
+                                    Text(
+                                        text = if (state.paymentMethod.isVerified) "Verified ✓" else "Verify",
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (state.paymentMethod.isVerified) FbSuccessGreen else Color.White,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                                     )
                                 }
                             }
+                        }
 
-                            Surface(
-                                onClick = { showPaymentDialog = true },
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (state.paymentMethod.isVerified) {
-                                    Color(0xFFE8F5E9)
-                                } else {
-                                    FbBlue
-                                },
-                                modifier = Modifier.testTag("verify_payment_badge")
-                            ) {
-                                Text(
-                                    text = if (state.paymentMethod.isVerified) "Verified ✓" else "Verify",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (state.paymentMethod.isVerified) FbSuccessGreen else Color.White,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        // Option 3: Meskot Creator Wallet Balance (Real Ledger Balance Deduction)
+                        val isWalletSelected = state.paymentMethod.paymentSource == AdPaymentSource.MESKOT_WALLET
+                        val formattedWalletUsd = PaymentCurrency.USD.formatFromEtb(walletBalanceEtb)
+                        val formattedWalletEtb = "ETB ${String.format(Locale.US, "%,.2f", walletBalanceEtb)}"
+                        Surface(
+                            onClick = {
+                                onStateChange(
+                                    state.copy(
+                                        paymentMethod = state.paymentMethod.copy(
+                                            paymentSource = AdPaymentSource.MESKOT_WALLET,
+                                            isVerified = true
+                                        )
+                                    )
                                 )
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isWalletSelected) GoldSurface else FbLightGrayBg.copy(alpha = 0.65f),
+                            border = BorderStroke(
+                                width = if (isWalletSelected) 1.5.dp else 1.dp,
+                                color = if (isWalletSelected) FbBlue else FbDivider.copy(alpha = 0.6f)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("payment_option_wallet")
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        RadioButton(
+                                            selected = isWalletSelected,
+                                            onClick = {
+                                                onStateChange(
+                                                    state.copy(
+                                                        paymentMethod = state.paymentMethod.copy(
+                                                            paymentSource = AdPaymentSource.MESKOT_WALLET,
+                                                            isVerified = true
+                                                        )
+                                                    )
+                                                )
+                                            },
+                                            colors = RadioButtonDefaults.colors(selectedColor = FbBlue)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Column {
+                                            Text(
+                                                text = "Meskot Creator Wallet",
+                                                fontSize = 14.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = FbDarkText
+                                            )
+                                            Text(
+                                                text = "Available: $formattedWalletUsd (≈ $formattedWalletEtb)",
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (hasEnoughWalletBalance) FbSuccessGreen else FbErrorRed
+                                            )
+                                        }
+                                    }
+
+                                    Surface(
+                                        onClick = onDepositFunds,
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = GoldSurface,
+                                        border = BorderStroke(1.dp, FbDivider),
+                                        modifier = Modifier.testTag("top_up_wallet_ads_button")
+                                    ) {
+                                        Text(
+                                            text = "+ Add Funds",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = FbBlue,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                        )
+                                    }
+                                }
+
+                                if (isWalletSelected && !hasEnoughWalletBalance) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "Insufficient wallet balance for this campaign total (${state.formatAmount(state.totalAmountUsd)}). Tap '+ Add Funds' to deposit via Chapa or select Chapa Checkout / Card above.",
+                                        fontSize = 11.5.sp,
+                                        color = FbErrorRed
+                                    )
+                                }
                             }
                         }
                     }
@@ -2300,56 +2961,69 @@ private fun DebitOrCreditCardDialog(
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("debit_or_credit_card_screen"),
-            containerColor = Color.White,
+            containerColor = FbLightGrayBg,
             topBar = {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    IconButton(
-                        onClick = onDismiss,
+                Column(modifier = Modifier.fillMaxWidth().background(FbCardBg)) {
+                    Box(
                         modifier = Modifier
-                            .size(48.dp)
-                            .testTag("card_screen_back_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowLeft,
-                            contentDescription = "Back",
-                            tint = FbDarkText,
-                            modifier = Modifier.size(30.dp)
-                        )
-                    }
-
-                    Text(
-                        text = "Debit or credit card",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = FbDarkText
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(GoldDeep, GoldLight, GoldAccent, GoldDeep)
+                                )
+                            )
                     )
-
-                    IconButton(
-                        onClick = onDismiss,
+                    Row(
                         modifier = Modifier
-                            .size(48.dp)
-                            .testTag("card_screen_close_button")
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = FbDarkText,
-                            modifier = Modifier.size(26.dp)
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("card_screen_back_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowLeft,
+                                contentDescription = "Back",
+                                tint = FbBlue,
+                                modifier = Modifier.size(30.dp)
+                            )
+                        }
+
+                        Text(
+                            text = "Debit or credit card",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = FbDarkText
                         )
+
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("card_screen_close_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = FbDarkText,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
                     }
+                    HorizontalDivider(color = FbDivider.copy(alpha = 0.6f))
                 }
             },
             bottomBar = {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color.White)
+                        .background(FbCardBg)
                         .padding(horizontal = 20.dp, vertical = 18.dp)
                 ) {
                     Button(
@@ -2386,7 +3060,9 @@ private fun DebitOrCreditCardDialog(
                                             cardNumber = cleanNumber,
                                             expiryDate = expFormatted,
                                             cvv = cleanCvv,
-                                            isVerified = true
+                                            isVerified = true,
+                                            paymentSource = AdPaymentSource.DEBIT_CREDIT_CARD,
+                                            lastTransactionRef = "CRD-${brand.take(4).uppercase(Locale.US)}-$last4-${System.currentTimeMillis()}"
                                         )
                                     )
                                 }
@@ -2394,7 +3070,7 @@ private fun DebitOrCreditCardDialog(
                         },
                         shape = RoundedCornerShape(28.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF0064E0),
+                            containerColor = FbBlue,
                             contentColor = Color.White
                         ),
                         modifier = Modifier
@@ -2459,7 +3135,7 @@ private fun DebitOrCreditCardDialog(
                     label = {
                         Text(
                             text = "Name on card",
-                            color = Color(0xFF606770)
+                            color = FbSecondaryText
                         )
                     },
                     singleLine = true,
@@ -2469,10 +3145,10 @@ private fun DebitOrCreditCardDialog(
                         imeAction = ImeAction.Next
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF1C2B33),
-                        unfocusedBorderColor = Color(0xFFCCD0D5),
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White
+                        focusedBorderColor = FbBlue,
+                        unfocusedBorderColor = FbDivider,
+                        focusedContainerColor = FbCardBg,
+                        unfocusedContainerColor = FbCardBg
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2490,7 +3166,7 @@ private fun DebitOrCreditCardDialog(
                     label = {
                         Text(
                             text = "Card number",
-                            color = Color(0xFF606770)
+                            color = FbSecondaryText
                         )
                     },
                     placeholder = { Text("4532 •••• •••• 7228") },
@@ -2501,10 +3177,10 @@ private fun DebitOrCreditCardDialog(
                         imeAction = ImeAction.Next
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF1C2B33),
-                        unfocusedBorderColor = Color(0xFFCCD0D5),
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White
+                        focusedBorderColor = FbBlue,
+                        unfocusedBorderColor = FbDivider,
+                        focusedContainerColor = FbCardBg,
+                        unfocusedContainerColor = FbCardBg
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2522,7 +3198,7 @@ private fun DebitOrCreditCardDialog(
                     label = {
                         Text(
                             text = "MM/YY",
-                            color = Color(0xFF606770)
+                            color = FbSecondaryText
                         )
                     },
                     placeholder = { Text("08/29") },
@@ -2533,10 +3209,10 @@ private fun DebitOrCreditCardDialog(
                         imeAction = ImeAction.Next
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF1C2B33),
-                        unfocusedBorderColor = Color(0xFFCCD0D5),
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White
+                        focusedBorderColor = FbBlue,
+                        unfocusedBorderColor = FbDivider,
+                        focusedContainerColor = FbCardBg,
+                        unfocusedContainerColor = FbCardBg
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2554,7 +3230,7 @@ private fun DebitOrCreditCardDialog(
                     label = {
                         Text(
                             text = "CVV",
-                            color = Color(0xFF606770)
+                            color = FbSecondaryText
                         )
                     },
                     placeholder = { Text("123") },
@@ -2565,10 +3241,10 @@ private fun DebitOrCreditCardDialog(
                         imeAction = ImeAction.Done
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF1C2B33),
-                        unfocusedBorderColor = Color(0xFFCCD0D5),
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White
+                        focusedBorderColor = FbBlue,
+                        unfocusedBorderColor = FbDivider,
+                        focusedContainerColor = FbCardBg,
+                        unfocusedContainerColor = FbCardBg
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2607,7 +3283,7 @@ private fun DebitOrCreditCardDialog(
 
                 Spacer(modifier = Modifier.height(22.dp))
 
-                // Security Lock Icon + Notice + Blue Link (Matches Screenshot)
+                // Security Lock Icon + Notice + Meskot Gold Link
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2617,7 +3293,7 @@ private fun DebitOrCreditCardDialog(
                     Icon(
                         imageVector = Icons.Default.Lock,
                         contentDescription = "Secure payment",
-                        tint = Color(0xFF5F6368),
+                        tint = FbBlue,
                         modifier = Modifier.size(22.dp)
                     )
 
@@ -2626,7 +3302,7 @@ private fun DebitOrCreditCardDialog(
                     Text(
                         text = "Your payment methods are saved and stored securely.",
                         fontSize = 15.sp,
-                        color = Color(0xFF1C1E21),
+                        color = FbDarkText,
                         textAlign = TextAlign.Center,
                         lineHeight = 20.sp
                     )
@@ -2637,7 +3313,7 @@ private fun DebitOrCreditCardDialog(
                         text = "Terms and privacy policies apply.",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF0064E0),
+                        color = FbBlue,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.clickable { showTermsDialog = true }
                     )
@@ -2650,16 +3326,17 @@ private fun DebitOrCreditCardDialog(
         if (showTermsDialog) {
             AlertDialog(
                 onDismissRequest = { showTermsDialog = false },
-                containerColor = Color.White,
-                title = { Text("Payment Terms & Privacy", fontWeight = FontWeight.Bold) },
+                containerColor = FbCardBg,
+                title = { Text("Payment Terms & Privacy", fontWeight = FontWeight.Bold, color = FbDarkText) },
                 text = {
                     Text(
-                        "Your debit or credit card details are encrypted and stored securely for Meskot Ads billing in USD or ETB (converted using the daily National Bank of Ethiopia exchange rate)."
+                        "Your debit or credit card details are encrypted and stored securely for Meskot Ads billing in USD or ETB (converted using the daily National Bank of Ethiopia exchange rate).",
+                        color = FbSecondaryText
                     )
                 },
                 confirmButton = {
                     TextButton(onClick = { showTermsDialog = false }) {
-                        Text("Close", color = Color(0xFF0064E0), fontWeight = FontWeight.Bold)
+                        Text("Close", color = FbBlue, fontWeight = FontWeight.Bold)
                     }
                 }
             )

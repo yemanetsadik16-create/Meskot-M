@@ -171,9 +171,15 @@ class MeskotRepository(
     private val _hiddenPostIds = MutableStateFlow<Set<String>>(emptySet())
     val hiddenPostIds: StateFlow<Set<String>> = _hiddenPostIds.asStateFlow()
 
-    // Monetization: Ad Campaigns
+    // Monetization: Ad Campaigns (Real-time Server Synced with Firebase Firestore)
     private val _adCampaigns = MutableStateFlow<List<AdCampaign>>(createInitialAdCampaigns())
     val adCampaigns: StateFlow<List<AdCampaign>> = _adCampaigns.asStateFlow()
+
+    private val _isAdsServerSynced = MutableStateFlow(false)
+    val isAdsServerSynced: StateFlow<Boolean> = _isAdsServerSynced.asStateFlow()
+    private var adCampaignsRegistration: com.google.firebase.firestore.ListenerRegistration? = null
+    private var marketplaceListingsRegistration: com.google.firebase.firestore.ListenerRegistration? = null
+    private var marketplaceChatsRegistration: com.google.firebase.firestore.ListenerRegistration? = null
 
     // Content Boosting Campaigns
     private val _boostCampaigns = MutableStateFlow<List<BoostCampaign>>(emptyList())
@@ -608,6 +614,35 @@ class MeskotRepository(
                 _activeLiveStreams.value = liveStreams
             }
 
+            // Real-time Ad Campaigns in Firebase Firestore (Facebook Ads Manager Backend)
+            adCampaignsRegistration?.remove()
+            adCampaignsRegistration = FirebaseManager.listenToAdCampaigns { liveCampaigns ->
+                _adCampaigns.value = liveCampaigns
+                _isAdsServerSynced.value = true
+            }
+            if (adCampaignsRegistration != null) {
+                _isAdsServerSynced.value = true
+            }
+
+            // Real-time Marketplace Listings & Buyer-Seller Chats in Firebase Firestore
+            marketplaceListingsRegistration?.remove()
+            marketplaceListingsRegistration = FirebaseManager.listenToMarketplaceListings { liveListings ->
+                val savedSet = _savedListingIds.value
+                val liveMap = liveListings.associateBy { it.id }
+                val mergedSeed = createInitialMarketplaceListings()
+                    .filterNot { it.id in liveMap }
+                    .map { it.copy(isSaved = savedSet.contains(it.id)) }
+                val mergedLive = liveListings.map { it.copy(isSaved = savedSet.contains(it.id)) }
+                _marketplaceListings.value = (mergedLive + mergedSeed).sortedByDescending { it.createdAt }
+            }
+
+            marketplaceChatsRegistration?.remove()
+            marketplaceChatsRegistration = FirebaseManager.listenToMarketplaceChats { liveChats ->
+                val liveKeys = liveChats.map { "${it.chatId}_${it.timestamp}" }.toSet()
+                val remainingLocal = _marketplaceChats.value.filterNot { "${it.chatId}_${it.timestamp}" in liveKeys }
+                _marketplaceChats.value = (liveChats + remainingLocal).sortedByDescending { it.timestamp }
+            }
+
             FirebaseManager.listenToComments { liveComments ->
                 _comments.value = liveComments
             }
@@ -802,6 +837,8 @@ class MeskotRepository(
         generalMessagesRegistration = null
         storiesRegistration?.remove()
         storiesRegistration = null
+        adCampaignsRegistration?.remove()
+        adCampaignsRegistration = null
         _incomingMessageAlert.value = null
         _incomingCall.value = null
         userRepository.setCurrentUser(null)
@@ -1968,7 +2005,14 @@ class MeskotRepository(
         )
     }
 
-    // ADS MANAGER: CAMPAIGNS
+    // ADS MANAGER: CAMPAIGNS (Real-time Firebase Firestore Ad Server Integration)
+    fun refreshAdCampaignsFromServer() {
+        FirebaseManager.fetchAdCampaignsOnce { liveCampaigns ->
+            _adCampaigns.value = liveCampaigns
+            _isAdsServerSynced.value = true
+        }
+    }
+
     fun createAdCampaign(
         name: String,
         objective: String,
@@ -1979,16 +2023,21 @@ class MeskotRepository(
         ctaText: String,
         destinationUrl: String,
         targetAudience: String = "Men/Women, 18-65+, 1 location",
-        deductFromWallet: Boolean = false
+        durationDays: Int = 5,
+        deductFromWallet: Boolean = false,
+        paymentMethod: String = "Chapa Checkout (USD/ETB)",
+        paymentRef: String = "",
+        totalPaidEtb: Double = dailyBudgetEtb * durationDays.coerceAtLeast(1) * 1.05
     ): Boolean {
         val user = _currentUser.value ?: User(uid = "usr_yemane", displayName = "Yemane Tsadik")
+        val chargeAmountEtb = if (totalPaidEtb > 0.0) totalPaidEtb else (dailyBudgetEtb * durationDays.coerceAtLeast(1) * 1.05)
 
-        if (deductFromWallet && (user.creatorNetBalance < dailyBudgetEtb || dailyBudgetEtb <= 0)) {
+        if (deductFromWallet && (user.creatorNetBalance < chargeAmountEtb || chargeAmountEtb <= 0)) {
             return false
         }
 
         val newBalance = if (deductFromWallet) {
-            (user.creatorNetBalance - dailyBudgetEtb).coerceAtLeast(0.0)
+            (user.creatorNetBalance - chargeAmountEtb).coerceAtLeast(0.0)
         } else {
             user.creatorNetBalance
         }
@@ -2000,6 +2049,7 @@ class MeskotRepository(
             repoScope.launch {
                 userRepository.saveUser(updatedUser)
             }
+            FirebaseManager.saveUser(updatedUser)
         }
 
         val advertiserName = user.displayName.ifBlank { "Yemane Tsadik" }
@@ -2007,6 +2057,9 @@ class MeskotRepository(
 
         val estimatedImpressions = (dailyBudgetEtb * 18).toInt().coerceAtLeast(1250)
         val estimatedClicks = (estimatedImpressions * 0.038).toInt().coerceAtLeast(45)
+        val effectivePaymentRef = paymentRef.ifBlank {
+            "CHP-AD-" + UUID.randomUUID().toString().take(8).uppercase()
+        }
 
         val newCampaign = AdCampaign(
             id = "camp_" + System.currentTimeMillis(),
@@ -2028,30 +2081,94 @@ class MeskotRepository(
             destinationUrl = destinationUrl,
             advertiserName = advertiserName,
             advertiserAvatar = advertiserAvatar,
-            targetAudience = targetAudience
+            advertiserUid = user.uid,
+            durationDays = durationDays.coerceAtLeast(1),
+            targetAudience = targetAudience,
+            paymentMethod = paymentMethod,
+            paymentRef = effectivePaymentRef,
+            totalPaidEtb = chargeAmountEtb,
+            createdAt = System.currentTimeMillis()
         )
         _adCampaigns.value = listOf(newCampaign) + _adCampaigns.value
 
+        // Persist to Firebase Firestore backend server
+        FirebaseManager.saveAdCampaign(newCampaign) { success ->
+            if (success) {
+                _isAdsServerSynced.value = true
+            }
+        }
+
         val newEntry = EarningsLedgerEntry(
             id = "ledger_" + System.currentTimeMillis(),
-            transactionRef = "CAMP-" + UUID.randomUUID().toString().take(8).uppercase(),
+            transactionRef = effectivePaymentRef,
             entryType = LedgerEntryType.AD_CAMPAIGN_DEBIT,
-            amountEtb = -dailyBudgetEtb,
+            amountEtb = -chargeAmountEtb,
             balanceAfterEtb = newBalance,
             sourceTitle = "Ad Campaign Promoted: $name",
-            metadata = "Objective: $objective · Audience: $targetAudience"
+            metadata = "Paid via $paymentMethod · Ref: $effectivePaymentRef · Objective: $objective · Duration: ${durationDays}d"
         )
         _earningsLedger.value = listOf(newEntry) + _earningsLedger.value
         return true
     }
 
     fun toggleAdCampaignStatus(campaignId: String) {
+        var updatedStatus: String? = null
         _adCampaigns.value = _adCampaigns.value.map {
             if (it.id == campaignId) {
                 val newStatus = if (it.status == "ACTIVE") "PAUSED" else "ACTIVE"
+                updatedStatus = newStatus
                 it.copy(status = newStatus)
             } else it
         }
+        updatedStatus?.let { status ->
+            FirebaseManager.updateAdCampaignStatus(campaignId, status)
+        }
+    }
+
+    fun recordAdImpression(campaignId: String) {
+        var cpm = 25.0
+        _adCampaigns.value = _adCampaigns.value.map { camp ->
+            if (camp.id == campaignId) {
+                cpm = camp.cpmEtb
+                val costPerImp = (camp.cpmEtb / 1000.0).coerceAtLeast(0.025)
+                val newImps = camp.impressions + 1
+                val newCtr = if (newImps > 0) {
+                    Math.round((camp.clicks.toDouble() / newImps.toDouble()) * 10000.0) / 100.0
+                } else camp.ctr
+                camp.copy(
+                    impressions = newImps,
+                    totalSpentEtb = camp.totalSpentEtb + costPerImp,
+                    ctr = newCtr
+                )
+            } else camp
+        }
+        FirebaseManager.recordAdImpression(campaignId, cpm)
+    }
+
+    fun recordAdClick(campaignId: String, recordConversion: Boolean = false) {
+        var cpc = 1.45
+        _adCampaigns.value = _adCampaigns.value.map { camp ->
+            if (camp.id == campaignId) {
+                cpc = camp.avgCpcEtb
+                val newClicks = camp.clicks + 1
+                val newConversions = if (recordConversion) camp.conversions + 1 else camp.conversions
+                val newCtr = if (camp.impressions > 0) {
+                    Math.round((newClicks.toDouble() / camp.impressions.toDouble()) * 10000.0) / 100.0
+                } else camp.ctr
+                camp.copy(
+                    clicks = newClicks,
+                    conversions = newConversions,
+                    totalSpentEtb = camp.totalSpentEtb + cpc,
+                    ctr = newCtr
+                )
+            } else camp
+        }
+        FirebaseManager.recordAdClick(campaignId, cpc, recordConversion)
+    }
+
+    fun deleteAdCampaign(campaignId: String) {
+        _adCampaigns.value = _adCampaigns.value.filterNot { it.id == campaignId }
+        FirebaseManager.deleteAdCampaign(campaignId)
     }
 
     // COMMENTS
@@ -3688,8 +3805,26 @@ class MeskotRepository(
     )
     val marketplaceLocation: StateFlow<MarketplaceLocation> = _marketplaceLocation.asStateFlow()
 
-    private val _savedListingIds = MutableStateFlow<Set<String>>(emptySet())
+    private val _savedListingIds = MutableStateFlow<Set<String>>(loadSavedListingIds())
     val savedListingIds: StateFlow<Set<String>> = _savedListingIds.asStateFlow()
+
+    private fun loadSavedListingIds(): Set<String> {
+        return try {
+            val prefs = context.getSharedPreferences("meskot_marketplace_prefs", Context.MODE_PRIVATE)
+            prefs.getStringSet("saved_listing_ids", emptySet()) ?: emptySet()
+        } catch (e: Exception) {
+            emptySet()
+        }
+    }
+
+    private fun persistSavedListingIds(ids: Set<String>) {
+        try {
+            val prefs = context.getSharedPreferences("meskot_marketplace_prefs", Context.MODE_PRIVATE)
+            prefs.edit().putStringSet("saved_listing_ids", ids).apply()
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
 
     private val _marketplaceChats = MutableStateFlow<List<MarketplaceChatMessage>>(createInitialMarketplaceChats())
     val marketplaceChats: StateFlow<List<MarketplaceChatMessage>> = _marketplaceChats.asStateFlow()
@@ -3707,9 +3842,80 @@ class MeskotRepository(
         val current = _savedListingIds.value
         val next = if (current.contains(itemId)) current - itemId else current + itemId
         _savedListingIds.value = next
+        persistSavedListingIds(next)
         _marketplaceListings.value = _marketplaceListings.value.map { item ->
             if (item.id == itemId) item.copy(isSaved = next.contains(itemId)) else item
         }
+    }
+
+    fun incrementMarketplaceListingViews(itemId: String) {
+        var nextViews = 1
+        _marketplaceListings.value = _marketplaceListings.value.map { item ->
+            if (item.id == itemId) {
+                nextViews = item.viewsCount + 1
+                item.copy(viewsCount = nextViews)
+            } else item
+        }
+        FirebaseManager.incrementMarketplaceListingViews(itemId, nextViews)
+    }
+
+    fun toggleMarketplaceListingAvailability(itemId: String): ListingItem? {
+        var updatedItem: ListingItem? = null
+        _marketplaceListings.value = _marketplaceListings.value.map { item ->
+            if (item.id == itemId) {
+                val toggled = item.copy(isAvailable = !item.isAvailable)
+                updatedItem = toggled
+                toggled
+            } else item
+        }
+        updatedItem?.let { FirebaseManager.updateMarketplaceListing(it) }
+        return updatedItem
+    }
+
+    fun updateMarketplaceListingDetails(
+        itemId: String,
+        newTitle: String,
+        newPrice: Double,
+        newCurrency: String,
+        newCondition: String,
+        newDescription: String,
+        newIsNegotiable: Boolean
+    ): ListingItem? {
+        var updatedItem: ListingItem? = null
+        _marketplaceListings.value = _marketplaceListings.value.map { item ->
+            if (item.id == itemId) {
+                val edited = item.copy(
+                    title = newTitle.trim().ifBlank { item.title },
+                    price = newPrice.coerceAtLeast(0.0),
+                    currency = newCurrency.uppercase(),
+                    condition = newCondition,
+                    description = newDescription.trim().ifBlank { item.description },
+                    isNegotiable = newIsNegotiable
+                )
+                updatedItem = edited
+                edited
+            } else item
+        }
+        updatedItem?.let { FirebaseManager.updateMarketplaceListing(it) }
+        return updatedItem
+    }
+
+    fun promoteMarketplaceListing(itemId: String): ListingItem? {
+        var updatedItem: ListingItem? = null
+        _marketplaceListings.value = _marketplaceListings.value.map { item ->
+            if (item.id == itemId) {
+                val promoted = item.copy(isPromoted = true, viewsCount = item.viewsCount + 45)
+                updatedItem = promoted
+                promoted
+            } else item
+        }
+        updatedItem?.let { FirebaseManager.updateMarketplaceListing(it) }
+        return updatedItem
+    }
+
+    fun deleteMarketplaceListing(itemId: String) {
+        _marketplaceListings.value = _marketplaceListings.value.filterNot { it.id == itemId }
+        FirebaseManager.deleteMarketplaceListing(itemId)
     }
 
     fun createMarketplaceListing(

@@ -155,47 +155,11 @@ fun TopNavBar(
                     )
                 }
 
-                // Right Action Controls: [+] [🔍] [☰]
+                // Right Action Controls: [🔍]
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // [+] Create Post button in radiant Meskot Gold with luxury drop glow
-                    Box(
-                        modifier = Modifier
-                            .height(36.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(GoldLight, LuxuryGoldAccent, GoldDeep)
-                                )
-                            )
-                            .border(1.dp, Color.White.copy(alpha = 0.6f), RoundedCornerShape(18.dp))
-                            .clickable { onOpenComposer() }
-                            .padding(horizontal = 11.dp)
-                            .testTag("create_post_nav_btn"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Create Post",
-                                tint = Color.White,
-                                modifier = Modifier.size(17.dp)
-                            )
-                            Text(
-                                text = "Post",
-                                color = Color.White,
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.2.sp
-                            )
-                        }
-                    }
-
                     // [🔍] Search button with luxury frosted gold tint & soft contour
                     Box(
                         modifier = Modifier
@@ -210,25 +174,6 @@ fun TopNavBar(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search",
-                            tint = GoldDeep,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // [☰] Menu button with luxury frosted gold tint
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(GoldSurface)
-                            .border(1.dp, GoldBorder.copy(alpha = 0.8f), CircleShape)
-                            .clickable { onOpenMenu() }
-                            .testTag("menu_nav_btn"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Menu",
                             tint = GoldDeep,
                             modifier = Modifier.size(18.dp)
                         )
@@ -327,12 +272,12 @@ fun IconNavBar(
                 )
 
                 NavLuxuryItem(
-                    activeIcon = Icons.Filled.BarChart,
-                    inactiveIcon = Icons.Outlined.BarChart,
-                    label = "Stats",
-                    isSelected = currentTab == ScreenTab.DASHBOARD,
-                    onClick = { onTabSelected(ScreenTab.DASHBOARD) },
-                    testTag = "tab_dashboard"
+                    activeIcon = Icons.Default.Menu,
+                    inactiveIcon = Icons.Default.Menu,
+                    label = "Menu",
+                    isSelected = currentTab == ScreenTab.MENU,
+                    onClick = { onTabSelected(ScreenTab.MENU) },
+                    testTag = "tab_menu"
                 )
 
                 if (isAdmin) {

@@ -253,39 +253,47 @@ fun GroupDetailScreen(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = CardBg,
-                shadowElevation = 1.dp
+                shadowElevation = 2.dp
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp)
-                ) {
-                    // Metadata: Title, Globe/Lock + Privacy + Bullet + Member count, Overlapping Avatar Stack
-                    GroupMetadataSection(
-                        uiState = uiState,
-                        currentLanguage = currentLanguage,
-                        onMemberAvatarClick = { user -> viewModel.openProfile(user) }
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(com.example.ui.theme.MeskotLogoHorizontalBrush)
                     )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp)
+                    ) {
+                        // Metadata: Title, Globe/Lock + Privacy + Bullet + Member count, Overlapping Avatar Stack
+                        GroupMetadataSection(
+                            uiState = uiState,
+                            currentLanguage = currentLanguage,
+                            onMemberAvatarClick = { user -> viewModel.openProfile(user) }
+                        )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    // Dynamic Action Bar: Button 1 ("Manage" with Shield icon OR "Join Group" / "Joined") + Button 2 ("Invite" with User-plus icon)
-                    GroupDynamicActionBar(
-                        uiState = uiState,
-                        onManageClick = { viewModel.openGroupAdminDashboard(liveGroup) },
-                        onJoinToggleClick = { viewModel.toggleGroupJoin(liveGroup) },
-                        onInviteClick = { isInviteDialogOpen = true }
-                    )
+                        // Dynamic Action Bar: Button 1 ("Manage" with Shield icon OR "Join Group" / "Joined") + Button 2 ("Invite" with User-plus icon)
+                        GroupDynamicActionBar(
+                            uiState = uiState,
+                            onManageClick = { viewModel.openGroupAdminDashboard(liveGroup) },
+                            onJoinToggleClick = { viewModel.toggleGroupJoin(liveGroup) },
+                            onInviteClick = { isInviteDialogOpen = true }
+                        )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    // Category Filter Pills: Horizontal scrollable LazyRow (Videos, Photos, Announcements, Events)
-                    GroupCategoryFilterPillsRow(
-                        selectedCategory = uiState.selectedCategory,
-                        onCategoryClick = { category ->
-                            selectedCategory = if (selectedCategory == category) null else category
-                        }
-                    )
+                        // Category Filter Pills: Horizontal scrollable LazyRow (Videos, Photos, Announcements, Events)
+                        GroupCategoryFilterPillsRow(
+                            selectedCategory = uiState.selectedCategory,
+                            onCategoryClick = { category ->
+                                selectedCategory = if (selectedCategory == category) null else category
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -944,7 +952,7 @@ private fun GroupPostComposerCard(
             .testTag("group_post_composer_card"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CardBg),
-        border = BorderStroke(1.dp, LineBorder)
+        border = BorderStroke(1.2.dp, GoldBorder)
     ) {
         Column(
             modifier = Modifier
@@ -969,22 +977,22 @@ private fun GroupPostComposerCard(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(24.dp))
-                        .background(Paper)
-                        .border(1.dp, LineBorder, RoundedCornerShape(24.dp))
+                        .background(GoldSurface)
+                        .border(1.dp, GoldBorder, RoundedCornerShape(24.dp))
                         .clickable { onWriteSomethingClick() }
                         .padding(horizontal = 16.dp, vertical = 11.dp)
                         .testTag("group_write_something_trigger")
                 ) {
                     Text(
                         text = "Write something...",
-                        color = MutedText,
+                        color = GoldDeep,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
             }
 
-            HorizontalDivider(color = LineBorder.copy(alpha = 0.65f))
+            HorizontalDivider(color = GoldBorder.copy(alpha = 0.65f))
 
             // Bottom Row: 3 action items (Photo, Feeling, Poll)
             Row(

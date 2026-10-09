@@ -55,6 +55,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.ThumbUp
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
+import coil.compose.AsyncImage
+import com.example.data.AdCampaign
 import com.example.data.AppLanguage
 import com.example.data.MeskotStrings
 import com.example.data.Post
@@ -80,6 +92,11 @@ fun FeedScreen(
     val tickerTimeMs by viewModel.tickerTimeMs.collectAsState()
     val isRefreshing by viewModel.isFeedRefreshing.collectAsState()
     val activeLiveStreams by viewModel.activeLiveStreams.collectAsState()
+    val adCampaigns by viewModel.adCampaigns.collectAsState()
+
+    val activeAdCampaigns = remember(adCampaigns) {
+        adCampaigns.filter { it.status == "ACTIVE" }
+    }
 
     val liveStreamsList = remember(activeLiveStreams) {
         activeLiveStreams.filter { it.isLive }
@@ -322,8 +339,8 @@ fun FeedScreen(
             }
         }
 
-        // Posts List
-        if (feedPosts.isEmpty()) {
+        // Posts List & Active Sponsored Ads Delivery (Facebook Ad Server Engine)
+        if (feedPosts.isEmpty() && activeAdCampaigns.isEmpty()) {
             item {
                 Column(
                     modifier = Modifier
@@ -343,28 +360,64 @@ fun FeedScreen(
                 }
             }
         } else {
-            items(feedPosts, key = { it.id }) { post ->
-                val comments = viewModel.getComments(post.id)
-                val userTier = viewModel.getUserMembershipTier(post.uid)
-                PostCard(
-                    post = post,
-                    currentUserId = currentUser?.uid,
-                    comments = comments,
-                    currentLanguage = currentLanguage,
-                    currentUserTier = userTier,
-                    onBoostClick = { viewModel.openBoostModal(it) },
-                    onUnlockVip = { viewModel.openSubscriptionModal(it) },
-                    onAuthorClick = { viewModel.openProfileByUid(it) },
-                    onToggleReaction = { pid, type -> viewModel.toggleReaction(pid, type) },
-                    onShare = { viewModel.sharePost(it) },
-                    onToggleSave = { viewModel.toggleSavePost(it) },
-                    onTipClick = { viewModel.openTipModal(it) },
-                    onOpenMenu = { viewModel.openPostMenu(it) },
-                    onAddComment = { pid, text, parentId -> viewModel.addComment(pid, text, parentId) },
-                    onToggleCommentLike = { pid, cid -> viewModel.toggleCommentLike(pid, cid) },
-                    onDeleteComment = { pid, cid -> viewModel.deleteComment(pid, cid) },
-                    onReelClick = { viewModel.viewReel(it) }
-                )
+            // If there are active campaigns and very few posts, ensure the latest active campaign is shown near top
+            if (activeAdCampaigns.isNotEmpty() && feedPosts.size < 2) {
+                items(activeAdCampaigns, key = { "sponsored_top_${it.id}" }) { campaign ->
+                    SponsoredFeedAdCard(
+                        campaign = campaign,
+                        onImpression = { viewModel.recordAdImpression(campaign.id) },
+                        onClickAd = { recordConversion ->
+                            viewModel.recordAdClick(campaign.id, recordConversion)
+                        },
+                        onEngagementClick = {
+                            viewModel.recordAdClick(campaign.id, recordConversion = true)
+                        }
+                    )
+                }
+            }
+
+            feedPosts.forEachIndexed { index, post ->
+                item(key = post.id) {
+                    val comments = viewModel.getComments(post.id)
+                    val userTier = viewModel.getUserMembershipTier(post.uid)
+                    PostCard(
+                        post = post,
+                        currentUserId = currentUser?.uid,
+                        comments = comments,
+                        currentLanguage = currentLanguage,
+                        currentUserTier = userTier,
+                        onBoostClick = { viewModel.openBoostModal(it) },
+                        onUnlockVip = { viewModel.openSubscriptionModal(it) },
+                        onAuthorClick = { viewModel.openProfileByUid(it) },
+                        onToggleReaction = { pid, type -> viewModel.toggleReaction(pid, type) },
+                        onShare = { viewModel.sharePost(it) },
+                        onToggleSave = { viewModel.toggleSavePost(it) },
+                        onTipClick = { viewModel.openTipModal(it) },
+                        onOpenMenu = { viewModel.openPostMenu(it) },
+                        onAddComment = { pid, text, parentId -> viewModel.addComment(pid, text, parentId) },
+                        onToggleCommentLike = { pid, cid -> viewModel.toggleCommentLike(pid, cid) },
+                        onDeleteComment = { pid, cid -> viewModel.deleteComment(pid, cid) },
+                        onReelClick = { viewModel.viewReel(it) }
+                    )
+                }
+
+                // Inject an active Sponsored Ad every 2 posts (Facebook News Feed Ad Slot)
+                if (activeAdCampaigns.isNotEmpty() && (index + 1) % 2 == 0) {
+                    val adIndex = (index / 2) % activeAdCampaigns.size
+                    val campaign = activeAdCampaigns[adIndex]
+                    item(key = "sponsored_feed_${campaign.id}_slot_$index") {
+                        SponsoredFeedAdCard(
+                            campaign = campaign,
+                            onImpression = { viewModel.recordAdImpression(campaign.id) },
+                            onClickAd = { recordConversion ->
+                                viewModel.recordAdClick(campaign.id, recordConversion)
+                            },
+                            onEngagementClick = {
+                                viewModel.recordAdClick(campaign.id, recordConversion = true)
+                            }
+                        )
+                    }
+                }
             }
         }
 
@@ -417,5 +470,258 @@ fun StoryAvatarItem(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+@Composable
+fun SponsoredFeedAdCard(
+    campaign: AdCampaign,
+    onImpression: () -> Unit,
+    onClickAd: (Boolean) -> Unit,
+    onEngagementClick: () -> Unit
+) {
+    val uriHandler = LocalUriHandler.current
+
+    // Record real-time ad impression once when rendered in feed
+    LaunchedEffect(campaign.id) {
+        onImpression()
+    }
+
+    val openDestination = { isCta: Boolean ->
+        onClickAd(isCta)
+        val rawUrl = campaign.destinationUrl.trim()
+        val fullUrl = if (rawUrl.startsWith("http://", true) || rawUrl.startsWith("https://", true)) {
+            rawUrl
+        } else {
+            "https://$rawUrl"
+        }
+        try {
+            uriHandler.openUri(fullUrl)
+        } catch (_: Exception) {
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+            .testTag("sponsored_feed_ad_${campaign.id}"),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        border = BorderStroke(1.2.dp, GoldBorder)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Top luminous Meskot Gold accent strip
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(GoldDeep, GoldLight, GoldAccent, GoldDeep)
+                        )
+                    )
+            )
+
+            // Advertiser Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    UserAvatar(
+                        photoUrl = campaign.advertiserAvatar,
+                        name = campaign.advertiserName,
+                        size = 40
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = campaign.advertiserName,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Ink
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = GoldSurface,
+                                border = BorderStroke(0.8.dp, GoldBorder)
+                            ) {
+                                Text(
+                                    text = "Sponsored",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = GoldDeep,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                )
+                            }
+                            Text(
+                                text = " · ",
+                                fontSize = 12.sp,
+                                color = MutedText
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Public,
+                                contentDescription = "Sponsored Public",
+                                tint = GoldDeep,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
+                }
+
+                Icon(
+                    imageVector = Icons.Default.MoreHoriz,
+                    contentDescription = "Ad options",
+                    tint = MutedText
+                )
+            }
+
+            // Primary Caption Text
+            if (campaign.primaryText.isNotBlank()) {
+                Text(
+                    text = campaign.primaryText,
+                    fontSize = 14.sp,
+                    color = Ink,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+
+            // Ad Media Image
+            if (campaign.mediaUrl.isNotBlank()) {
+                AsyncImage(
+                    model = campaign.mediaUrl,
+                    contentDescription = campaign.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(210.dp)
+                        .background(Paper)
+                        .clickable { openDestination(false) }
+                )
+            }
+
+            // Destination Link Bar + CTA Button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(GoldSurface)
+                    .clickable { openDestination(true) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = null,
+                            tint = GoldDeep,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = campaign.headline.ifBlank { "MESKOT.COM" },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = GoldDeep,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Text(
+                        text = campaign.advertiserName,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                if (campaign.ctaText.isNotBlank() && !campaign.ctaText.equals("No button", ignoreCase = true)) {
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Surface(
+                        onClick = { openDestination(true) },
+                        shape = RoundedCornerShape(8.dp),
+                        color = GoldDeep,
+                        border = BorderStroke(1.dp, GoldLight.copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = campaign.ctaText,
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.OpenInNew,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = LineBorder.copy(alpha = 0.6f))
+
+            // Live Ad Telemetry + Social Engagement Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${campaign.impressions} reach · ${campaign.clicks} clicks",
+                    fontSize = 11.sp,
+                    color = MutedText,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { onEngagementClick() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ThumbUp,
+                            contentDescription = "Like Ad",
+                            tint = GoldDeep,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Like", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = GoldDeep)
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { openDestination(true) }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Share,
+                            contentDescription = "Visit Link",
+                            tint = GoldDeep,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Visit", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = GoldDeep)
+                    }
+                }
+            }
+        }
     }
 }

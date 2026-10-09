@@ -1073,6 +1073,13 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _isCreateCampaignOpen.value = false
     }
 
+    val isAdsServerSynced: StateFlow<Boolean> = repository.isAdsServerSynced
+
+    fun refreshAdCampaignsFromServer() {
+        repository.refreshAdCampaignsFromServer()
+        showMessage("🔄 Synced Ad Campaigns with Meskot Cloud Ad Server.")
+    }
+
     fun createAdCampaign(
         name: String,
         objective: String,
@@ -1083,12 +1090,17 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         ctaText: String,
         destinationUrl: String,
         targetAudience: String = "Men/Women, 18-65+, 1 location",
-        deductFromWallet: Boolean = false
-    ) {
+        durationDays: Int = 5,
+        deductFromWallet: Boolean = false,
+        paymentMethod: String = "Chapa Checkout (USD/ETB)",
+        paymentRef: String = "",
+        totalPaidEtb: Double = dailyBudgetEtb * durationDays.coerceAtLeast(1) * 1.05
+    ): Boolean {
         val currentBalance = currentUser.value?.creatorNetBalance ?: 0.0
-        if (deductFromWallet && (currentBalance < dailyBudgetEtb || dailyBudgetEtb <= 0)) {
-            showMessage("⚠️ Insufficient wallet balance. Please verify card payment or deposit funds first.")
-            return
+        val chargeAmountEtb = if (totalPaidEtb > 0.0) totalPaidEtb else (dailyBudgetEtb * durationDays.coerceAtLeast(1) * 1.05)
+        if (deductFromWallet && (currentBalance < chargeAmountEtb || chargeAmountEtb <= 0)) {
+            showMessage("⚠️ Insufficient Meskot Wallet balance. Please deposit funds or pay via Chapa / Card.")
+            return false
         }
         val success = repository.createAdCampaign(
             name = name,
@@ -1100,18 +1112,99 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
             ctaText = ctaText,
             destinationUrl = destinationUrl,
             targetAudience = targetAudience,
-            deductFromWallet = deductFromWallet
+            durationDays = durationDays,
+            deductFromWallet = deductFromWallet,
+            paymentMethod = paymentMethod,
+            paymentRef = paymentRef,
+            totalPaidEtb = chargeAmountEtb
         )
         if (success) {
             closeCreateCampaignModal()
-            showMessage("🚀 Ad promoted! \"$name\" is now active.")
+            val refNote = if (paymentRef.isNotBlank()) " · Ref: $paymentRef" else ""
+            showMessage("🚀 Ad promoted on Meskot Ad Server! \"$name\" is now live ($paymentMethod$refNote).")
         } else {
             showMessage("⚠️ Could not launch campaign.")
         }
+        return success
+    }
+
+    /**
+     * Initiates a real Chapa inline payment checkout (Card / Telebirr / CBE Birr / PayPal / M-Pesa)
+     * for an Ad Campaign and automatically publishes the campaign to Firestore upon verified payment.
+     */
+    fun initiateAdCampaignChapaPayment(
+        name: String,
+        objective: String,
+        dailyBudgetEtb: Double,
+        totalAmountEtb: Double,
+        headline: String,
+        primaryText: String,
+        mediaUrl: String,
+        ctaText: String,
+        destinationUrl: String,
+        targetAudience: String,
+        durationDays: Int,
+        currencyCode: String = "USD",
+        paymentChannelLabel: String = "Chapa Inline Checkout (Card/Telebirr/CBE)",
+        onPublished: (String) -> Unit = {}
+    ) {
+        val user = currentUser.value
+        val fName = user?.displayName?.split(" ")?.firstOrNull() ?: "Yemane"
+        val lName = user?.displayName?.split(" ")?.drop(1)?.joinToString(" ")?.ifBlank { "Tsadik" } ?: "Tsadik"
+        val email = if (user?.email?.contains("@") == true) user.email else "advertiser@meskot.app"
+        val cfg = repository.chapaConfig.value
+        val ref = "CHP-AD-" + System.currentTimeMillis()
+        val cur = PaymentCurrency.fromCode(currencyCode)
+
+        launchChapaPayment(
+            ChapaPaymentSession(
+                amount = totalAmountEtb,
+                title = "Meskot Ad Campaign: $name",
+                txRef = ref,
+                email = email,
+                firstName = fName,
+                lastName = lName,
+                initialCurrency = cur.code,
+                publicKey = cfg.publicKey,
+                isLiveMode = cfg.isLiveMode,
+                onPaymentCompleted = { completedRef ->
+                    createAdCampaign(
+                        name = name,
+                        objective = objective,
+                        dailyBudgetEtb = dailyBudgetEtb,
+                        headline = headline,
+                        primaryText = primaryText,
+                        mediaUrl = mediaUrl,
+                        ctaText = ctaText,
+                        destinationUrl = destinationUrl,
+                        targetAudience = targetAudience,
+                        durationDays = durationDays,
+                        deductFromWallet = false,
+                        paymentMethod = paymentChannelLabel,
+                        paymentRef = completedRef,
+                        totalPaidEtb = totalAmountEtb
+                    )
+                    onPublished(completedRef)
+                }
+            )
+        )
     }
 
     fun toggleAdCampaignStatus(campaignId: String) {
         repository.toggleAdCampaignStatus(campaignId)
+    }
+
+    fun recordAdImpression(campaignId: String) {
+        repository.recordAdImpression(campaignId)
+    }
+
+    fun recordAdClick(campaignId: String, recordConversion: Boolean = false) {
+        repository.recordAdClick(campaignId, recordConversion)
+    }
+
+    fun deleteAdCampaign(campaignId: String) {
+        repository.deleteAdCampaign(campaignId)
+        showMessage("🗑️ Ad campaign removed from server.")
     }
 
     // Creator Payouts
@@ -1648,6 +1741,135 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
 
     fun toggleSaveListing(itemId: String) {
         repository.toggleSaveListing(itemId)
+        val isNowSaved = repository.savedListingIds.value.contains(itemId)
+        showMessage(if (isNowSaved) "Saved to your Marketplace items" else "Removed from Saved items")
+    }
+
+    fun incrementMarketplaceListingViews(itemId: String) {
+        repository.incrementMarketplaceListingViews(itemId)
+    }
+
+    fun toggleMarketplaceListingAvailability(itemId: String) {
+        val updated = repository.toggleMarketplaceListingAvailability(itemId)
+        if (updated != null) {
+            showMessage(
+                if (updated.isAvailable) "\"${updated.title}\" marked as Available"
+                else "\"${updated.title}\" marked as Sold"
+            )
+        }
+    }
+
+    fun updateMarketplaceListingDetails(
+        itemId: String,
+        newTitle: String,
+        newPrice: Double,
+        newCurrency: String,
+        newCondition: String,
+        newDescription: String,
+        newIsNegotiable: Boolean
+    ) {
+        val updated = repository.updateMarketplaceListingDetails(
+            itemId = itemId,
+            newTitle = newTitle,
+            newPrice = newPrice,
+            newCurrency = newCurrency,
+            newCondition = newCondition,
+            newDescription = newDescription,
+            newIsNegotiable = newIsNegotiable
+        )
+        if (updated != null) {
+            showMessage("Updated listing \"${updated.title}\"")
+        }
+    }
+
+    fun deleteMarketplaceListing(itemId: String, title: String) {
+        repository.deleteMarketplaceListing(itemId)
+        showMessage("Deleted listing \"$title\"")
+    }
+
+    fun boostMarketplaceListing(item: ListingItem, dailyBudgetEtb: Double = 350.0, durationDays: Int = 5) {
+        val totalBoostEtb = dailyBudgetEtb * durationDays * 1.05
+        val user = currentUser.value
+        val fName = user?.displayName?.split(" ")?.firstOrNull() ?: "Meskot"
+        val lName = user?.displayName?.split(" ")?.drop(1)?.joinToString(" ")?.ifBlank { "Seller" } ?: "Seller"
+        val email = if (user?.email?.contains("@") == true) user.email else "seller@meskot.app"
+        val cfg = repository.chapaConfig.value
+        val ref = "CHP-MKT-BOOST-" + System.currentTimeMillis()
+
+        launchChapaPayment(
+            ChapaPaymentSession(
+                amount = totalBoostEtb,
+                title = "Boost Listing · ${item.title.take(28)}",
+                txRef = ref,
+                email = email,
+                firstName = fName,
+                lastName = lName,
+                initialCurrency = "ETB",
+                publicKey = cfg.publicKey,
+                isLiveMode = cfg.isLiveMode,
+                onPaymentCompleted = { txRef ->
+                    repository.promoteMarketplaceListing(item.id)
+                    repository.createAdCampaign(
+                        name = "Marketplace Boost: ${item.title.take(28)}",
+                        objective = "CONVERSIONS",
+                        dailyBudgetEtb = dailyBudgetEtb,
+                        headline = "${item.formattedPrice} · ${item.title}",
+                        primaryText = item.description.take(180),
+                        mediaUrl = item.primaryImageUrl,
+                        ctaText = "Shop Now",
+                        destinationUrl = "https://meskot.app/marketplace/${item.id}",
+                        durationDays = durationDays,
+                        targetAudience = "${item.location.name} (+${item.location.radiusKm} km)",
+                        paymentMethod = "Chapa Checkout",
+                        paymentRef = txRef,
+                        totalPaidEtb = totalBoostEtb
+                    )
+                    showMessage("Listing promoted with Golden Meskot Boost! (Ref: $txRef)")
+                }
+            )
+        )
+    }
+
+    fun sendMarketplaceOffer(item: ListingItem, offerAmount: Double, offerCurrency: String) {
+        val formattedOffer = if (offerCurrency.equals("USD", ignoreCase = true)) {
+            "$${String.format(java.util.Locale.US, "%,.0f", offerAmount)}"
+        } else {
+            "ETB ${String.format(java.util.Locale.US, "%,.0f", offerAmount)}"
+        }
+        val offerMessage = "🤝 Formal Offer: I would like to offer $formattedOffer for \"${item.title}\" (Listed at ${item.formattedPrice}). Let me know if we have a deal!"
+        repository.sendMarketplaceInquiry(item, offerMessage)
+        showMessage("Sent formal offer of $formattedOffer to ${item.sellerName}!")
+    }
+
+    fun buyMarketplaceItemWithChapa(item: ListingItem, onPurchased: () -> Unit = {}) {
+        val isUsd = item.currency.equals("USD", ignoreCase = true)
+        val amountInEtb = if (isUsd) (item.price * 125.0).coerceAtLeast(100.0) else item.price.coerceAtLeast(10.0)
+        val user = currentUser.value
+        val fName = user?.displayName?.split(" ")?.firstOrNull() ?: "Meskot"
+        val lName = user?.displayName?.split(" ")?.drop(1)?.joinToString(" ")?.ifBlank { "Buyer" } ?: "Buyer"
+        val email = if (user?.email?.contains("@") == true) user.email else "buyer@meskot.app"
+        val cfg = repository.chapaConfig.value
+        val ref = "CHP-MKT-BUY-" + System.currentTimeMillis()
+
+        launchChapaPayment(
+            ChapaPaymentSession(
+                amount = amountInEtb,
+                title = "Buy on Meskot · ${item.title.take(28)}",
+                txRef = ref,
+                email = email,
+                firstName = fName,
+                lastName = lName,
+                initialCurrency = if (isUsd) "USD" else "ETB",
+                publicKey = cfg.publicKey,
+                isLiveMode = cfg.isLiveMode,
+                onPaymentCompleted = { txRef ->
+                    val receiptMsg = "✅ Paid ${item.formattedPrice} via Chapa Escrow (Ref: $txRef) for \"${item.title}\". Please confirm meetup/delivery details!"
+                    repository.sendMarketplaceInquiry(item, receiptMsg)
+                    showMessage("Payment confirmed (Ref: $txRef)! Receipt sent to ${item.sellerName}.")
+                    onPurchased()
+                }
+            )
+        )
     }
 
     fun createMarketplaceListing(

@@ -1172,7 +1172,7 @@ fun TipModal(
                     }
 
                     Text(
-                        text = "Send Facebook-like animated gifts to reward the creator! 1 Star = $0.01 USD (~${String.format(java.util.Locale.US, "%.2f", 0.01 * nbeRate)} ETB).",
+                        text = "Send Meskot animated gifts to reward the creator! 1 Star = $0.01 USD (~${String.format(java.util.Locale.US, "%.2f", 0.01 * nbeRate)} ETB).",
                         fontSize = 11.sp,
                         color = MutedText,
                         modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)

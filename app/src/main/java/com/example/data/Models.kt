@@ -509,7 +509,12 @@ data class AdCampaign(
     val destinationUrl: String,
     val advertiserName: String,
     val advertiserAvatar: String,
+    val advertiserUid: String = "",
+    val durationDays: Int = 5,
     val targetAudience: String = "Ethiopia & Global Diaspora (18-50)",
+    val paymentMethod: String = "Chapa Checkout (USD/ETB)",
+    val paymentRef: String = "",
+    val totalPaidEtb: Double = 0.0,
     val createdAt: Long = System.currentTimeMillis()
 )
 

@@ -81,16 +81,78 @@ fun GroupsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(Paper)
             .testTag("groups_screen")
     ) {
-        // Tab switcher
+        // Meskot Brand Header Banner for Groups
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = CardBg,
+            shadowElevation = 2.dp
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(com.example.ui.theme.MeskotLogoHorizontalBrush)
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = MeskotStrings.get("navGroups", currentLanguage),
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Serif,
+                            color = Ink
+                        )
+                        Text(
+                            text = "ማኅበራት በመስኮት · Habesha Communities & Circles",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = com.example.ui.theme.GoldDeep
+                        )
+                    }
+
+                    Button(
+                        onClick = { isCreateGroupDialogOpen = true },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Gold,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.height(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = MeskotStrings.get("create", currentLanguage),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // Tab switcher styled in Meskot Gold & Parchment
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 8.dp),
-            shape = RoundedCornerShape(14.dp),
-            color = CardBg,
-            border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder)
+            shape = RoundedCornerShape(16.dp),
+            color = com.example.ui.theme.GoldSurface,
+            border = androidx.compose.foundation.BorderStroke(1.2.dp, com.example.ui.theme.GoldBorder)
         ) {
             Row(modifier = Modifier.padding(4.dp)) {
                 TabButton(
@@ -108,7 +170,7 @@ fun GroupsScreen(
             }
         }
 
-        // Search & Create Group Row
+        // Search Row in Meskot Warm Parchment & Gold Border
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -119,26 +181,30 @@ fun GroupsScreen(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 13.sp),
-                colors = com.example.ui.theme.meskotTextFieldColors(containerColor = Paper2, borderColor = LineBorder),
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = MutedText) },
-                placeholder = { Text(MeskotStrings.get("searchGroups", currentLanguage), fontSize = 13.sp, color = MutedText) },
+                colors = com.example.ui.theme.meskotTextFieldColors(
+                    containerColor = CardBg,
+                    borderColor = com.example.ui.theme.GoldBorder
+                ),
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = com.example.ui.theme.GoldDeep
+                    )
+                },
+                placeholder = {
+                    Text(
+                        MeskotStrings.get("searchGroups", currentLanguage),
+                        fontSize = 13.sp,
+                        color = MutedText
+                    )
+                },
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
                     .height(52.dp),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(22.dp),
                 singleLine = true
             )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Button(
-                onClick = { isCreateGroupDialogOpen = true },
-                colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.White),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.height(50.dp)
-            ) {
-                Text(text = MeskotStrings.get("create", currentLanguage), fontWeight = FontWeight.Bold)
-            }
         }
 
         // Groups List
@@ -197,72 +263,92 @@ fun GroupRowItem(
             .fillMaxWidth()
             .padding(vertical = 6.dp)
             .clickable { onClick() },
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = CardBg),
-        border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder)
+        border = androidx.compose.foundation.BorderStroke(1.2.dp, com.example.ui.theme.GoldBorder)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Group Cover Thumbnail with Initial
-            val bgCol = try { Color(android.graphics.Color.parseColor(group.coverColorHex)) } catch (e: Exception) { Gold }
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Subtle Meskot gold top accent strip on each group card
             Box(
                 modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(bgCol),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(com.example.ui.theme.MeskotLogoHorizontalBrush)
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = group.name.take(1).uppercase(),
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Serif
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = group.name,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "${group.memberCount} ${MeskotStrings.get("members", currentLanguage)} · ${group.description}",
-                    fontSize = 12.sp,
-                    color = MutedText,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            if (group.isJoined) {
-                OutlinedButton(
-                    onClick = onToggleJoin,
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.height(34.dp)
+                // Group Cover Thumbnail with Initial
+                val bgCol = try { Color(android.graphics.Color.parseColor(group.coverColorHex)) } catch (e: Exception) { Gold }
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(bgCol)
+                        .border(1.5.dp, com.example.ui.theme.GoldBorder, RoundedCornerShape(14.dp)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(text = MeskotStrings.get("member", currentLanguage), fontSize = 11.sp, color = Ink)
+                    Text(
+                        text = group.name.take(1).uppercase(),
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Serif
+                    )
                 }
-            } else {
-                Button(
-                    onClick = onToggleJoin,
-                    colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.White),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.height(34.dp)
-                ) {
-                    Text(text = MeskotStrings.get("join", currentLanguage), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = group.name,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${group.memberCount} ${MeskotStrings.get("members", currentLanguage)} · ${group.description}",
+                        fontSize = 12.sp,
+                        color = MutedText,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                if (group.isJoined) {
+                    OutlinedButton(
+                        onClick = onToggleJoin,
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.2.dp, com.example.ui.theme.GoldBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = com.example.ui.theme.GoldSurface,
+                            contentColor = com.example.ui.theme.GoldDeep
+                        ),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Text(
+                            text = MeskotStrings.get("member", currentLanguage),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = com.example.ui.theme.GoldDeep
+                        )
+                    }
+                } else {
+                    Button(
+                        onClick = onToggleJoin,
+                        colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.White),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Text(text = MeskotStrings.get("join", currentLanguage), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -280,61 +366,76 @@ fun CreateGroupDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = CardBg),
+            border = androidx.compose.foundation.BorderStroke(1.2.dp, com.example.ui.theme.GoldBorder),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = MeskotStrings.get("createGroup", currentLanguage),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Serif,
-                    color = Ink
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(com.example.ui.theme.MeskotLogoHorizontalBrush)
                 )
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = MeskotStrings.get("createGroup", currentLanguage),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Serif,
+                        color = Ink
+                    )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(MeskotStrings.get("groupName", currentLanguage)) },
-                    textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
-                    colors = com.example.ui.theme.meskotTextFieldColors(),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = desc,
-                    onValueChange = { desc = it },
-                    label = { Text(MeskotStrings.get("groupDesc", currentLanguage)) },
-                    textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
-                    colors = com.example.ui.theme.meskotTextFieldColors(),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    minLines = 2
-                )
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text(text = MeskotStrings.get("cancel", currentLanguage), color = MutedText)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = { onCreate(name, desc) },
-                        enabled = name.isNotBlank(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.White),
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text(MeskotStrings.get("groupName", currentLanguage)) },
+                        textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
+                        colors = com.example.ui.theme.meskotTextFieldColors(
+                            containerColor = Paper,
+                            borderColor = com.example.ui.theme.GoldBorder
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = desc,
+                        onValueChange = { desc = it },
+                        label = { Text(MeskotStrings.get("groupDesc", currentLanguage)) },
+                        textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
+                        colors = com.example.ui.theme.meskotTextFieldColors(
+                            containerColor = Paper,
+                            borderColor = com.example.ui.theme.GoldBorder
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        minLines = 2
+                    )
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        Text(text = MeskotStrings.get("create", currentLanguage), fontWeight = FontWeight.Bold)
+                        TextButton(onClick = onDismiss) {
+                            Text(text = MeskotStrings.get("cancel", currentLanguage), color = MutedText)
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = { onCreate(name, desc) },
+                            enabled = name.isNotBlank(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.White),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(text = MeskotStrings.get("create", currentLanguage), fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

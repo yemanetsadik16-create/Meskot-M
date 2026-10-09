@@ -10,6 +10,7 @@ val Paper = Color(0xFFF7F5F0) // Warm linen backdrop complimenting the gold embl
 val Paper2 = Color(0xFFEBE6DC) // Warm tinted container
 val CardBg = Color(0xFFFFFFFC) // Pristine warm card background
 val Gold = Color(0xFFC48F37) // Luminous Meskot Gold
+val GoldAccent = Color(0xFFC48F37) // Luminous Meskot Gold Accent
 val GoldDeep = Color(0xFF946820) // Deep royal amber
 val GoldLight = Color(0xFFF3CA68) // Radiant gold highlight
 val GoldSurface = Color(0xFFFDF7EC) // Gentle warm gold surface tint
