@@ -64,7 +64,7 @@ class MeskotRepository(
 
                 val storiesDeferred = CompletableDeferred<Unit>()
                 FirebaseManager.fetchStoriesOnce { liveStories ->
-                    _stories.value = liveStories
+                    mergeLiveStories(liveStories)
                     storiesDeferred.complete(Unit)
                 }
 
@@ -85,9 +85,85 @@ class MeskotRepository(
     val posts: StateFlow<List<Post>> = _posts.asStateFlow()
 
     // Stories list (synchronized with Firebase Firestore with expiration timer)
-    private val _stories = MutableStateFlow<List<StoryItem>>(emptyList())
+    private val _stories = MutableStateFlow<List<StoryItem>>(createSeedCommunityStories())
     val stories: StateFlow<List<StoryItem>> = _stories.asStateFlow()
     private var storiesRegistration: com.google.firebase.firestore.ListenerRegistration? = null
+
+    private fun createSeedCommunityStories(): List<StoryItem> {
+        val now = System.currentTimeMillis()
+        return listOf(
+            StoryItem(
+                id = "preset_story_1",
+                uid = "community_selam",
+                authorName = "Selamawit T.",
+                authorPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
+                mediaUrl = "https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=800&q=80",
+                caption = "Addis skyline looking radiant today ✨",
+                filterName = "Sunset",
+                createdAt = now - 2 * 3600 * 1000L,
+                expiresAt = now + 22 * 3600 * 1000L,
+                viewers = listOf("community_meskot", "community_dawit"),
+                likes = mapOf("community_meskot" to true, "community_dawit" to true),
+                reactions = mapOf("community_meskot" to "❤️", "community_dawit" to "🔥"),
+                commentCount = 2
+            ),
+            StoryItem(
+                id = "preset_story_2",
+                uid = "community_meskot",
+                authorName = "Meskot Official",
+                authorPhoto = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
+                mediaUrl = "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=800&q=80",
+                caption = "Fresh roast traditional Buna ☕",
+                filterName = "Warm",
+                createdAt = now - 4 * 3600 * 1000L,
+                expiresAt = now + 20 * 3600 * 1000L,
+                viewers = listOf("community_selam", "community_kalkidan"),
+                likes = mapOf("community_selam" to true),
+                reactions = mapOf("community_selam" to "☕"),
+                commentCount = 2
+            ),
+            StoryItem(
+                id = "preset_story_3",
+                uid = "community_dawit",
+                authorName = "Dawit Gebre",
+                authorPhoto = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
+                mediaUrl = "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80",
+                caption = "Sunset over the Ethiopian highlands 🌄",
+                filterName = "Vibrant",
+                createdAt = now - 6 * 3600 * 1000L,
+                expiresAt = now + 18 * 3600 * 1000L,
+                viewers = listOf("community_selam"),
+                likes = mapOf("community_selam" to true),
+                reactions = mapOf("community_selam" to "😍"),
+                commentCount = 1
+            ),
+            StoryItem(
+                id = "preset_story_4",
+                uid = "community_kalkidan",
+                authorName = "Kalkidan M.",
+                authorPhoto = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
+                mediaUrl = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80",
+                caption = "Serene lake breezes 🌿",
+                filterName = "Normal",
+                createdAt = now - 8 * 3600 * 1000L,
+                expiresAt = now + 16 * 3600 * 1000L,
+                viewers = listOf("community_dawit"),
+                likes = mapOf("community_dawit" to true),
+                reactions = mapOf("community_dawit" to "✨"),
+                commentCount = 1
+            )
+        )
+    }
+
+    private fun mergeLiveStories(liveStories: List<StoryItem>) {
+        val liveMap = liveStories.associateBy { it.id }
+        val currentMap = _stories.value.associateBy { it.id }
+        val seeds = createSeedCommunityStories().map { seed ->
+            liveMap[seed.id] ?: currentMap[seed.id] ?: seed
+        }
+        val nonSeedLive = liveStories.filterNot { s -> seeds.any { it.id == s.id } }
+        _stories.value = (nonSeedLive + seeds).sortedByDescending { it.createdAt }
+    }
 
     // Comments map: postId -> List<Comment>
     private val _comments = MutableStateFlow<Map<String, List<Comment>>>(emptyMap())
@@ -605,7 +681,7 @@ class MeskotRepository(
 
             storiesRegistration?.remove()
             storiesRegistration = FirebaseManager.listenToStories { liveStories ->
-                _stories.value = liveStories
+                mergeLiveStories(liveStories)
             }
 
             // Real-time active Live Streams in Firebase Firestore
@@ -1172,9 +1248,12 @@ class MeskotRepository(
 
     fun recordStoryView(storyId: String, viewerUid: String) {
         if (viewerUid.isBlank()) return
+        var updatedStory: StoryItem? = null
         _stories.value = _stories.value.map {
             if (it.id == storyId && !it.viewers.contains(viewerUid)) {
-                it.copy(viewers = it.viewers + viewerUid)
+                val copy = it.copy(viewers = it.viewers + viewerUid)
+                updatedStory = copy
+                copy
             } else it
         }
         FirebaseManager.recordStoryView(storyId, viewerUid)
@@ -1182,14 +1261,25 @@ class MeskotRepository(
 
     fun toggleStoryLike(storyId: String, uid: String) {
         val actor = _currentUser.value
-        _stories.value = _stories.value.map { story ->
+        val existing = _stories.value.find { it.id == storyId }
+        val baseList = if (existing == null) {
+            val seed = createSeedCommunityStories().find { it.id == storyId }
+            if (seed != null) _stories.value + seed else _stories.value
+        } else _stories.value
+
+        _stories.value = baseList.map { story ->
             if (story.id == storyId) {
                 val currentlyLiked = story.likes[uid] ?: false
                 val newLikes = story.likes.toMutableMap()
+                val newReactions = story.reactions.toMutableMap()
                 if (currentlyLiked) {
                     newLikes.remove(uid)
+                    newReactions.remove(uid)
                 } else {
                     newLikes[uid] = true
+                    if (!newReactions.containsKey(uid)) {
+                        newReactions[uid] = "❤️"
+                    }
                     // Direct notification to story owner (story.uid) and prevent self-notification
                     if (actor != null && actor.uid != story.uid) {
                         addNotification(
@@ -1203,8 +1293,49 @@ class MeskotRepository(
                         )
                     }
                 }
-                FirebaseManager.toggleStoryLike(storyId, uid, !currentlyLiked)
-                story.copy(likes = newLikes)
+                val updated = story.copy(likes = newLikes, reactions = newReactions)
+                FirebaseManager.toggleStoryLike(storyId, uid, !currentlyLiked, fallbackStory = updated)
+                updated
+            } else story
+        }
+    }
+
+    fun reactToStory(storyId: String, uid: String, emoji: String) {
+        val actor = _currentUser.value
+        val existing = _stories.value.find { it.id == storyId }
+        val baseList = if (existing == null) {
+            val seed = createSeedCommunityStories().find { it.id == storyId }
+            if (seed != null) _stories.value + seed else _stories.value
+        } else _stories.value
+
+        _stories.value = baseList.map { story ->
+            if (story.id == storyId) {
+                val currentEmoji = story.reactions[uid]
+                val newReactions = story.reactions.toMutableMap()
+                val newLikes = story.likes.toMutableMap()
+                val nextEmoji: String? = if (currentEmoji == emoji) {
+                    newReactions.remove(uid)
+                    newLikes.remove(uid)
+                    null
+                } else {
+                    newReactions[uid] = emoji
+                    newLikes[uid] = true
+                    if (actor != null && actor.uid != story.uid) {
+                        addNotification(
+                            fromUid = actor.uid,
+                            fromName = actor.displayName,
+                            fromPhoto = actor.photoUrl,
+                            toUid = story.uid,
+                            type = "reaction",
+                            targetId = storyId,
+                            customText = "${actor.displayName} reacted $emoji to your story"
+                        )
+                    }
+                    emoji
+                }
+                val updated = story.copy(likes = newLikes, reactions = newReactions)
+                FirebaseManager.reactToStory(storyId, uid, nextEmoji, fallbackStory = updated)
+                updated
             } else story
         }
     }
@@ -2235,7 +2366,7 @@ class MeskotRepository(
             createdAt = System.currentTimeMillis(),
             isAuthorVerified = user.isVerified
         )
-        val currentList = _comments.value[postId] ?: emptyList()
+        val currentList = getCommentsForPost(postId)
         _comments.value = _comments.value + (postId to (currentList + newComment))
         // Increment post comment count
         val postExists = _posts.value.any { it.id == postId }
@@ -2244,24 +2375,34 @@ class MeskotRepository(
                 if (it.id == postId) it.copy(commentCount = it.commentCount + 1) else it
             }
         }
+        // Increment story comment count if this is a story
+        val storyExists = _stories.value.any { it.id == postId }
+        if (storyExists) {
+            _stories.value = _stories.value.map {
+                if (it.id == postId) it.copy(commentCount = maxOf(it.commentCount + 1, currentList.size + 1)) else it
+            }
+        }
         FirebaseManager.addComment(newComment)
         val post = _posts.value.find { it.id == postId }
-        // Self-notification guard: only notify if actor_id (user.uid) != post_author_id (post.uid)
-        if (post != null && user.uid != post.uid) {
+        val story = _stories.value.find { it.id == postId }
+        val ownerUid = post?.uid ?: story?.uid
+        // Self-notification guard: only notify if actor_id (user.uid) != owner_id
+        if (ownerUid != null && user.uid != ownerUid) {
+            val contextLabel = if (story != null) "story" else "post"
             addNotification(
                 fromUid = user.uid,
                 fromName = user.displayName,
                 fromPhoto = user.photoUrl,
-                toUid = post.uid, // Directed to post author (owner_id), NOT the triggering user
+                toUid = ownerUid, // Directed to post/story author (owner_id), NOT the triggering user
                 type = "comment",
                 targetId = postId,
-                customText = "${user.displayName} commented on your post: \"${text.take(60)}\""
+                customText = "${user.displayName} commented on your $contextLabel: \"${text.take(60)}\""
             )
         }
-        // If replying to another user's comment, also notify the parent comment author (if distinct from actor and post author)
+        // If replying to another user's comment, also notify the parent comment author (if distinct from actor and post/story author)
         if (parentId != null) {
             val parentComment = currentList.find { it.id == parentId }
-            if (parentComment != null && parentComment.uid != user.uid && parentComment.uid != post?.uid) {
+            if (parentComment != null && parentComment.uid != user.uid && parentComment.uid != ownerUid) {
                 addNotification(
                     fromUid = user.uid,
                     fromName = user.displayName,
@@ -2277,14 +2418,18 @@ class MeskotRepository(
 
     fun toggleCommentLike(postId: String, commentId: String) {
         val user = _currentUser.value ?: return
-        val commentsList = _comments.value[postId] ?: return
+        val commentsList = getCommentsForPost(postId)
+        if (commentsList.isEmpty()) return
         _comments.value = _comments.value + (postId to commentsList.map { comment ->
             if (comment.id == commentId) {
                 val updatedLikes = comment.likes.toMutableMap()
+                val isNowLiked: Boolean
                 if (updatedLikes[user.uid] == true) {
                     updatedLikes.remove(user.uid)
+                    isNowLiked = false
                 } else {
                     updatedLikes[user.uid] = true
+                    isNowLiked = true
                     // Self-notification guard: only notify comment owner if actor_id != comment_author_id
                     if (user.uid != comment.uid) {
                         addNotification(
@@ -2298,22 +2443,28 @@ class MeskotRepository(
                         )
                     }
                 }
+                FirebaseManager.toggleCommentLike(commentId, user.uid, isNowLiked)
                 comment.copy(likes = updatedLikes)
             } else comment
         })
     }
 
     fun editComment(postId: String, commentId: String, newText: String) {
-        val commentsList = _comments.value[postId] ?: return
+        val commentsList = getCommentsForPost(postId)
+        if (commentsList.isEmpty()) return
         _comments.value = _comments.value + (postId to commentsList.map {
             if (it.id == commentId) it.copy(text = newText, editedAt = System.currentTimeMillis()) else it
         })
     }
 
     fun deleteComment(postId: String, commentId: String) {
-        val commentsList = _comments.value[postId] ?: return
+        val commentsList = getCommentsForPost(postId)
+        if (commentsList.isEmpty()) return
         _comments.value = _comments.value + (postId to commentsList.filterNot { it.id == commentId })
         _posts.value = _posts.value.map {
+            if (it.id == postId) it.copy(commentCount = maxOf(0, it.commentCount - 1)) else it
+        }
+        _stories.value = _stories.value.map {
             if (it.id == postId) it.copy(commentCount = maxOf(0, it.commentCount - 1)) else it
         }
         FirebaseManager.deleteComment(postId, commentId)

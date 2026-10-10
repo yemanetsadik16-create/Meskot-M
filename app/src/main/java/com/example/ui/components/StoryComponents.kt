@@ -4,18 +4,20 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -25,6 +27,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -32,13 +35,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -50,6 +56,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.example.data.AppLanguage
+import com.example.data.Comment
 import com.example.data.MeskotStrings
 import com.example.data.StoryItem
 import com.example.data.User
@@ -88,9 +95,11 @@ val StoryExpirationOptions = listOf(
     1 to "1 Hour (Flash Story)"
 )
 
+val StoryQuickReactions = listOf("❤️", "🔥", "😍", "👏", "☕", "✨")
+
 /**
  * Create Story Dialog allowing photo capture via device camera, filter styling,
- * captioning, and Firebase expiration timer selection.
+ * captioning, and Firebase expiration timer selection — styled in Meskot Royal Gold & Crimson.
  */
 @Composable
 fun CreateStoryDialog(
@@ -109,7 +118,7 @@ fun CreateStoryDialog(
     var isUploading by remember { mutableStateOf(false) }
     var showPermissionRationale by remember { mutableStateOf(false) }
 
-    // Camera Capture Launcher (Takes high resolution preview bitmap from device camera)
+    // Camera Capture Launcher
     val takePictureLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { bitmap ->
@@ -163,7 +172,7 @@ fun CreateStoryDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.95f))
+                .background(InkDark.copy(alpha = 0.94f))
                 .padding(horizontal = 16.dp, vertical = 24.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -173,34 +182,39 @@ fun CreateStoryDialog(
                     .fillMaxHeight(0.92f),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = CardBg),
-                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                border = BorderStroke(1.2.dp, GoldBorder),
+                elevation = CardDefaults.cardElevation(defaultElevation = 14.dp)
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    // Header Bar
+                    // Meskot Royal Header Bar
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Paper)
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(InkDark, Color(0xFF281918), InkDark)
+                                )
+                            )
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(38.dp)
                                     .clip(CircleShape)
-                                    .background(Brush.linearGradient(listOf(Gold, GoldDeep))),
+                                    .background(Brush.linearGradient(listOf(GoldLight, Gold, CrossRed)))
+                                    .border(1.dp, GoldLight, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.CameraAlt,
+                                    imageVector = Icons.Default.AutoAwesome,
                                     contentDescription = null,
                                     tint = Color.White,
                                     modifier = Modifier.size(20.dp)
@@ -208,122 +222,124 @@ fun CreateStoryDialog(
                             }
                             Column {
                                 Text(
-                                    text = if (photoPathOrUrl == null) "Capture Story" else "Story Editor",
+                                    text = if (photoPathOrUrl == null) "Create Meskot Story" else "Meskot Story Studio",
                                     fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Ink
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = GoldLight
                                 )
                                 Text(
-                                    text = "Share moments that expire automatically",
+                                    text = "Share cultural & daily moments with your community",
                                     fontSize = 11.sp,
-                                    color = MutedText
+                                    color = Color.White.copy(alpha = 0.78f)
                                 )
                             }
                         }
 
                         IconButton(
                             onClick = onDismiss,
-                            enabled = !isUploading
+                            enabled = !isUploading,
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.12f))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Close",
-                                tint = Ink
+                                tint = GoldLight,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
 
-                    Divider(color = LineBorder, thickness = 1.dp)
+                    HorizontalDivider(color = GoldBorder, thickness = 1.dp)
 
                     // Body
                     if (photoPathOrUrl == null) {
-                        // Viewfinder / Capture Selector Screen
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(20.dp)
                                 .verticalScroll(rememberScrollState()),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(20.dp)
+                            verticalArrangement = Arrangement.spacedBy(18.dp)
                         ) {
-                            Spacer(modifier = Modifier.height(8.dp))
-
                             // Camera Viewfinder Box (9:16 vertical story proportion)
                             Box(
                                 modifier = Modifier
-                                    .width(200.dp)
+                                    .width(205.dp)
                                     .aspectRatio(9f / 16f)
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(InkDark)
-                                    .border(2.dp, Gold.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                                    .clip(RoundedCornerShape(22.dp))
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(InkDark, Color(0xFF2B181A), Ink)
+                                        )
+                                    )
+                                    .border(2.dp, Brush.linearGradient(listOf(GoldLight, Gold, CrossRed)), RoundedCornerShape(22.dp))
                                     .clickable { triggerCamera() },
                                 contentAlignment = Alignment.Center
                             ) {
-                                // Decorative Viewfinder Corner brackets
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier.padding(24.dp)
+                                    modifier = Modifier.padding(22.dp)
                                 ) {
                                     Box(
                                         modifier = Modifier
                                             .size(72.dp)
                                             .clip(CircleShape)
-                                            .background(Brush.linearGradient(listOf(GoldLight, Gold, GoldDeep)))
-                                            .padding(2.dp),
+                                            .background(Brush.linearGradient(listOf(GoldLight, Gold, CrossRed)))
+                                            .border(2.dp, Color.White.copy(alpha = 0.85f), CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.PhotoCamera,
                                             contentDescription = "Capture with Camera",
                                             tint = Color.White,
-                                            modifier = Modifier.size(38.dp)
+                                            modifier = Modifier.size(36.dp)
                                         )
                                     }
 
                                     Spacer(modifier = Modifier.height(14.dp))
 
                                     Text(
-                                        text = "Open Device Camera",
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        text = "Open Meskot Camera",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = GoldLight,
+                                        textAlign = TextAlign.Center
                                     )
 
                                     Spacer(modifier = Modifier.height(4.dp))
 
                                     Text(
-                                        text = "Tap to take a live photo for your story feed",
-                                        fontSize = 12.sp,
-                                        color = Color.White.copy(alpha = 0.7f),
+                                        text = "Tap to capture a live moment for your story",
+                                        fontSize = 11.sp,
+                                        color = Color.White.copy(alpha = 0.78f),
                                         textAlign = TextAlign.Center
                                     )
                                 }
 
-                                // Top badges on viewfinder
-                                Row(
+                                Surface(
+                                    color = CrossRed.copy(alpha = 0.85f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, GoldLight.copy(alpha = 0.6f)),
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
-                                        .padding(12.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        .padding(12.dp)
                                 ) {
-                                    Surface(
-                                        color = Color.Black.copy(alpha = 0.6f),
-                                        shape = RoundedCornerShape(12.dp)
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.FlashAuto,
-                                                contentDescription = null,
-                                                tint = GoldLight,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Text("HDR", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                        }
+                                        Icon(
+                                            imageVector = Icons.Default.AutoAwesome,
+                                            contentDescription = null,
+                                            tint = GoldLight,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Text("MESKOT HD", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -334,13 +350,13 @@ fun CreateStoryDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(52.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = GoldDeep),
+                                colors = ButtonDefaults.buttonColors(containerColor = CrossRed),
                                 shape = RoundedCornerShape(14.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.CameraAlt,
                                     contentDescription = null,
-                                    tint = Color.White,
+                                    tint = GoldLight,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -363,32 +379,34 @@ fun CreateStoryDialog(
                                     .fillMaxWidth()
                                     .height(48.dp),
                                 shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.2.dp, Gold),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink)
                             ) {
                                 Icon(
                                     imageVector = Icons.Outlined.PhotoLibrary,
                                     contentDescription = null,
-                                    tint = Gold,
+                                    tint = GoldDeep,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Choose Existing Photo from Gallery",
+                                    text = "Choose Photo from Gallery",
                                     fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium
+                                    fontWeight = FontWeight.Bold,
+                                    color = Ink
                                 )
                             }
 
-                            // Or Preset Quick Inspiration
+                            // Quick Inspiration Presets
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    text = "Quick Demo / Inspiration Presets:",
+                                    text = "Meskot Cultural & Scenic Presets:",
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MutedText
+                                    fontWeight = FontWeight.Bold,
+                                    color = GoldDeep
                                 )
                                 LazyRow(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -398,10 +416,10 @@ fun CreateStoryDialog(
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                             modifier = Modifier
-                                                .width(80.dp)
+                                                .width(84.dp)
                                                 .clip(RoundedCornerShape(12.dp))
-                                                .background(Paper)
-                                                .border(1.dp, LineBorder, RoundedCornerShape(12.dp))
+                                                .background(GoldSurface)
+                                                .border(1.dp, GoldBorder, RoundedCornerShape(12.dp))
                                                 .clickable { photoPathOrUrl = sampleUrl }
                                                 .padding(6.dp)
                                         ) {
@@ -409,7 +427,7 @@ fun CreateStoryDialog(
                                                 model = sampleUrl,
                                                 contentDescription = title,
                                                 modifier = Modifier
-                                                    .size(68.dp)
+                                                    .size(70.dp)
                                                     .clip(RoundedCornerShape(8.dp)),
                                                 contentScale = ContentScale.Crop
                                             )
@@ -420,7 +438,7 @@ fun CreateStoryDialog(
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
                                                 color = Ink,
-                                                fontWeight = FontWeight.Medium
+                                                fontWeight = FontWeight.SemiBold
                                             )
                                         }
                                     }
@@ -431,7 +449,7 @@ fun CreateStoryDialog(
                                 Surface(
                                     color = GoldSurface,
                                     shape = RoundedCornerShape(12.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                                    border = BorderStroke(1.dp, GoldBorder),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Row(
@@ -463,11 +481,10 @@ fun CreateStoryDialog(
                                 .padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            // Image Preview Container with Filter (Facebook 9:16 vertical story frame)
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(340.dp),
+                                    .height(330.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Box(
@@ -475,7 +492,8 @@ fun CreateStoryDialog(
                                         .fillMaxHeight()
                                         .aspectRatio(9f / 16f)
                                         .clip(RoundedCornerShape(18.dp))
-                                        .background(InkDark),
+                                        .background(InkDark)
+                                        .border(1.5.dp, Gold, RoundedCornerShape(18.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     val colorFilter = when (selectedFilter) {
@@ -485,7 +503,6 @@ fun CreateStoryDialog(
                                         else -> null
                                     }
 
-                                    // Blurred ambient backdrop for non-9:16 photos (Facebook style)
                                     AsyncImage(
                                         model = photoPathOrUrl,
                                         contentDescription = null,
@@ -518,11 +535,11 @@ fun CreateStoryDialog(
                                         )
                                     }
 
-                                    // Retake / Change Button Floating on top
                                     Surface(
                                         onClick = { photoPathOrUrl = null },
-                                        color = Color.Black.copy(alpha = 0.65f),
+                                        color = InkDark.copy(alpha = 0.78f),
                                         shape = CircleShape,
+                                        border = BorderStroke(1.dp, GoldLight.copy(alpha = 0.6f)),
                                         modifier = Modifier
                                             .align(Alignment.TopEnd)
                                             .padding(12.dp)
@@ -535,7 +552,7 @@ fun CreateStoryDialog(
                                             Icon(
                                                 imageVector = Icons.Default.Refresh,
                                                 contentDescription = "Retake",
-                                                tint = Color.White,
+                                                tint = GoldLight,
                                                 modifier = Modifier.size(16.dp)
                                             )
                                             Text(
@@ -547,18 +564,18 @@ fun CreateStoryDialog(
                                         }
                                     }
 
-                                    // Filter Badge on preview
                                     Surface(
-                                        color = Color.Black.copy(alpha = 0.55f),
+                                        color = CrossRed.copy(alpha = 0.85f),
                                         shape = RoundedCornerShape(8.dp),
                                         modifier = Modifier
                                             .align(Alignment.BottomStart)
                                             .padding(12.dp)
                                     ) {
                                         Text(
-                                            text = "Filter: $selectedFilter",
-                                            color = Color.White,
+                                            text = "Tone: $selectedFilter",
+                                            color = GoldLight,
                                             fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                         )
                                     }
@@ -568,9 +585,9 @@ fun CreateStoryDialog(
                             // Filter Picker Row
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(
-                                    text = "Visual Style & Filter",
+                                    text = "Meskot Visual Tone",
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontWeight = FontWeight.Bold,
                                     color = Ink
                                 )
                                 LazyRow(
@@ -582,18 +599,18 @@ fun CreateStoryDialog(
                                         Surface(
                                             onClick = { selectedFilter = filter },
                                             shape = RoundedCornerShape(16.dp),
-                                            color = if (isSelected) GoldDeep else Paper,
-                                            border = androidx.compose.foundation.BorderStroke(
+                                            color = if (isSelected) CrossRed else GoldSurface,
+                                            border = BorderStroke(
                                                 1.dp,
-                                                if (isSelected) GoldDeep else LineBorder
+                                                if (isSelected) GoldLight else GoldBorder
                                             )
                                         ) {
                                             Text(
                                                 text = filter,
                                                 fontSize = 12.sp,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                                 color = if (isSelected) Color.White else Ink,
-                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                                             )
                                         }
                                     }
@@ -603,41 +620,33 @@ fun CreateStoryDialog(
                             // Caption Input
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(
-                                    text = "Add Caption (Optional)",
+                                    text = "Story Caption (Optional)",
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontWeight = FontWeight.Bold,
                                     color = Ink
                                 )
                                 OutlinedTextField(
                                     value = captionText,
                                     onValueChange = { if (it.length <= 140) captionText = it },
-                                    placeholder = { Text("What's happening in this moment?", fontSize = 13.sp) },
+                                    placeholder = { Text("Share what's happening in this moment…", fontSize = 13.sp) },
                                     modifier = Modifier.fillMaxWidth(),
                                     maxLines = 3,
                                     shape = RoundedCornerShape(12.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = Gold,
-                                        unfocusedBorderColor = LineBorder
+                                        focusedBorderColor = GoldDeep,
+                                        unfocusedBorderColor = GoldBorder
                                     ),
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                                     keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
                                 )
-                                Text(
-                                    text = "${captionText.length}/140",
-                                    fontSize = 11.sp,
-                                    color = MutedText,
-                                    modifier = Modifier.align(Alignment.End)
-                                )
                             }
 
-                            // ==========================================
-                            // FIREBASE EXPIRATION TIMER LOGIC SECTION
-                            // ==========================================
+                            // Expiration Duration Chips
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(14.dp),
                                 colors = CardDefaults.cardColors(containerColor = GoldSurface),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder)
+                                border = BorderStroke(1.dp, GoldBorder)
                             ) {
                                 Column(
                                     modifier = Modifier.padding(14.dp),
@@ -650,38 +659,30 @@ fun CreateStoryDialog(
                                         Icon(
                                             imageVector = Icons.Default.Timer,
                                             contentDescription = null,
-                                            tint = GoldDeep,
-                                            modifier = Modifier.size(20.dp)
+                                            tint = CrossRed,
+                                            modifier = Modifier.size(18.dp)
                                         )
                                         Text(
-                                            text = "Firebase Expiration Timer",
-                                            fontSize = 14.sp,
+                                            text = "Story Duration Timer",
+                                            fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Ink
                                         )
                                     }
 
-                                    Text(
-                                        text = "Your story is stored in Firebase Firestore and will automatically self-destruct and expire from everyone's feed when the timer ends.",
-                                        fontSize = 11.sp,
-                                        color = MutedText,
-                                        lineHeight = 16.sp
-                                    )
-
-                                    // Expiration Duration Chips
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        StoryExpirationOptions.forEach { (hours, label) ->
+                                        StoryExpirationOptions.forEach { (hours, _) ->
                                             val isSelected = selectedExpirationHours == hours
                                             Surface(
                                                 onClick = { selectedExpirationHours = hours },
                                                 shape = RoundedCornerShape(10.dp),
-                                                color = if (isSelected) Gold else CardBg,
-                                                border = androidx.compose.foundation.BorderStroke(
+                                                color = if (isSelected) CrossRed else CardBg,
+                                                border = BorderStroke(
                                                     1.dp,
-                                                    if (isSelected) GoldDeep else LineBorder
+                                                    if (isSelected) GoldLight else GoldBorder
                                                 ),
                                                 modifier = Modifier.weight(1f)
                                             ) {
@@ -693,7 +694,7 @@ fun CreateStoryDialog(
                                                         text = "${hours}h",
                                                         fontSize = 14.sp,
                                                         fontWeight = FontWeight.Bold,
-                                                        color = if (isSelected) Color.White else Ink
+                                                        color = if (isSelected) GoldLight else Ink
                                                     )
                                                     Text(
                                                         text = if (hours == 24) "Standard" else if (hours == 1) "Flash" else "Quick",
@@ -724,26 +725,26 @@ fun CreateStoryDialog(
                                     .fillMaxWidth()
                                     .height(52.dp),
                                 shape = RoundedCornerShape(14.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = GoldDeep)
+                                colors = ButtonDefaults.buttonColors(containerColor = CrossRed)
                             ) {
                                 if (isUploading) {
                                     CircularProgressIndicator(
-                                        color = Color.White,
-                                        modifier = Modifier.size(24.dp),
+                                        color = GoldLight,
+                                        modifier = Modifier.size(22.dp),
                                         strokeWidth = 2.dp
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
-                                    Text("Uploading to Firebase…", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text("Publishing to Meskot Stories…", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                 } else {
                                     Icon(
-                                        imageVector = Icons.Default.Send,
+                                        imageVector = Icons.AutoMirrored.Filled.Send,
                                         contentDescription = null,
-                                        tint = Color.White,
+                                        tint = GoldLight,
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Share to Story (${selectedExpirationHours}h Timer) 🚀",
+                                        text = "Publish Meskot Story (${selectedExpirationHours}h) ✨",
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -759,23 +760,61 @@ fun CreateStoryDialog(
 }
 
 /**
- * Story Viewer Dialog: Full screen immersive display of active story with
- * real-time expiration badge, progress playback, viewer count, and likes.
+ * Story Viewer Dialog: Full-screen luxury Meskot story experience with:
+ * - Segmented progress bars across active stories & tap left/right navigation
+ * - Double-tap to Like with animated Meskot Crimson/Gold heart burst
+ * - Interactive Quick Emoji Reactions bar (❤️ 🔥 😍 👏 ☕ ✨)
+ * - Fully functional Story Comments bottom sheet (add, like, delete comments in real time)
+ * - Direct Story Reply composer that posts to comments AND messages the story creator
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StoryViewerDialog(
     story: StoryItem,
+    allStories: List<StoryItem> = listOf(story),
     currentUser: User?,
+    users: List<User> = emptyList(),
+    comments: List<Comment> = emptyList(),
     onDismiss: () -> Unit,
+    onSelectStory: (StoryItem) -> Unit = {},
     onDeleteStory: (String) -> Unit,
-    onToggleLike: (String) -> Unit
+    onToggleLike: (String) -> Unit,
+    onReactStory: (String, String) -> Unit = { id, _ -> onToggleLike(id) },
+    onAddComment: (String, String) -> Unit = { _, _ -> },
+    onReplyStory: (StoryItem, String) -> Unit = { s, txt -> onAddComment(s.id, txt) },
+    onToggleCommentLike: (String, String) -> Unit = { _, _ -> },
+    onDeleteComment: (String, String) -> Unit = { _, _ -> }
 ) {
-    val context = LocalContext.current
-    var showViewersDialog by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    var showViewersSheet by remember { mutableStateOf(false) }
+    var showCommentsSheet by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var replyText by remember(story.id) { mutableStateOf("") }
+    var sheetCommentText by remember(story.id) { mutableStateOf("") }
+
+    // Animated heart burst state when liking or double-tapping
+    var showHeartBurst by remember { mutableStateOf(false) }
+    var burstEmoji by remember { mutableStateOf("❤️") }
+
     val isAuthor = currentUser?.uid == story.uid
     val isLiked = currentUser?.let { story.likes[it.uid] == true } ?: false
-    val likeCount = story.likes.values.count { it }
+    val myReaction = currentUser?.let { story.reactions[it.uid] }
+    val likeCount = maxOf(story.likes.values.count { it }, story.reactions.size)
+    val totalCommentsCount = maxOf(story.commentCount, comments.size)
+
+    val orderedStories = remember(allStories, story.id) {
+        if (allStories.isEmpty()) listOf(story)
+        else if (allStories.any { it.id == story.id }) allStories
+        else listOf(story) + allStories
+    }
+    val currentIndex = orderedStories.indexOfFirst { it.id == story.id }.coerceAtLeast(0)
+
+    LaunchedEffect(showHeartBurst) {
+        if (showHeartBurst) {
+            delay(850L)
+            showHeartBurst = false
+        }
+    }
 
     // Real-time ticking remaining calculation
     var currentNowMs by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -786,16 +825,26 @@ fun StoryViewerDialog(
         }
     }
 
-    // Auto-advancing progress bar (10 seconds duration per story view)
-    val progress = remember { Animatable(0f) }
-    LaunchedEffect(story.id) {
-        progress.snapTo(0f)
-        progress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 10_000, easing = LinearEasing)
-        )
-        // Auto-close when progress finishes
-        onDismiss()
+    // Pause story timer when typing a reply or viewing sheets
+    val isPaused = showCommentsSheet || showViewersSheet || showDeleteConfirm || replyText.isNotEmpty()
+
+    val progress = remember(story.id) { Animatable(0f) }
+    LaunchedEffect(story.id, isPaused) {
+        if (!isPaused) {
+            val remainingFraction = (1f - progress.value).coerceIn(0.05f, 1f)
+            progress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = (10_000 * remainingFraction).toInt(),
+                    easing = LinearEasing
+                )
+            )
+            if (currentIndex < orderedStories.lastIndex) {
+                onSelectStory(orderedStories[currentIndex + 1])
+            } else {
+                onDismiss()
+            }
+        }
     }
 
     Dialog(
@@ -805,9 +854,8 @@ fun StoryViewerDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black)
+                .background(InkDark)
         ) {
-            // Main Media Image in Facebook 9:16 Story Frame
             val colorFilter = when (story.filterName) {
                 "Noir" -> ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
                 "Warm" -> ColorFilter.tint(Color(0xFFFFA500).copy(alpha = 0.2f), androidx.compose.ui.graphics.BlendMode.Darken)
@@ -815,108 +863,200 @@ fun StoryViewerDialog(
                 else -> null
             }
 
+            // Story Media Container with Left/Right Tap Navigation & Double-Tap to Like
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(9f / 16f)
-                    .align(Alignment.Center)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF141414))
+                    .fillMaxSize()
+                    .pointerInput(story.id, currentIndex, isLiked) {
+                        detectTapGestures(
+                            onDoubleTap = {
+                                burstEmoji = "❤️"
+                                showHeartBurst = true
+                                if (!isLiked) {
+                                    onToggleLike(story.id)
+                                }
+                            },
+                            onTap = { offset ->
+                                val width = size.width
+                                if (offset.x < width * 0.28f) {
+                                    if (currentIndex > 0) {
+                                        onSelectStory(orderedStories[currentIndex - 1])
+                                    }
+                                } else if (offset.x > width * 0.72f) {
+                                    if (currentIndex < orderedStories.lastIndex) {
+                                        onSelectStory(orderedStories[currentIndex + 1])
+                                    } else {
+                                        onDismiss()
+                                    }
+                                }
+                            }
+                        )
+                    }
             ) {
-                // Ambient backdrop fill so landscape/square photos look like Facebook Stories
+                // Ambient blurred backdrop
                 AsyncImage(
                     model = story.mediaUrl,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
-                    alpha = 0.32f,
+                    alpha = 0.30f,
                     colorFilter = colorFilter
                 )
 
-                AsyncImage(
-                    model = story.mediaUrl,
-                    contentDescription = "Story by ${story.authorName}",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit,
-                    colorFilter = colorFilter
-                )
+                // Framed 9:16 Story Canvas with subtle Meskot Gold border
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(9f / 16f)
+                        .align(Alignment.Center)
+                        .padding(horizontal = 6.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0xFF101713))
+                        .border(
+                            width = 1.2.dp,
+                            brush = Brush.verticalGradient(
+                                listOf(GoldLight.copy(alpha = 0.65f), Gold.copy(alpha = 0.35f), CrossRed.copy(alpha = 0.65f))
+                            ),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                ) {
+                    AsyncImage(
+                        model = story.mediaUrl,
+                        contentDescription = "Story by ${story.authorName}",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        colorFilter = colorFilter
+                    )
 
-                if (story.filterName == "Sunset") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(
-                                        Color(0xFFFF7E5F).copy(alpha = 0.28f),
-                                        Color(0xFFFEB47B).copy(alpha = 0.15f)
+                    if (story.filterName == "Sunset") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color(0xFFFF7E5F).copy(alpha = 0.28f),
+                                            Color(0xFFFEB47B).copy(alpha = 0.15f)
+                                        )
                                     )
                                 )
+                        )
+                    }
+                }
+
+                // Double-tap / Reaction Burst Animation in Center
+                AnimatedVisibility(
+                    visible = showHeartBurst,
+                    enter = scaleIn(animationSpec = spring(dampingRatio = 0.45f, stiffness = 400f)) + fadeIn(),
+                    exit = scaleOut() + fadeOut(),
+                    modifier = Modifier.align(Alignment.Center)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = CrossRed.copy(alpha = 0.88f),
+                        border = BorderStroke(2.5.dp, GoldLight),
+                        shadowElevation = 16.dp,
+                        modifier = Modifier.size(104.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = burstEmoji,
+                                fontSize = 48.sp
                             )
-                    )
+                        }
+                    }
                 }
             }
 
-            // Top scrim shadow for legibility
+            // Top Luxury Gradient Scrim
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
+                    .height(155.dp)
                     .align(Alignment.TopCenter)
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent)
+                            listOf(InkDark.copy(alpha = 0.90f), Color.Transparent)
                         )
                     )
             )
 
-            // Bottom scrim shadow for caption & buttons
+            // Bottom Luxury Gradient Scrim
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
+                    .height(270.dp)
                     .align(Alignment.BottomCenter)
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
+                            listOf(Color.Transparent, InkDark.copy(alpha = 0.88f), InkDark.copy(alpha = 0.98f))
                         )
                     )
             )
 
-            // Top Header: Progress Bar & Story Author Info
+            // Top Header: Multi-segment Meskot Gold Progress Bar & Story Author Info
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
-                    .padding(horizontal = 16.dp, vertical = 20.dp),
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Segmented Progress Bar
-                LinearProgressIndicator(
-                    progress = { progress.value },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .clip(RoundedCornerShape(2.dp)),
-                    color = Color.White,
-                    trackColor = Color.White.copy(alpha = 0.35f),
-                )
+                // Segmented Progress Bars across all active stories
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    orderedStories.forEachIndexed { index, item ->
+                        val segProgress = when {
+                            index < currentIndex -> 1f
+                            index == currentIndex -> progress.value
+                            else -> 0f
+                        }
+                        LinearProgressIndicator(
+                            progress = { segProgress },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(3.5.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = GoldLight,
+                            trackColor = Color.White.copy(alpha = 0.28f)
+                        )
+                    }
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Author info + Expiration badge
+                    // Author Avatar with Meskot Gold/Crimson Ring + Name + Timer
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        UserAvatar(
-                            photoUrl = story.authorPhoto,
-                            name = story.authorName,
-                            size = 38
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(Brush.sweepGradient(listOf(GoldLight, Gold, CrossRed, GoldDeep, GoldLight)))
+                                .padding(2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                                    .background(InkDark)
+                                    .padding(1.5.dp)
+                            ) {
+                                UserAvatar(
+                                    photoUrl = story.authorPhoto,
+                                    name = story.authorName,
+                                    size = 37
+                                )
+                            }
+                        }
 
                         Column {
                             Row(
@@ -926,27 +1066,25 @@ fun StoryViewerDialog(
                                 Text(
                                     text = story.authorName,
                                     fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.ExtraBold,
                                     color = Color.White
                                 )
 
-                                if (story.filterName != "Normal") {
-                                    Surface(
-                                        color = GoldDeep.copy(alpha = 0.75f),
-                                        shape = RoundedCornerShape(6.dp)
-                                    ) {
-                                        Text(
-                                            text = story.filterName,
-                                            fontSize = 9.sp,
-                                            color = Color.White,
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                        )
-                                    }
+                                Surface(
+                                    color = CrossRed.copy(alpha = 0.85f),
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = BorderStroke(0.8.dp, GoldLight.copy(alpha = 0.7f))
+                                ) {
+                                    Text(
+                                        text = if (story.filterName != "Normal") story.filterName else "MESKOT",
+                                        fontSize = 9.sp,
+                                        color = GoldLight,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
                                 }
                             }
 
-                            // Dynamic remaining expiration timer badge
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -961,229 +1099,734 @@ fun StoryViewerDialog(
                                     text = story.formattedRemaining(currentNowMs),
                                     fontSize = 11.sp,
                                     color = GoldLight,
-                                    fontWeight = FontWeight.Medium
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
                     }
 
-                    // Action buttons (Delete if own story, Close X)
+                    // Top Right Actions (Comments count, Delete if author, Close)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         if (isAuthor) {
                             IconButton(
                                 onClick = { showDeleteConfirm = true },
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(CrossRed.copy(alpha = 0.75f))
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Delete,
                                     contentDescription = "Delete Story",
-                                    tint = Color.White.copy(alpha = 0.85f),
-                                    modifier = Modifier.size(20.dp)
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
 
                         IconButton(
                             onClick = onDismiss,
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.16f))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Close",
                                 tint = Color.White,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                 }
             }
 
-            // Bottom Section: Caption & Engagement
+            // Bottom Section: Caption, Quick Reactions, Likes, Comments Sheet Trigger & Reply Input
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = 16.dp, vertical = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Caption Pill
+                // Story Caption Banner in Meskot Glass Card
                 if (story.caption.isNotBlank()) {
                     Surface(
-                        color = Color.Black.copy(alpha = 0.55f),
-                        shape = RoundedCornerShape(12.dp),
+                        color = InkDark.copy(alpha = 0.78f),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.45f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            text = story.caption,
-                            fontSize = 15.sp,
-                            color = Color.White,
+                        Row(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                            lineHeight = 20.sp
-                        )
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(3.dp)
+                                    .height(24.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(Brush.verticalGradient(listOf(GoldLight, CrossRed)))
+                            )
+                            Text(
+                                text = story.caption,
+                                fontSize = 14.sp,
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium,
+                                lineHeight = 19.sp
+                            )
+                        }
                     }
                 }
 
-                // Controls Row
+                // Engagement Summary & Quick Emoji Reactions Bar
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    if (isAuthor) {
-                        // Viewer Count Pill
+                    // Left: Likes & Comments Counter Pills
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Likes / Reactions Pill
                         Surface(
-                            onClick = { showViewersDialog = true },
-                            color = Color.White.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(20.dp)
+                            onClick = {
+                                if (isAuthor) {
+                                    showViewersSheet = true
+                                } else {
+                                    burstEmoji = "❤️"
+                                    if (!isLiked) showHeartBurst = true
+                                    onToggleLike(story.id)
+                                }
+                            },
+                            color = if (isLiked) CrossRed.copy(alpha = 0.90f) else Color.White.copy(alpha = 0.14f),
+                            shape = RoundedCornerShape(20.dp),
+                            border = BorderStroke(1.dp, if (isLiked) GoldLight else Gold.copy(alpha = 0.45f))
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Visibility,
-                                    contentDescription = null,
-                                    tint = Color.White,
+                                    imageVector = if (isLiked) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
+                                    contentDescription = "Story Likes",
+                                    tint = if (isLiked) GoldLight else Color.White,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Text(
-                                    text = "${story.viewers.size} viewers",
-                                    fontSize = 13.sp,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold
+                                    text = "$likeCount ${if (likeCount == 1) "Like" else "Likes"}",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
                                 )
                             }
                         }
 
+                        // Comments Drawer Trigger Pill
                         Surface(
-                            color = Gold.copy(alpha = 0.25f),
-                            shape = RoundedCornerShape(20.dp)
+                            onClick = { showCommentsSheet = true },
+                            color = Color.White.copy(alpha = 0.14f),
+                            shape = RoundedCornerShape(20.dp),
+                            border = BorderStroke(1.dp, Gold.copy(alpha = 0.45f)),
+                            modifier = Modifier.testTag("story_comments_button")
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Favorite,
-                                    contentDescription = null,
-                                    tint = Color(0xFFFF4B6E),
+                                    imageVector = Icons.Outlined.ChatBubbleOutline,
+                                    contentDescription = "Story Comments",
+                                    tint = GoldLight,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Text(
-                                    text = "$likeCount likes",
-                                    fontSize = 13.sp,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Medium
+                                    text = "$totalCommentsCount ${if (totalCommentsCount == 1) "Comment" else "Comments"}",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
                                 )
                             }
                         }
-                    } else {
-                        // Quick Reaction Pill & Like Button for viewers
-                        Surface(
-                            color = Color.White.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(24.dp),
-                            modifier = Modifier.weight(1f)
+
+                        if (isAuthor) {
+                            Surface(
+                                onClick = { showViewersSheet = true },
+                                color = Gold.copy(alpha = 0.22f),
+                                shape = RoundedCornerShape(20.dp),
+                                border = BorderStroke(1.dp, GoldLight.copy(alpha = 0.5f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = GoldLight,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Text(
+                                        text = "${story.viewers.size}",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = GoldLight
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Right: Quick Emoji Reactions Strip
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        StoryQuickReactions.take(4).forEach { emoji ->
+                            val isSelectedEmoji = myReaction == emoji
+                            Surface(
+                                onClick = {
+                                    burstEmoji = emoji
+                                    showHeartBurst = true
+                                    onReactStory(story.id, emoji)
+                                },
+                                shape = CircleShape,
+                                color = if (isSelectedEmoji) CrossRed else Color.White.copy(alpha = 0.14f),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelectedEmoji) GoldLight else Color.White.copy(alpha = 0.22f)
+                                ),
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(text = emoji, fontSize = 15.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Bottom Interactive Story Comment & Direct Reply Bar + Like Heart Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = replyText,
+                        onValueChange = { replyText = it },
+                        placeholder = {
+                            Text(
+                                text = if (isAuthor) "Add a comment to your story…" else "Comment or reply to ${story.authorName.split(" ").firstOrNull()}…",
+                                fontSize = 13.sp,
+                                color = Color.White.copy(alpha = 0.72f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(26.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = Color.White.copy(alpha = 0.14f),
+                            unfocusedContainerColor = Color.White.copy(alpha = 0.12f),
+                            focusedBorderColor = GoldLight,
+                            unfocusedBorderColor = Gold.copy(alpha = 0.55f),
+                            cursorColor = GoldLight
+                        ),
+                        trailingIcon = {
+                            if (replyText.isNotBlank()) {
+                                IconButton(
+                                    onClick = {
+                                        val clean = replyText.trim()
+                                        if (clean.isNotEmpty()) {
+                                            onReplyStory(story, clean)
+                                            replyText = ""
+                                            focusManager.clearFocus()
+                                        }
+                                    },
+                                    modifier = Modifier.testTag("story_send_reply_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Send,
+                                        contentDescription = "Send Story Comment",
+                                        tint = GoldLight
+                                    )
+                                }
+                            } else {
+                                IconButton(
+                                    onClick = { showCommentsSheet = true }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ModeComment,
+                                        contentDescription = "Open Story Comments",
+                                        tint = GoldLight.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(
+                            onSend = {
+                                val clean = replyText.trim()
+                                if (clean.isNotEmpty()) {
+                                    onReplyStory(story, clean)
+                                    replyText = ""
+                                    focusManager.clearFocus()
+                                }
+                            }
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("story_reply_input")
+                    )
+
+                    // Meskot Crimson & Gold Like Button
+                    val heartScale by animateFloatAsState(
+                        targetValue = if (isLiked) 1.12f else 1.0f,
+                        animationSpec = spring(dampingRatio = 0.45f, stiffness = 500f),
+                        label = "story_heart_scale"
+                    )
+                    IconButton(
+                        onClick = {
+                            if (!isLiked) {
+                                burstEmoji = "❤️"
+                                showHeartBurst = true
+                            }
+                            onToggleLike(story.id)
+                        },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .scale(heartScale)
+                            .clip(CircleShape)
+                            .background(
+                                if (isLiked) Brush.linearGradient(listOf(CrossRed, GoldDeep))
+                                else Brush.linearGradient(listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.12f)))
+                            )
+                            .border(
+                                width = 1.5.dp,
+                                color = if (isLiked) GoldLight else Gold.copy(alpha = 0.55f),
+                                shape = CircleShape
+                            )
+                            .testTag("story_like_button")
+                    ) {
+                        Icon(
+                            imageVector = if (isLiked) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = "Like Story",
+                            tint = if (isLiked) GoldLight else Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+
+            // ==========================================================
+            // STORY COMMENTS & REACTIONS BOTTOM SHEET (MESKOT BRANDED)
+            // ==========================================================
+            if (showCommentsSheet) {
+                ModalBottomSheet(
+                    onDismissRequest = { showCommentsSheet = false },
+                    containerColor = CardBg,
+                    dragHandle = { BottomSheetDefaults.DragHandle(color = Gold) }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.75f)
+                            .navigationBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        // Sheet Header
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Send,
-                                    contentDescription = null,
-                                    tint = Color.White.copy(alpha = 0.8f),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "Send reply to ${story.authorName.split(" ").firstOrNull()}…",
-                                    fontSize = 13.sp,
-                                    color = Color.White.copy(alpha = 0.8f)
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(Brush.linearGradient(listOf(GoldLight, Gold, CrossRed))),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ChatBubble,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = "Story Comments & Reactions",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Ink
+                                    )
+                                    Text(
+                                        text = "$likeCount likes • ${comments.size} comments on ${story.authorName}'s story",
+                                        fontSize = 11.sp,
+                                        color = MutedText
+                                    )
+                                }
+                            }
+
+                            IconButton(onClick = { showCommentsSheet = false }) {
+                                Icon(Icons.Default.Close, contentDescription = "Close", tint = Ink)
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                        // Heart Button
-                        IconButton(
-                            onClick = { onToggleLike(story.id) },
-                            modifier = Modifier
-                                .size(46.dp)
-                                .clip(CircleShape)
-                                .background(if (isLiked) Color(0xFFFF4B6E) else Color.White.copy(alpha = 0.2f))
+                        // Quick Emoji Reaction Bar inside Sheet
+                        Surface(
+                            color = GoldSurface,
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, GoldBorder),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(
-                                imageVector = if (isLiked) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
-                                contentDescription = "Like Story",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "Quick React:",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = GoldDeep
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    StoryQuickReactions.forEach { emoji ->
+                                        val isSelected = myReaction == emoji
+                                        Surface(
+                                            onClick = { onReactStory(story.id, emoji) },
+                                            shape = CircleShape,
+                                            color = if (isSelected) CrossRed else Color.White,
+                                            border = BorderStroke(1.dp, if (isSelected) GoldLight else GoldBorder),
+                                            modifier = Modifier.size(34.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Text(text = emoji, fontSize = 16.sp)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = LineBorder)
+
+                        // Comments List
+                        if (comments.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Forum,
+                                        contentDescription = null,
+                                        tint = Gold,
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                    Text(
+                                        text = "No comments on this story yet",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Ink
+                                    )
+                                    Text(
+                                        text = "Be the first to leave a comment or reaction below!",
+                                        fontSize = 12.sp,
+                                        color = MutedText
+                                    )
+                                }
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                contentPadding = PaddingValues(vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                items(comments, key = { it.id }) { comment ->
+                                    val isCommentLiked = currentUser?.uid?.let { comment.likes[it] == true } ?: false
+                                    val commentLikesCount = comment.likes.values.count { it }
+                                    val canDelete = currentUser?.uid == comment.uid || isAuthor
+
+                                    Surface(
+                                        color = Paper,
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = BorderStroke(1.dp, LineBorder),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp),
+                                            verticalAlignment = Alignment.Top,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            UserAvatar(
+                                                photoUrl = comment.authorPhoto,
+                                                name = comment.authorName,
+                                                size = 36
+                                            )
+
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    Text(
+                                                        text = comment.authorName,
+                                                        fontSize = 13.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Ink
+                                                    )
+                                                    if (comment.isAuthorVerified) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Verified,
+                                                            contentDescription = "Verified",
+                                                            tint = GoldDeep,
+                                                            modifier = Modifier.size(14.dp)
+                                                        )
+                                                    }
+                                                    Text(
+                                                        text = MeskotStrings.timeAgo(comment.createdAt, AppLanguage.EN),
+                                                        fontSize = 11.sp,
+                                                        color = MutedText
+                                                    )
+                                                }
+
+                                                Spacer(modifier = Modifier.height(3.dp))
+
+                                                Text(
+                                                    text = comment.text,
+                                                    fontSize = 13.sp,
+                                                    color = Ink,
+                                                    lineHeight = 18.sp
+                                                )
+
+                                                Spacer(modifier = Modifier.height(6.dp))
+
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                        modifier = Modifier.clickable {
+                                                            onToggleCommentLike(story.id, comment.id)
+                                                        }
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = if (isCommentLiked) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
+                                                            contentDescription = "Like Comment",
+                                                            tint = if (isCommentLiked) CrossRed else MutedText,
+                                                            modifier = Modifier.size(15.dp)
+                                                        )
+                                                        Text(
+                                                            text = if (commentLikesCount > 0) "Like ($commentLikesCount)" else "Like",
+                                                            fontSize = 11.sp,
+                                                            fontWeight = if (isCommentLiked) FontWeight.Bold else FontWeight.Medium,
+                                                            color = if (isCommentLiked) CrossRed else MutedText
+                                                        )
+                                                    }
+
+                                                    if (canDelete) {
+                                                        Text(
+                                                            text = "Delete",
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = CrossRed,
+                                                            modifier = Modifier.clickable {
+                                                                onDeleteComment(story.id, comment.id)
+                                                            }
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(color = LineBorder)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Add Comment Input Row inside Sheet
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = sheetCommentText,
+                                onValueChange = { sheetCommentText = it },
+                                placeholder = { Text("Write a comment on this story…", fontSize = 13.sp) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(24.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = GoldDeep,
+                                    unfocusedBorderColor = GoldBorder,
+                                    focusedContainerColor = GoldSurface.copy(alpha = 0.5f),
+                                    unfocusedContainerColor = Paper
+                                ),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                keyboardActions = KeyboardActions(
+                                    onSend = {
+                                        val clean = sheetCommentText.trim()
+                                        if (clean.isNotEmpty()) {
+                                            onAddComment(story.id, clean)
+                                            sheetCommentText = ""
+                                            focusManager.clearFocus()
+                                        }
+                                    }
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("story_sheet_comment_input")
                             )
+
+                            Button(
+                                onClick = {
+                                    val clean = sheetCommentText.trim()
+                                    if (clean.isNotEmpty()) {
+                                        onAddComment(story.id, clean)
+                                        sheetCommentText = ""
+                                        focusManager.clearFocus()
+                                    }
+                                },
+                                enabled = sheetCommentText.isNotBlank(),
+                                shape = CircleShape,
+                                contentPadding = PaddingValues(0.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = CrossRed,
+                                    disabledContainerColor = LineBorder
+                                ),
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .testTag("story_sheet_post_comment_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = "Post Story Comment",
+                                    tint = GoldLight,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // Viewers Bottom Sheet / Dialog
-            if (showViewersDialog) {
+            // Viewers & Likers Dialog
+            if (showViewersSheet) {
                 AlertDialog(
-                    onDismissRequest = { showViewersDialog = false },
+                    onDismissRequest = { showViewersSheet = false },
+                    containerColor = CardBg,
                     title = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Default.Visibility, contentDescription = null, tint = GoldDeep)
-                            Text("Story Viewers (${story.viewers.size})", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Icon(Icons.Default.Visibility, contentDescription = null, tint = CrossRed)
+                            Text(
+                                "Story Activity (${story.viewers.size} views • $likeCount likes)",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Ink
+                            )
                         }
                     },
                     text = {
+                        val allParticipantIds = (story.viewers + story.likes.keys + story.reactions.keys).distinct()
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 240.dp)
+                                .heightIn(max = 260.dp)
                                 .verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            if (story.viewers.isEmpty()) {
-                                Text("No viewers yet. Friends will appear here as they watch.", fontSize = 13.sp, color = MutedText)
+                            if (allParticipantIds.isEmpty()) {
+                                Text("No viewers or reactions yet.", fontSize = 13.sp, color = MutedText)
                             } else {
-                                story.viewers.forEach { viewerId ->
+                                allParticipantIds.forEach { participantUid ->
+                                    val matchedUser = users.find { it.uid == participantUid }
+                                    val displayName = when {
+                                        participantUid == currentUser?.uid -> "${currentUser.displayName} (You)"
+                                        matchedUser != null -> matchedUser.displayName
+                                        participantUid.startsWith("community_") -> participantUid.removePrefix("community_").replaceFirstChar { it.uppercase() }
+                                        else -> "Meskot Member"
+                                    }
+                                    val emoji = story.reactions[participantUid] ?: if (story.likes[participantUid] == true) "❤️" else null
+
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(vertical = 4.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(GoldSurface)
+                                            .padding(horizontal = 10.dp, vertical = 8.dp)
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(32.dp)
-                                                .clip(CircleShape)
-                                                .background(Paper2),
-                                            contentAlignment = Alignment.Center
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Icon(Icons.Default.Person, contentDescription = null, tint = Ink, modifier = Modifier.size(18.dp))
+                                            UserAvatar(
+                                                photoUrl = matchedUser?.photoUrl ?: "",
+                                                name = displayName,
+                                                size = 32
+                                            )
+                                            Text(
+                                                text = displayName,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Ink
+                                            )
                                         }
-                                        Text(
-                                            text = if (viewerId == currentUser?.uid) "You (Author)" else "Community Member ($viewerId)",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = Ink
-                                        )
+                                        if (emoji != null) {
+                                            Text(text = emoji, fontSize = 16.sp)
+                                        }
                                     }
                                 }
                             }
                         }
                     },
                     confirmButton = {
-                        TextButton(onClick = { showViewersDialog = false }) {
-                            Text("Close", color = GoldDeep, fontWeight = FontWeight.Bold)
+                        TextButton(onClick = { showViewersSheet = false }) {
+                            Text("Close", color = CrossRed, fontWeight = FontWeight.Bold)
                         }
                     }
                 )
@@ -1193,8 +1836,9 @@ fun StoryViewerDialog(
             if (showDeleteConfirm) {
                 AlertDialog(
                     onDismissRequest = { showDeleteConfirm = false },
-                    title = { Text("Delete Story?", fontWeight = FontWeight.Bold) },
-                    text = { Text("This will permanently remove your story from Firebase Firestore and delete it from all friends' feeds.", fontSize = 13.sp) },
+                    containerColor = CardBg,
+                    title = { Text("Delete Story?", fontWeight = FontWeight.Bold, color = Ink) },
+                    text = { Text("This will permanently remove your story from Firebase Firestore and delete it from all friends' feeds.", fontSize = 13.sp, color = MutedText) },
                     confirmButton = {
                         Button(
                             onClick = {
@@ -1218,8 +1862,8 @@ fun StoryViewerDialog(
 }
 
 /**
- * Story Avatar Ring Item: Displays an avatar surrounded by a colorful gradient ring
- * (or plus badge for the user's "Your Story") in the horizontal story feed.
+ * Story Avatar Ring Item: Displays an avatar surrounded by a Meskot Gold & Crimson gradient ring
+ * in the horizontal story feed.
  */
 @Composable
 fun StoryAvatarRingItem(
@@ -1232,17 +1876,16 @@ fun StoryAvatarRingItem(
 ) {
     val activeGradient = Brush.sweepGradient(
         listOf(
-            Color(0xFFF3CA68),
-            Color(0xFFC48F37),
-            Color(0xFFE85D04),
-            Color(0xFFD00000),
-            Color(0xFF9D0208),
-            Color(0xFFF3CA68)
+            GoldLight,
+            Gold,
+            CrossRed,
+            GoldDeep,
+            GoldLight
         )
     )
 
     val viewedGradient = Brush.linearGradient(
-        listOf(Color(0xFFB0B7B3), Color(0xFFD4DAD6))
+        listOf(GoldBorder, LineBorder)
     )
 
     Column(
@@ -1256,7 +1899,6 @@ fun StoryAvatarRingItem(
             contentAlignment = Alignment.Center
         ) {
             if (hasStory) {
-                // Gradient Story Ring
                 Box(
                     modifier = Modifier
                         .size(62.dp)
@@ -1268,7 +1910,7 @@ fun StoryAvatarRingItem(
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(CircleShape)
-                            .background(Color.White)
+                            .background(CardBg)
                             .padding(2.dp)
                     ) {
                         UserAvatar(
@@ -1286,14 +1928,13 @@ fun StoryAvatarRingItem(
                 )
             }
 
-            // If Current User: Plus Badge to Create Story
             if (isCurrentUser) {
                 Box(
                     modifier = Modifier
                         .size(20.dp)
                         .clip(CircleShape)
-                        .background(GoldDeep)
-                        .border(1.5.dp, Color.White, CircleShape)
+                        .background(Brush.linearGradient(listOf(CrossRed, GoldDeep)))
+                        .border(1.5.dp, GoldLight, CircleShape)
                         .align(Alignment.BottomEnd),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1305,7 +1946,6 @@ fun StoryAvatarRingItem(
                     )
                 }
             } else if (!hasStory && MeskotStrings.isOnline(user.lastSeen)) {
-                // Green online presence dot (only when user is genuinely active)
                 Box(
                     modifier = Modifier
                         .size(13.dp)
@@ -1315,11 +1955,10 @@ fun StoryAvatarRingItem(
                         .align(Alignment.BottomEnd)
                 )
             } else if (expirationText != null) {
-                // Expiration badge
                 Surface(
-                    color = GoldDeep,
+                    color = CrossRed,
                     shape = RoundedCornerShape(8.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White),
+                    border = BorderStroke(1.dp, GoldLight),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .offset(y = 2.dp)
@@ -1328,7 +1967,7 @@ fun StoryAvatarRingItem(
                         text = expirationText,
                         fontSize = 8.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = GoldLight,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                     )
                 }
@@ -1350,7 +1989,7 @@ fun StoryAvatarRingItem(
 }
 
 /**
- * Inspiring Ethiopian community story samples for the Facebook story tray.
+ * Inspiring Ethiopian community story samples for the Meskot story tray.
  */
 val PresetCommunityStories = listOf(
     StoryItem(
@@ -1362,7 +2001,10 @@ val PresetCommunityStories = listOf(
         caption = "Addis skyline looking radiant today ✨",
         filterName = "Sunset",
         createdAt = System.currentTimeMillis() - 2 * 3600 * 1000L,
-        expiresAt = System.currentTimeMillis() + 22 * 3600 * 1000L
+        expiresAt = System.currentTimeMillis() + 22 * 3600 * 1000L,
+        likes = mapOf("community_meskot" to true, "community_dawit" to true),
+        reactions = mapOf("community_meskot" to "❤️", "community_dawit" to "🔥"),
+        commentCount = 2
     ),
     StoryItem(
         id = "preset_story_2",
@@ -1373,7 +2015,10 @@ val PresetCommunityStories = listOf(
         caption = "Fresh roast traditional Buna ☕",
         filterName = "Warm",
         createdAt = System.currentTimeMillis() - 4 * 3600 * 1000L,
-        expiresAt = System.currentTimeMillis() + 20 * 3600 * 1000L
+        expiresAt = System.currentTimeMillis() + 20 * 3600 * 1000L,
+        likes = mapOf("community_selam" to true),
+        reactions = mapOf("community_selam" to "☕"),
+        commentCount = 2
     ),
     StoryItem(
         id = "preset_story_3",
@@ -1384,7 +2029,10 @@ val PresetCommunityStories = listOf(
         caption = "Sunset over the Ethiopian highlands 🌄",
         filterName = "Vibrant",
         createdAt = System.currentTimeMillis() - 6 * 3600 * 1000L,
-        expiresAt = System.currentTimeMillis() + 18 * 3600 * 1000L
+        expiresAt = System.currentTimeMillis() + 18 * 3600 * 1000L,
+        likes = mapOf("community_selam" to true),
+        reactions = mapOf("community_selam" to "😍"),
+        commentCount = 1
     ),
     StoryItem(
         id = "preset_story_4",
@@ -1395,15 +2043,17 @@ val PresetCommunityStories = listOf(
         caption = "Serene lake breezes 🌿",
         filterName = "Normal",
         createdAt = System.currentTimeMillis() - 8 * 3600 * 1000L,
-        expiresAt = System.currentTimeMillis() + 16 * 3600 * 1000L
+        expiresAt = System.currentTimeMillis() + 16 * 3600 * 1000L,
+        likes = mapOf("community_dawit" to true),
+        reactions = mapOf("community_dawit" to "✨"),
+        commentCount = 1
     )
 )
 
 /**
- * Facebook-style Stories Tray.
- * Features the signature Facebook "Create story" card (user avatar taking top ~68%,
- * overlapping circular blue + button, white bottom area) followed by vertical story cards
- * with author avatar at top-left and name at bottom.
+ * Meskot Royal Stories Rail:
+ * Features a luxury Meskot section header with gold/crimson accents followed by the
+ * "Create Story" card and active community story cards with live like & comment badges.
  */
 @Composable
 fun FacebookStoriesRail(
@@ -1423,58 +2073,137 @@ fun FacebookStoriesRail(
         if (filtered.isEmpty()) {
             PresetCommunityStories
         } else if (filtered.size < 4) {
-            filtered + PresetCommunityStories.take(4 - filtered.size)
+            val existingIds = filtered.map { it.id }.toSet()
+            filtered + PresetCommunityStories.filterNot { it.id in existingIds }.take(4 - filtered.size)
         } else {
             filtered
         }
     }
 
-    Column(
+    Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp)
+            .padding(horizontal = 14.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        border = BorderStroke(1.2.dp, GoldBorder.copy(alpha = 0.85f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(GoldSurface.copy(alpha = 0.7f), CardBg)
+                    )
+                )
+                .padding(vertical = 12.dp)
         ) {
-            // 1. Signature Facebook "Create story" Card
-            item(key = "fb_create_story_card") {
-                FacebookCreateStoryCard(
-                    currentUser = currentUser,
-                    onClick = onCreateStoryClick
+            // Meskot Stories Brand Header Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .background(Brush.linearGradient(listOf(GoldLight, Gold, CrossRed))),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                    Text(
+                        text = "Meskot Stories",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Ink
+                    )
+                    Surface(
+                        color = CrossRed.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(0.8.dp, CrossRed.copy(alpha = 0.35f))
+                    ) {
+                        Text(
+                            text = "${myActiveStories.size + displayStories.size} LIVE",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = CrossRed,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                Text(
+                    text = "+ Add Moment",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = GoldDeep,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onCreateStoryClick() }
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
 
-            // 2. User's Own Active Story (if published)
-            myActiveStories.firstOrNull()?.let { myStory ->
-                item(key = "my_active_story_${myStory.id}") {
-                    FacebookStoryCard(
-                        story = myStory,
-                        isMyStory = true,
-                        isViewed = false,
-                        onClick = { onStoryClick(myStory) }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // 1. Meskot Branded "Create story" Card
+                item(key = "fb_create_story_card") {
+                    FacebookCreateStoryCard(
+                        currentUser = currentUser,
+                        onClick = onCreateStoryClick
                     )
                 }
-            }
 
-            // 3. Friends & Community Stories
-            items(displayStories, key = { "fb_story_${it.id}" }) { story ->
-                val isViewed = currentUser?.uid?.let { story.viewers.contains(it) } ?: false
-                FacebookStoryCard(
-                    story = story,
-                    isMyStory = false,
-                    isViewed = isViewed,
-                    onClick = { onStoryClick(story) }
-                )
+                // 2. User's Own Active Story (if published)
+                myActiveStories.firstOrNull()?.let { myStory ->
+                    item(key = "my_active_story_${myStory.id}") {
+                        FacebookStoryCard(
+                            story = myStory,
+                            currentUser = currentUser,
+                            isMyStory = true,
+                            isViewed = false,
+                            onClick = { onStoryClick(myStory) }
+                        )
+                    }
+                }
+
+                // 3. Friends & Community Stories
+                items(displayStories, key = { "fb_story_${it.id}" }) { story ->
+                    val isViewed = currentUser?.uid?.let { story.viewers.contains(it) } ?: false
+                    FacebookStoryCard(
+                        story = story,
+                        currentUser = currentUser,
+                        isMyStory = false,
+                        isViewed = isViewed,
+                        onClick = { onStoryClick(story) }
+                    )
+                }
             }
         }
     }
 }
 
 /**
- * Facebook "Create story" card matching the iconic Facebook mobile app design.
+ * Meskot "Create story" card styled with Meskot Gold, Crimson, and Warm Linen.
  */
 @Composable
 fun FacebookCreateStoryCard(
@@ -1482,27 +2211,30 @@ fun FacebookCreateStoryCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cardWidth = 108.dp
+    val cardWidth = 112.dp
 
     Card(
         modifier = modifier
             .width(cardWidth)
             .aspectRatio(9f / 16f)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable { onClick() },
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE4E6EB))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = GoldSurface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        border = BorderStroke(
+            width = 1.4.dp,
+            brush = Brush.verticalGradient(listOf(GoldLight, Gold, CrossRed.copy(alpha = 0.7f)))
+        )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Top ~68%: Logged-in User Profile Photo
+                // Top ~66%: Logged-in User Profile Photo
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(130.dp)
-                        .background(Color(0xFFE4E6EB)),
+                        .height(126.dp)
+                        .background(InkDark),
                     contentAlignment = Alignment.Center
                 ) {
                     if (!currentUser?.photoUrl.isNullOrBlank()) {
@@ -1512,13 +2244,22 @@ fun FacebookCreateStoryCard(
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(Color.Transparent, InkDark.copy(alpha = 0.45f))
+                                    )
+                                )
+                        )
                     } else {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
                                     Brush.verticalGradient(
-                                        listOf(Color(0xFFEAEFF5), Color(0xFFD6E2EE))
+                                        listOf(InkDark, Color(0xFF2B181A), GoldDeep.copy(alpha = 0.8f))
                                     )
                                 ),
                             contentAlignment = Alignment.Center
@@ -1526,42 +2267,54 @@ fun FacebookCreateStoryCard(
                             Icon(
                                 imageVector = Icons.Default.Person,
                                 contentDescription = null,
-                                tint = Color(0xFF65676B),
-                                modifier = Modifier.size(54.dp)
+                                tint = GoldLight,
+                                modifier = Modifier.size(48.dp)
                             )
                         }
                     }
                 }
 
-                // Bottom: Clean White surface with "Create story"
+                // Bottom: Warm Meskot Gold & Linen footer
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .background(Color.White)
-                        .padding(top = 18.dp, start = 4.dp, end = 4.dp, bottom = 4.dp),
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(GoldSurface, Paper)
+                            )
+                        )
+                        .padding(top = 18.dp, start = 6.dp, end = 6.dp, bottom = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "Create story",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF050505),
-                        textAlign = TextAlign.Center,
-                        lineHeight = 14.sp
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Create Story",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Ink,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 13.sp
+                        )
+                        Text(
+                            text = "Share moment",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = GoldDeep
+                        )
+                    }
                 }
             }
 
-            // Facebook Blue Overlapping "+" Button
+            // Meskot Royal Gold & Crimson Overlapping "+" Medallion
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .offset(y = 113.dp)
-                    .size(34.dp)
+                    .offset(y = 108.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF1877F2)) // Official Facebook Blue
-                    .border(3.dp, Color.White, CircleShape),
+                    .background(Brush.linearGradient(listOf(GoldLight, Gold, CrossRed)))
+                    .border(2.5.dp, GoldSurface, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -1576,28 +2329,39 @@ fun FacebookCreateStoryCard(
 }
 
 /**
- * Facebook Story Card for individual story previews.
+ * Meskot Story Card for individual story previews with Meskot Gold/Crimson ring
+ * and live like/comment badge indicators.
  */
 @Composable
 fun FacebookStoryCard(
     story: StoryItem,
+    currentUser: User? = null,
     isMyStory: Boolean,
     isViewed: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cardWidth = 108.dp
+    val cardWidth = 112.dp
+    val likeCount = maxOf(story.likes.values.count { it }, story.reactions.size)
+    val isLikedByMe = currentUser?.uid?.let { story.likes[it] == true || story.reactions.containsKey(it) } ?: false
 
     Card(
         modifier = modifier
             .width(cardWidth)
             .aspectRatio(9f / 16f)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable { onClick() },
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1E21)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE4E6EB).copy(alpha = 0.6f))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = InkDark),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        border = BorderStroke(
+            width = 1.4.dp,
+            brush = if (isViewed) {
+                Brush.verticalGradient(listOf(GoldBorder, LineBorder))
+            } else {
+                Brush.verticalGradient(listOf(GoldLight, Gold, CrossRed))
+            }
+        )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             // Full-bleed Story Media Background
@@ -1608,39 +2372,43 @@ fun FacebookStoryCard(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Scrim Gradients: Dark top for avatar readability, dark bottom for author name
+            // Scrim Gradients: Dark top for avatar readability, rich Meskot dark bottom for author & stats
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            0.0f to Color(0x66000000),
+                            0.0f to InkDark.copy(alpha = 0.55f),
                             0.3f to Color.Transparent,
                             0.55f to Color.Transparent,
-                            1.0f to Color(0xB3000000)
+                            1.0f to InkDark.copy(alpha = 0.88f)
                         )
                     )
             )
 
-            // Top-left: Author Avatar with Facebook Blue ring
+            // Top-left: Author Avatar with Meskot Gold & Crimson ring
             Box(
                 modifier = Modifier
                     .padding(8.dp)
                     .align(Alignment.TopStart)
             ) {
-                val ringColor = if (isViewed) Color(0xFFB0B3B8) else Color(0xFF1877F2)
+                val ringBrush = if (isViewed) {
+                    Brush.linearGradient(listOf(GoldBorder, LineBorder))
+                } else {
+                    Brush.sweepGradient(listOf(GoldLight, Gold, CrossRed, GoldDeep, GoldLight))
+                }
                 Box(
                     modifier = Modifier
                         .size(38.dp)
                         .clip(CircleShape)
-                        .background(ringColor)
+                        .background(ringBrush)
                         .padding(2.5.dp)
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(CircleShape)
-                            .background(Color.White)
+                            .background(InkDark)
                             .padding(1.5.dp)
                     ) {
                         UserAvatar(
@@ -1652,24 +2420,66 @@ fun FacebookStoryCard(
                 }
             }
 
-            // Bottom: Author Name
+            // Top-right: Live Likes & Comments Pill Badge
+            if (likeCount > 0 || story.commentCount > 0) {
+                Surface(
+                    color = if (isLikedByMe) CrossRed.copy(alpha = 0.88f) else InkDark.copy(alpha = 0.72f),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(0.8.dp, GoldLight.copy(alpha = 0.65f)),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Favorite,
+                            contentDescription = null,
+                            tint = GoldLight,
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Text(
+                            text = "$likeCount",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+
+            // Bottom: Author Name & Caption Preview
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
-                    text = if (isMyStory) "Your story" else story.authorName,
+                    text = if (isMyStory) "Your Story" else story.authorName,
                     color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    lineHeight = 14.sp
+                    lineHeight = 13.sp
                 )
+                if (story.caption.isNotBlank()) {
+                    Text(
+                        text = story.caption,
+                        color = GoldLight.copy(alpha = 0.92f),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 11.sp
+                    )
+                }
             }
         }
     }
 }
-

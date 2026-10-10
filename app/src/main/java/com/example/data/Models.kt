@@ -309,7 +309,9 @@ data class StoryItem(
     val createdAt: Long = System.currentTimeMillis(),
     val expiresAt: Long = System.currentTimeMillis() + 24 * 60 * 60 * 1000L,
     val viewers: List<String> = emptyList(),
-    val likes: Map<String, Boolean> = emptyMap()
+    val likes: Map<String, Boolean> = emptyMap(),
+    val reactions: Map<String, String> = emptyMap(), // uid -> emoji or reaction code
+    val commentCount: Int = 0
 ) {
     fun isExpired(nowMs: Long = System.currentTimeMillis()): Boolean = nowMs >= expiresAt
 

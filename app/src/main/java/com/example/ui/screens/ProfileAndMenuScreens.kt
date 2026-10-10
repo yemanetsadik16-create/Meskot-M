@@ -4111,7 +4111,9 @@ fun AuthScreen(
     var lastName by remember { mutableStateOf("") }
     var signUpEmail by remember { mutableStateOf("") }
     var signUpPassword by remember { mutableStateOf("") }
+    var signUpConfirmPassword by remember { mutableStateOf("") }
     var isSignUpPasswordVisible by remember { mutableStateOf(false) }
+    var isSignUpConfirmPasswordVisible by remember { mutableStateOf(false) }
 
     // Birthday state
     val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -4609,11 +4611,16 @@ fun AuthScreen(
                             // New Password
                             OutlinedTextField(
                                 value = signUpPassword,
-                                onValueChange = { signUpPassword = it },
+                                onValueChange = {
+                                    signUpPassword = it
+                                    if (errorMessage != null) errorMessage = null
+                                },
                                 label = { Text(MeskotStrings.get("password", currentLanguage)) },
                                 textStyle = TextStyle(color = Ink, fontSize = 14.sp),
                                 colors = meskotTextFieldColors(),
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("signup_password_input"),
                                 shape = RoundedCornerShape(10.dp),
                                 singleLine = true,
                                 enabled = !isLoading,
@@ -4622,12 +4629,85 @@ fun AuthScreen(
                                     IconButton(onClick = { isSignUpPasswordVisible = !isSignUpPasswordVisible }) {
                                         Icon(
                                             imageVector = if (isSignUpPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                            contentDescription = null,
+                                            contentDescription = "Toggle password visibility",
                                             tint = MutedText
                                         )
                                     }
                                 }
                             )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Confirm Password
+                            val passwordsMatch = signUpConfirmPassword.isNotEmpty() && signUpPassword == signUpConfirmPassword
+                            val passwordsMismatch = signUpConfirmPassword.isNotEmpty() && signUpPassword != signUpConfirmPassword
+
+                            OutlinedTextField(
+                                value = signUpConfirmPassword,
+                                onValueChange = {
+                                    signUpConfirmPassword = it
+                                    if (errorMessage != null) errorMessage = null
+                                },
+                                label = { Text(MeskotStrings.get("confirmPassword", currentLanguage)) },
+                                textStyle = TextStyle(color = Ink, fontSize = 14.sp),
+                                isError = passwordsMismatch,
+                                colors = meskotTextFieldColors(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("signup_confirm_password_input"),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true,
+                                enabled = !isLoading,
+                                visualTransformation = if (isSignUpConfirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                trailingIcon = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(end = 4.dp)
+                                    ) {
+                                        if (signUpConfirmPassword.isNotEmpty()) {
+                                            Icon(
+                                                imageVector = if (passwordsMatch) Icons.Default.CheckCircle else Icons.Default.Info,
+                                                contentDescription = if (passwordsMatch) "Passwords match" else "Passwords do not match",
+                                                tint = if (passwordsMatch) ActiveGreen else CrossRed,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                        IconButton(onClick = { isSignUpConfirmPasswordVisible = !isSignUpConfirmPasswordVisible }) {
+                                            Icon(
+                                                imageVector = if (isSignUpConfirmPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                                contentDescription = "Toggle confirm password visibility",
+                                                tint = MutedText
+                                            )
+                                        }
+                                    }
+                                }
+                            )
+
+                            if (signUpConfirmPassword.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (passwordsMatch) Icons.Default.CheckCircle else Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = if (passwordsMatch) ActiveGreen else CrossRed,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = if (passwordsMatch) {
+                                            MeskotStrings.get("passwordsMatch", currentLanguage)
+                                        } else {
+                                            MeskotStrings.get("passwordsDoNotMatch", currentLanguage)
+                                        },
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (passwordsMatch) ActiveGreen else CrossRed
+                                    )
+                                }
+                            }
 
                             Spacer(modifier = Modifier.height(14.dp))
 
@@ -4868,6 +4948,10 @@ fun AuthScreen(
                                         errorMessage = "Please enter a valid email address"
                                     } else if (signUpPassword.length < 6) {
                                         errorMessage = "Password must be at least 6 characters"
+                                    } else if (signUpConfirmPassword.isBlank()) {
+                                        errorMessage = "Please confirm your password"
+                                    } else if (signUpPassword != signUpConfirmPassword) {
+                                        errorMessage = MeskotStrings.get("passwordsDoNotMatch", currentLanguage)
                                     } else {
                                         isLoading = true
                                         val finalGender = if (selectedGender == "Custom" && customGenderDescription.isNotBlank()) {

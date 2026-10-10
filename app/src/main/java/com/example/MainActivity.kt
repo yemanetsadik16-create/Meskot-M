@@ -72,6 +72,7 @@ import com.example.ui.screens.ReelsScreen
 import com.example.ui.screens.SavedScreen
 import com.example.ui.components.UserInterestAnalysisModal
 import com.example.recommendation.UserInterestTracker
+import com.example.notifications.NotificationHelper
 import com.example.ui.theme.MeskotTheme
 import com.example.ui.theme.Paper
 
@@ -79,6 +80,8 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val PERMISSIONS_REQUEST_CODE = 101
     }
+
+    private var pendingNotificationTarget by mutableStateOf<Pair<String, String>?>(null)
 
     fun requestCallPermissions() {
         val permissions = arrayOf(
@@ -93,14 +96,53 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         CallAudioManager.init(applicationContext)
+        NotificationHelper.createNotificationChannel(applicationContext)
+        extractNotificationIntent(intent)
 
         val repository = MeskotRepository(applicationContext)
 
         setContent {
             val viewModel = remember { MeskotViewModel(repository) }
+            val target = pendingNotificationTarget
+
+            LaunchedEffect(target) {
+                if (target != null) {
+                    val (targetType, targetId) = target
+                    when (targetType) {
+                        "chat", "message" -> {
+                            if (targetId.isNotBlank()) {
+                                viewModel.openChatByUid(targetId)
+                            } else {
+                                viewModel.navigateTo(ScreenTab.MESSAGES)
+                            }
+                        }
+                        "friends", "friend_request" -> viewModel.navigateTo(ScreenTab.FRIENDS)
+                        "notifications" -> viewModel.navigateTo(ScreenTab.NOTIFICATIONS)
+                        else -> viewModel.navigateTo(ScreenTab.FEED)
+                    }
+                    pendingNotificationTarget = null
+                }
+            }
+
             MeskotTheme {
                 MeskotApp(viewModel = viewModel)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        extractNotificationIntent(intent)
+    }
+
+    private fun extractNotificationIntent(intent: android.content.Intent?) {
+        val targetType = intent?.getStringExtra(NotificationHelper.EXTRA_TARGET_TYPE)
+        val targetId = intent?.getStringExtra(NotificationHelper.EXTRA_TARGET_ID) ?: ""
+        if (!targetType.isNullOrBlank()) {
+            pendingNotificationTarget = targetType to targetId
+            intent.removeExtra(NotificationHelper.EXTRA_TARGET_TYPE)
+            intent.removeExtra(NotificationHelper.EXTRA_TARGET_ID)
         }
     }
 }
@@ -154,6 +196,7 @@ fun MeskotApp(viewModel: MeskotViewModel) {
     val isEditProfileOpen by viewModel.isEditProfileOpen.collectAsState()
     val isCreateStoryOpen by viewModel.isCreateStoryOpen.collectAsState()
     val activeStoryToView by viewModel.activeStoryToView.collectAsState()
+    val allStories by viewModel.stories.collectAsState()
     val isCreateReelOpen by viewModel.isCreateReelOpen.collectAsState()
     val activeReelToView by viewModel.activeReelToView.collectAsState()
     val isLiveStreamOpen by viewModel.isLiveStreamOpen.collectAsState()
@@ -168,6 +211,38 @@ fun MeskotApp(viewModel: MeskotViewModel) {
     val callPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { /* Handled gracefully */ }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { /* Handled gracefully */ }
+
+    // Request Android 13+ (API 33+) POST_NOTIFICATIONS permission once logged in
+    LaunchedEffect(currentUser?.uid) {
+        if (currentUser != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (!NotificationHelper.hasNotificationPermission(context)) {
+                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
+    // Dispatch Facebook-style rich push notification when a new message arrives
+    LaunchedEffect(incomingMessageAlert) {
+        val msg = incomingMessageAlert ?: return@LaunchedEffect
+        val sender = users.find { it.uid == msg.fromUid }
+        val senderName = sender?.displayName?.takeIf { it.isNotBlank() } ?: "Meskot Member"
+        val senderAvatar = sender?.photoUrl ?: ""
+        NotificationHelper.showSocialPushNotificationAsync(
+            context = context,
+            notificationId = (msg.fromUid.hashCode() and 0x7FFFFFFF),
+            senderName = senderName,
+            messageBody = msg.text.ifBlank { "Sent you an attachment" },
+            senderAvatarUrl = senderAvatar,
+            timestampMs = msg.createdAt,
+            targetType = "chat",
+            targetId = msg.fromUid
+        )
+        viewModel.clearIncomingMessageAlert()
+    }
 
     // Step 2: Request runtime permissions before opening the call screen
     LaunchedEffect(activeCall) {
@@ -486,16 +561,37 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                 }
 
                 activeStoryToView?.let { story ->
+                    val liveStory = allStories.find { it.id == story.id } ?: story
+                    val storyComments = allComments[liveStory.id] ?: viewModel.getComments(liveStory.id)
                     StoryViewerDialog(
-                        story = story,
+                        story = liveStory,
+                        allStories = allStories,
                         currentUser = currentUser,
+                        users = users,
+                        comments = storyComments,
                         onDismiss = { viewModel.closeStoryViewer() },
+                        onSelectStory = { nextStory -> viewModel.viewStory(nextStory) },
                         onDeleteStory = { storyId ->
                             viewModel.deleteStory(storyId)
                             viewModel.showMessage("Story deleted.")
                         },
                         onToggleLike = { storyId ->
                             viewModel.toggleStoryLike(storyId)
+                        },
+                        onReactStory = { storyId, emoji ->
+                            viewModel.reactToStory(storyId, emoji)
+                        },
+                        onAddComment = { storyId, commentText ->
+                            viewModel.addComment(storyId, commentText)
+                        },
+                        onReplyStory = { targetStory, replyText ->
+                            viewModel.replyToStory(targetStory, replyText)
+                        },
+                        onToggleCommentLike = { storyId, commentId ->
+                            viewModel.toggleCommentLike(storyId, commentId)
+                        },
+                        onDeleteComment = { storyId, commentId ->
+                            viewModel.deleteComment(storyId, commentId)
                         }
                     )
                 }

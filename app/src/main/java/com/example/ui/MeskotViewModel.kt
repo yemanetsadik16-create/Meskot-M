@@ -364,6 +364,28 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         repository.toggleStoryLike(storyId, user.uid)
     }
 
+    fun reactToStory(storyId: String, emoji: String) {
+        val user = currentUser.value ?: return
+        repository.reactToStory(storyId, user.uid, emoji)
+    }
+
+    fun replyToStory(story: StoryItem, replyText: String) {
+        val cleanText = replyText.trim()
+        if (cleanText.isEmpty()) return
+        // Add to public/thread story comments AND send direct reply to story author
+        repository.addComment(story.id, cleanText)
+        val curUser = currentUser.value
+        if (curUser != null && curUser.uid != story.uid) {
+            repository.sendMessage(
+                otherUid = story.uid,
+                text = "Replied to your story (${story.caption.take(30).ifBlank { "Moment" }}): $cleanText",
+                mediaUrl = story.mediaUrl,
+                mediaType = "image"
+            )
+        }
+        showMessage("Reply & comment posted to ${story.authorName}'s story ✨")
+    }
+
     // Reel Creation & Reel Viewer Flow
     private val _isCreateReelOpen = MutableStateFlow(false)
     val isCreateReelOpen: StateFlow<Boolean> = _isCreateReelOpen.asStateFlow()

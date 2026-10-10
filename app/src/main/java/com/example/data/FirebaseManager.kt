@@ -424,10 +424,19 @@ object FirebaseManager {
         val map = commentToMap(comment)
         db.collection(COL_COMMENTS).document(comment.id).set(map, SetOptions.merge())
             .addOnSuccessListener {
-                // Increment comment count on post
+                // Increment comment count on post or story
                 db.collection(COL_POSTS).document(comment.postId).get().addOnSuccessListener { postDoc ->
-                    val cur = (postDoc.getLong("commentCount") ?: 0L).toInt()
-                    db.collection(COL_POSTS).document(comment.postId).update("commentCount", cur + 1)
+                    if (postDoc.exists()) {
+                        val cur = (postDoc.getLong("commentCount") ?: 0L).toInt()
+                        db.collection(COL_POSTS).document(comment.postId).update("commentCount", cur + 1)
+                    } else {
+                        db.collection(COL_STORIES).document(comment.postId).get().addOnSuccessListener { storyDoc ->
+                            if (storyDoc.exists()) {
+                                val cur = (storyDoc.getLong("commentCount") ?: 0L).toInt()
+                                db.collection(COL_STORIES).document(comment.postId).update("commentCount", cur + 1)
+                            }
+                        }
+                    }
                 }
                 onComplete(true)
             }
@@ -437,13 +446,32 @@ object FirebaseManager {
             }
     }
 
+    fun toggleCommentLike(commentId: String, uid: String, isLiked: Boolean) {
+        val db = firestore ?: return
+        val updateValue = if (isLiked) true else FieldValue.delete()
+        db.collection(COL_COMMENTS).document(commentId)
+            .update("likes.$uid", updateValue)
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Could not update comment like: ${e.message}")
+            }
+    }
+
     fun deleteComment(postId: String, commentId: String) {
         val db = firestore ?: return
         db.collection(COL_COMMENTS).document(commentId).delete()
             .addOnSuccessListener {
                 db.collection(COL_POSTS).document(postId).get().addOnSuccessListener { postDoc ->
-                    val cur = (postDoc.getLong("commentCount") ?: 1L).toInt()
-                    db.collection(COL_POSTS).document(postId).update("commentCount", maxOf(0, cur - 1))
+                    if (postDoc.exists()) {
+                        val cur = (postDoc.getLong("commentCount") ?: 1L).toInt()
+                        db.collection(COL_POSTS).document(postId).update("commentCount", maxOf(0, cur - 1))
+                    } else {
+                        db.collection(COL_STORIES).document(postId).get().addOnSuccessListener { storyDoc ->
+                            if (storyDoc.exists()) {
+                                val cur = (storyDoc.getLong("commentCount") ?: 1L).toInt()
+                                db.collection(COL_STORIES).document(postId).update("commentCount", maxOf(0, cur - 1))
+                            }
+                        }
+                    }
                 }
             }
             .addOnFailureListener { Log.e(TAG, "Failed to delete comment: ${it.message}") }
@@ -1269,12 +1297,30 @@ object FirebaseManager {
             }
     }
 
-    fun toggleStoryLike(storyId: String, uid: String, isLiked: Boolean) {
+    fun toggleStoryLike(storyId: String, uid: String, isLiked: Boolean, fallbackStory: StoryItem? = null) {
         val db = firestore ?: return
+        val updateValue = if (isLiked) true else FieldValue.delete()
         db.collection(COL_STORIES).document(storyId)
-            .update("likes.$uid", isLiked)
-            .addOnFailureListener { e ->
-                Log.w(TAG, "Could not update story like: ${e.message}")
+            .update("likes.$uid", updateValue)
+            .addOnFailureListener {
+                if (fallbackStory != null) {
+                    db.collection(COL_STORIES).document(storyId).set(storyToMap(fallbackStory), SetOptions.merge())
+                }
+            }
+    }
+
+    fun reactToStory(storyId: String, uid: String, reactionEmoji: String?, fallbackStory: StoryItem? = null) {
+        val db = firestore ?: return
+        val updates = mutableMapOf<String, Any>(
+            "reactions.$uid" to (reactionEmoji ?: FieldValue.delete()),
+            "likes.$uid" to (if (reactionEmoji != null) true else FieldValue.delete())
+        )
+        db.collection(COL_STORIES).document(storyId)
+            .update(updates)
+            .addOnFailureListener {
+                if (fallbackStory != null) {
+                    db.collection(COL_STORIES).document(storyId).set(storyToMap(fallbackStory), SetOptions.merge())
+                }
             }
     }
 
@@ -1348,13 +1394,21 @@ object FirebaseManager {
         "createdAt" to s.createdAt,
         "expiresAt" to s.expiresAt,
         "viewers" to s.viewers,
-        "likes" to s.likes
+        "likes" to s.likes,
+        "reactions" to s.reactions,
+        "commentCount" to s.commentCount
     )
 
     private fun parseStory(id: String, d: Map<String, Any?>): StoryItem {
         val rawLikes = (d["likes"] as? Map<*, *>)?.entries?.associate {
             it.key.toString() to (it.value as? Boolean ?: false)
         } ?: emptyMap()
+
+        val rawReactions = (d["reactions"] as? Map<*, *>)?.entries?.mapNotNull { (k, v) ->
+            val keyStr = k?.toString()
+            val valStr = v?.toString()
+            if (!keyStr.isNullOrBlank() && !valStr.isNullOrBlank()) keyStr to valStr else null
+        }?.toMap() ?: emptyMap()
 
         val rawViewers = (d["viewers"] as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
 
@@ -1369,7 +1423,9 @@ object FirebaseManager {
             createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
             expiresAt = (d["expiresAt"] as? Number)?.toLong() ?: (System.currentTimeMillis() + 24 * 3600 * 1000L),
             viewers = rawViewers,
-            likes = rawLikes
+            likes = rawLikes,
+            reactions = rawReactions,
+            commentCount = (d["commentCount"] as? Number)?.toInt() ?: 0
         )
     }
 
