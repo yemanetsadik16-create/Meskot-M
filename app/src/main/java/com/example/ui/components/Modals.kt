@@ -28,7 +28,9 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlayCircle
@@ -88,6 +90,7 @@ import com.example.data.AppLanguage
 import com.example.data.MeskotStrings
 import com.example.data.Post
 import com.example.data.User
+import com.example.ui.theme.CardBg
 import com.example.ui.theme.CrossRed
 import com.example.ui.theme.Gold
 import com.example.ui.theme.GoldBorder
@@ -148,13 +151,8 @@ fun ComposerDialog(
         }
     }
 
-    // Preset Ethiopian Cultural Visuals for testing photo posts easily
-    val samplePhotos = listOf(
-        "https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=800&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=800&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1578922746465-3a80a228f223?w=800&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=800&auto=format&fit=crop&q=80"
-    )
+    // Visuals list
+    val samplePhotos: List<String> = emptyList()
 
     val canSubmit = text.isNotBlank() ||
             selectedMediaUrls.isNotEmpty() ||
@@ -590,41 +588,42 @@ fun ComposerDialog(
                     }
                 }
 
-                // Quick photo selector
-                Text(
-                    text = "🖼️ " + MeskotStrings.get("addPhoto", currentLanguage) + " (Habesha Gallery):",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MutedText,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
-                )
+                if (samplePhotos.isNotEmpty()) {
+                    Text(
+                        text = "🖼️ " + MeskotStrings.get("addPhoto", currentLanguage) + ":",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MutedText,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                    )
 
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(samplePhotos.size) { idx ->
-                        val url = samplePhotos[idx]
-                        AsyncImage(
-                            model = url,
-                            contentDescription = "Sample",
-                            modifier = Modifier
-                                .size(50.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(
-                                    width = if (selectedMediaUrls.contains(url)) 2.dp else 0.5.dp,
-                                    color = if (selectedMediaUrls.contains(url)) Gold else LineBorder,
-                                    shape = RoundedCornerShape(8.dp)
-                                )
-                                .clickable {
-                                    if (selectedMediaUrls.contains(url)) {
-                                        selectedMediaUrls = selectedMediaUrls - url
-                                    } else {
-                                        selectedMediaUrls = selectedMediaUrls + url
-                                        selectedBgIndex = 0 // photos disable gradient mode
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(samplePhotos.size) { idx ->
+                            val url = samplePhotos[idx]
+                            AsyncImage(
+                                model = url,
+                                contentDescription = "Sample",
+                                modifier = Modifier
+                                    .size(50.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(
+                                        width = if (selectedMediaUrls.contains(url)) 2.dp else 0.5.dp,
+                                        color = if (selectedMediaUrls.contains(url)) Gold else LineBorder,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable {
+                                        if (selectedMediaUrls.contains(url)) {
+                                            selectedMediaUrls = selectedMediaUrls - url
+                                        } else {
+                                            selectedMediaUrls = selectedMediaUrls + url
+                                            selectedBgIndex = 0
+                                        }
                                     }
-                                }
-                        )
+                            )
+                        }
                     }
                 }
             }
@@ -1877,7 +1876,7 @@ fun EditProfileDialog(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            photoUrl = uri.toString()
+            photoUrl = persistPickedMediaUri(context, uri, "avatar")
         }
     }
 
@@ -1897,7 +1896,7 @@ fun EditProfileDialog(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            coverPhotoUrl = uri.toString()
+            coverPhotoUrl = persistPickedMediaUri(context, uri, "cover")
         }
     }
 
@@ -1916,7 +1915,8 @@ fun EditProfileDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = CardBg),
+            border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -1924,21 +1924,31 @@ fun EditProfileDialog(
                     .padding(20.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                Text(
-                    text = MeskotStrings.get("editProfile", currentLanguage),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Serif,
-                    color = Ink
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .width(4.dp)
+                            .height(20.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(Gold)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = MeskotStrings.get("editProfile", currentLanguage),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Serif,
+                        color = Ink
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Quick Visual Avatar & Cover Preview with Pickers
+                // Quick Visual Avatar & Cover Preview with Pickers (Meskot Brand Styled)
                 Card(
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    colors = CardDefaults.cardColors(containerColor = GoldSurface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -1954,7 +1964,12 @@ fun EditProfileDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            UserAvatar(photoUrl = photoUrl, name = name, size = 54)
+                            UserAvatar(
+                                photoUrl = photoUrl,
+                                name = name,
+                                size = 54,
+                                modifier = Modifier.border(2.dp, Gold, CircleShape)
+                            )
                             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Surface(
@@ -1964,7 +1979,7 @@ fun EditProfileDialog(
                                             )
                                         },
                                         shape = RoundedCornerShape(8.dp),
-                                        color = Color(0xFFE7F3FF),
+                                        color = Gold,
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         Row(
@@ -1972,18 +1987,19 @@ fun EditProfileDialog(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.Center
                                         ) {
-                                            Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = Color(0xFF1877F2), modifier = Modifier.size(14.dp))
+                                            Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Avatar Photo", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1877F2))
+                                            Text("Avatar Photo", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                         }
                                     }
                                     Surface(
                                         onClick = { avatarCameraLauncher.launch(null) },
                                         shape = RoundedCornerShape(8.dp),
-                                        color = Color(0xFFE4E6EB)
+                                        color = CardBg,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder)
                                     ) {
                                         Box(modifier = Modifier.padding(vertical = 6.dp, horizontal = 10.dp), contentAlignment = Alignment.Center) {
-                                            Icon(Icons.Default.CameraAlt, contentDescription = "Take Avatar Photo", tint = Ink, modifier = Modifier.size(15.dp))
+                                            Icon(Icons.Default.CameraAlt, contentDescription = "Take Avatar Photo", tint = GoldDeep, modifier = Modifier.size(15.dp))
                                         }
                                     }
                                 }
@@ -1995,7 +2011,8 @@ fun EditProfileDialog(
                                             )
                                         },
                                         shape = RoundedCornerShape(8.dp),
-                                        color = GoldSurface,
+                                        color = CardBg,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         Row(
@@ -2011,10 +2028,11 @@ fun EditProfileDialog(
                                     Surface(
                                         onClick = { coverCameraLauncher.launch(null) },
                                         shape = RoundedCornerShape(8.dp),
-                                        color = Color(0xFFE4E6EB)
+                                        color = CardBg,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder)
                                     ) {
                                         Box(modifier = Modifier.padding(vertical = 6.dp, horizontal = 10.dp), contentAlignment = Alignment.Center) {
-                                            Icon(Icons.Default.CameraAlt, contentDescription = "Take Cover Photo", tint = Ink, modifier = Modifier.size(15.dp))
+                                            Icon(Icons.Default.CameraAlt, contentDescription = "Take Cover Photo", tint = GoldDeep, modifier = Modifier.size(15.dp))
                                         }
                                     }
                                 }
@@ -2204,7 +2222,8 @@ fun EditProfileDialog(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) Ink else Paper2)
+                                .background(if (isSelected) Gold else GoldSurface)
+                                .border(1.dp, if (isSelected) GoldDeep else GoldBorder, RoundedCornerShape(8.dp))
                                 .clickable { gender = g }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
@@ -2216,7 +2235,7 @@ fun EditProfileDialog(
                                     else -> MeskotStrings.get("custom", currentLanguage)
                                 },
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 color = if (isSelected) Color.White else Ink
                             )
                         }
@@ -2225,16 +2244,176 @@ fun EditProfileDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                OutlinedTextField(
-                    value = birthDate,
-                    onValueChange = { birthDate = it },
-                    label = { Text(MeskotStrings.get("birthday", currentLanguage)) },
-                    placeholder = { Text("e.g. Sep 11, 1995") },
-                    textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
-                    colors = com.example.ui.theme.meskotTextFieldColors(),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                // Facebook-style Birthday Selection (matching Create Account section)
+                val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                val days = (1..31).map { it.toString() }
+                val years = (2012 downTo 1940).map { it.toString() }
+
+                val initialParts = remember(birthDate) {
+                    val trimmed = birthDate.trim()
+                    if (trimmed.isNotBlank()) {
+                        val cleaned = trimmed.replace(",", " ")
+                            .split(Regex("\\s+"))
+                            .filter { it.isNotBlank() }
+                        val rawMonth = cleaned.getOrNull(0) ?: "Jan"
+                        val matchedMonth = months.firstOrNull {
+                            rawMonth.startsWith(it, ignoreCase = true)
+                        } ?: "Jan"
+                        val matchedDay = cleaned.getOrNull(1)?.filter { it.isDigit() }
+                            ?.takeIf { it in days } ?: "1"
+                        val matchedYear = cleaned.getOrNull(2)?.filter { it.isDigit() }
+                            ?.takeIf { it in years } ?: "2000"
+                        Triple(matchedMonth, matchedDay, matchedYear)
+                    } else {
+                        Triple("Jan", "1", "2000")
+                    }
+                }
+
+                var selectedMonth by remember { mutableStateOf(initialParts.first) }
+                var isMonthMenuExpanded by remember { mutableStateOf(false) }
+
+                var selectedDay by remember { mutableStateOf(initialParts.second) }
+                var isDayMenuExpanded by remember { mutableStateOf(false) }
+
+                var selectedYear by remember { mutableStateOf(initialParts.third) }
+                var isYearMenuExpanded by remember { mutableStateOf(false) }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = MeskotStrings.get("birthday", currentLanguage),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Ink
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MutedText,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                Text(
+                    text = MeskotStrings.get("birthdaySub", currentLanguage),
+                    fontSize = 11.sp,
+                    color = MutedText
                 )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // 3 Dropdown Pickers: Month, Day, Year
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Month Selector
+                    Box(modifier = Modifier.weight(1.1f)) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder),
+                            color = Paper2,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isMonthMenuExpanded = true }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(text = selectedMonth, fontSize = 13.sp, color = Ink, fontWeight = FontWeight.Medium)
+                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = Ink)
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = isMonthMenuExpanded,
+                            onDismissRequest = { isMonthMenuExpanded = false }
+                        ) {
+                            months.forEach { m ->
+                                DropdownMenuItem(
+                                    text = { Text(m) },
+                                    onClick = {
+                                        selectedMonth = m
+                                        birthDate = "$selectedMonth $selectedDay, $selectedYear"
+                                        isMonthMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Day Selector
+                    Box(modifier = Modifier.weight(0.9f)) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder),
+                            color = Paper2,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isDayMenuExpanded = true }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(text = selectedDay, fontSize = 13.sp, color = Ink, fontWeight = FontWeight.Medium)
+                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = Ink)
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = isDayMenuExpanded,
+                            onDismissRequest = { isDayMenuExpanded = false }
+                        ) {
+                            days.forEach { d ->
+                                DropdownMenuItem(
+                                    text = { Text(d) },
+                                    onClick = {
+                                        selectedDay = d
+                                        birthDate = "$selectedMonth $selectedDay, $selectedYear"
+                                        isDayMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Year Selector
+                    Box(modifier = Modifier.weight(1.1f)) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder),
+                            color = Paper2,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isYearMenuExpanded = true }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(text = selectedYear, fontSize = 13.sp, color = Ink, fontWeight = FontWeight.Medium)
+                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = Ink)
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = isYearMenuExpanded,
+                            onDismissRequest = { isYearMenuExpanded = false }
+                        ) {
+                            years.forEach { y ->
+                                DropdownMenuItem(
+                                    text = { Text(y) },
+                                    onClick = {
+                                        selectedYear = y
+                                        birthDate = "$selectedMonth $selectedDay, $selectedYear"
+                                        isYearMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(18.dp))
 
@@ -2248,8 +2427,9 @@ fun EditProfileDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = {
+                            val finalBirthDate = "$selectedMonth $selectedDay, $selectedYear"
                             onSave(
-                                name, bio, photoUrl, gender, birthDate,
+                                name, bio, photoUrl, gender, finalBirthDate,
                                 coverPhotoUrl, profession, location, hometown,
                                 workplace, workRole, education, educationClass
                             )

@@ -85,84 +85,14 @@ class MeskotRepository(
     val posts: StateFlow<List<Post>> = _posts.asStateFlow()
 
     // Stories list (synchronized with Firebase Firestore with expiration timer)
-    private val _stories = MutableStateFlow<List<StoryItem>>(createSeedCommunityStories())
+    private val _stories = MutableStateFlow<List<StoryItem>>(emptyList())
     val stories: StateFlow<List<StoryItem>> = _stories.asStateFlow()
     private var storiesRegistration: com.google.firebase.firestore.ListenerRegistration? = null
 
-    private fun createSeedCommunityStories(): List<StoryItem> {
-        val now = System.currentTimeMillis()
-        return listOf(
-            StoryItem(
-                id = "preset_story_1",
-                uid = "community_selam",
-                authorName = "Selamawit T.",
-                authorPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-                mediaUrl = "https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=800&q=80",
-                caption = "Addis skyline looking radiant today ✨",
-                filterName = "Sunset",
-                createdAt = now - 2 * 3600 * 1000L,
-                expiresAt = now + 22 * 3600 * 1000L,
-                viewers = listOf("community_meskot", "community_dawit"),
-                likes = mapOf("community_meskot" to true, "community_dawit" to true),
-                reactions = mapOf("community_meskot" to "❤️", "community_dawit" to "🔥"),
-                commentCount = 2
-            ),
-            StoryItem(
-                id = "preset_story_2",
-                uid = "community_meskot",
-                authorName = "Meskot Official",
-                authorPhoto = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-                mediaUrl = "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=800&q=80",
-                caption = "Fresh roast traditional Buna ☕",
-                filterName = "Warm",
-                createdAt = now - 4 * 3600 * 1000L,
-                expiresAt = now + 20 * 3600 * 1000L,
-                viewers = listOf("community_selam", "community_kalkidan"),
-                likes = mapOf("community_selam" to true),
-                reactions = mapOf("community_selam" to "☕"),
-                commentCount = 2
-            ),
-            StoryItem(
-                id = "preset_story_3",
-                uid = "community_dawit",
-                authorName = "Dawit Gebre",
-                authorPhoto = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
-                mediaUrl = "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80",
-                caption = "Sunset over the Ethiopian highlands 🌄",
-                filterName = "Vibrant",
-                createdAt = now - 6 * 3600 * 1000L,
-                expiresAt = now + 18 * 3600 * 1000L,
-                viewers = listOf("community_selam"),
-                likes = mapOf("community_selam" to true),
-                reactions = mapOf("community_selam" to "😍"),
-                commentCount = 1
-            ),
-            StoryItem(
-                id = "preset_story_4",
-                uid = "community_kalkidan",
-                authorName = "Kalkidan M.",
-                authorPhoto = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
-                mediaUrl = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80",
-                caption = "Serene lake breezes 🌿",
-                filterName = "Normal",
-                createdAt = now - 8 * 3600 * 1000L,
-                expiresAt = now + 16 * 3600 * 1000L,
-                viewers = listOf("community_dawit"),
-                likes = mapOf("community_dawit" to true),
-                reactions = mapOf("community_dawit" to "✨"),
-                commentCount = 1
-            )
-        )
-    }
+    private fun createSeedCommunityStories(): List<StoryItem> = emptyList()
 
     private fun mergeLiveStories(liveStories: List<StoryItem>) {
-        val liveMap = liveStories.associateBy { it.id }
-        val currentMap = _stories.value.associateBy { it.id }
-        val seeds = createSeedCommunityStories().map { seed ->
-            liveMap[seed.id] ?: currentMap[seed.id] ?: seed
-        }
-        val nonSeedLive = liveStories.filterNot { s -> seeds.any { it.id == s.id } }
-        _stories.value = (nonSeedLive + seeds).sortedByDescending { it.createdAt }
+        _stories.value = liveStories.sortedByDescending { it.createdAt }
     }
 
     // Comments map: postId -> List<Comment>
@@ -281,6 +211,66 @@ class MeskotRepository(
             prefs.edit().putStringSet("active_tools", ids).apply()
         } catch (e: Exception) {
             // ignore
+        }
+    }
+
+    private fun saveUserPersonalDetailsBackup(user: User) {
+        try {
+            val prefs = context.getSharedPreferences("meskot_user_profile_backup", Context.MODE_PRIVATE)
+            val keys = buildList {
+                if (user.uid.isNotBlank()) add("uid_${user.uid}")
+                if (user.email.isNotBlank()) add("email_${user.email.trim().lowercase()}")
+            }
+            val editor = prefs.edit()
+            for (k in keys) {
+                editor.putString("${k}_displayName", user.displayName)
+                editor.putString("${k}_bio", user.bio)
+                editor.putString("${k}_photoUrl", user.photoUrl)
+                editor.putString("${k}_coverPhotoUrl", user.coverPhotoUrl)
+                editor.putString("${k}_gender", user.gender)
+                editor.putString("${k}_birthDate", user.birthDate)
+                editor.putString("${k}_profession", user.profession)
+                editor.putString("${k}_location", user.location)
+                editor.putString("${k}_hometown", user.hometown)
+                editor.putString("${k}_workplace", user.workplace)
+                editor.putString("${k}_workRole", user.workRole)
+                editor.putString("${k}_education", user.education)
+                editor.putString("${k}_educationClass", user.educationClass)
+                editor.putBoolean("${k}_hasBackup", true)
+            }
+            editor.apply()
+        } catch (e: Exception) {
+            Log.w("MeskotRepo", "Could not save profile backup: ${e.message}")
+        }
+    }
+
+    private fun applyUserPersonalDetailsBackup(user: User): User {
+        return try {
+            val prefs = context.getSharedPreferences("meskot_user_profile_backup", Context.MODE_PRIVATE)
+            val uidKey = "uid_${user.uid}"
+            val emailKey = "email_${user.email.trim().lowercase()}"
+            val activeKey = when {
+                user.uid.isNotBlank() && prefs.getBoolean("${uidKey}_hasBackup", false) -> uidKey
+                user.email.isNotBlank() && prefs.getBoolean("${emailKey}_hasBackup", false) -> emailKey
+                else -> return user
+            }
+            user.copy(
+                displayName = prefs.getString("${activeKey}_displayName", null)?.takeIf { it.isNotBlank() } ?: user.displayName,
+                bio = prefs.getString("${activeKey}_bio", null) ?: user.bio,
+                photoUrl = prefs.getString("${activeKey}_photoUrl", null)?.takeIf { it.isNotBlank() } ?: user.photoUrl,
+                coverPhotoUrl = prefs.getString("${activeKey}_coverPhotoUrl", null)?.takeIf { it.isNotBlank() } ?: user.coverPhotoUrl,
+                gender = prefs.getString("${activeKey}_gender", null)?.takeIf { it.isNotBlank() } ?: user.gender,
+                birthDate = prefs.getString("${activeKey}_birthDate", null)?.takeIf { it.isNotBlank() } ?: user.birthDate,
+                profession = prefs.getString("${activeKey}_profession", null) ?: user.profession,
+                location = prefs.getString("${activeKey}_location", null) ?: user.location,
+                hometown = prefs.getString("${activeKey}_hometown", null) ?: user.hometown,
+                workplace = prefs.getString("${activeKey}_workplace", null) ?: user.workplace,
+                workRole = prefs.getString("${activeKey}_workRole", null) ?: user.workRole,
+                education = prefs.getString("${activeKey}_education", null) ?: user.education,
+                educationClass = prefs.getString("${activeKey}_educationClass", null) ?: user.educationClass
+            )
+        } catch (e: Exception) {
+            user
         }
     }
 
@@ -457,9 +447,9 @@ class MeskotRepository(
         allMsgs.count { msg ->
             if (msg.isCallLog) return@count false
             val isIncoming = if (currentUid != null) {
-                msg.fromUid.isNotBlank() && msg.fromUid != currentUid && (msg.toUid == currentUid || msg.toUid == "user_0" || msg.toUid.isBlank())
+                msg.fromUid.isNotBlank() && msg.fromUid != currentUid && (msg.toUid == currentUid || msg.toUid.isBlank())
             } else {
-                msg.fromUid.isNotBlank() && msg.fromUid != "user_0"
+                msg.fromUid.isNotBlank()
             }
             if (!isIncoming) return@count false
             val lastRead = readMap[msg.fromUid] ?: 0L
@@ -481,13 +471,14 @@ class MeskotRepository(
         val fbAuthUser = FirebaseManager.getCurrentFirebaseUser()
         if (fbAuthUser != null) {
             val now = System.currentTimeMillis()
-            val user = User(
+            val baseUser = User(
                 uid = fbAuthUser.uid,
                 displayName = fbAuthUser.displayName ?: fbAuthUser.email?.substringBefore("@") ?: "User",
                 email = fbAuthUser.email ?: "",
                 photoUrl = fbAuthUser.photoUrl?.toString() ?: "",
                 lastSeen = now
             )
+            val user = applyUserPersonalDetailsBackup(baseUser)
             _currentUser.value = user
             userRepository.setCurrentUser(user)
             setupUserSpecificListeners(user.uid)
@@ -495,22 +486,28 @@ class MeskotRepository(
             // CRITICAL: Fetch full saved personal details and profile from server
             FirebaseManager.fetchUser(user.uid) { serverUser ->
                 if (serverUser != null) {
-                    val activeServerUser = serverUser.copy(lastSeen = System.currentTimeMillis())
-                    _currentUser.value = activeServerUser
-                    userRepository.setCurrentUser(activeServerUser)
-                    _users.value = _users.value.map { if (it.uid == activeServerUser.uid) activeServerUser else it }
-                    FirebaseManager.saveUser(activeServerUser)
-                    Log.d("MeskotRepo", "Loaded personal details for ${activeServerUser.uid} from Firestore server")
+                    val mergedUser = applyUserPersonalDetailsBackup(serverUser).copy(lastSeen = System.currentTimeMillis())
+                    _currentUser.value = mergedUser
+                    userRepository.setCurrentUser(mergedUser)
+                    saveUserPersonalDetailsBackup(mergedUser)
+                    _users.value = _users.value.map { if (it.uid == mergedUser.uid) mergedUser else it }
+                    FirebaseManager.saveUser(mergedUser)
+                    Log.d("MeskotRepo", "Loaded personal details for ${mergedUser.uid} from Firestore server")
+                } else {
+                    FirebaseManager.saveUser(user)
                 }
             }
         }
 
         repoScope.launch {
             userRepository.users.collect { liveUsers ->
-                _users.value = liveUsers
+                val mergedLiveUsers = liveUsers.map { u ->
+                    if (u.uid == _currentUser.value?.uid) applyUserPersonalDetailsBackup(u) else u
+                }
+                _users.value = mergedLiveUsers
                 val curUid = _currentUser.value?.uid ?: FirebaseManager.getCurrentFirebaseUser()?.uid
                 if (curUid != null) {
-                    val matching = liveUsers.find { it.uid == curUid }
+                    val matching = mergedLiveUsers.find { it.uid == curUid }
                     if (matching != null && matching != _currentUser.value) {
                         _currentUser.value = matching
                         setupUserSpecificListeners(matching.uid)
@@ -623,7 +620,11 @@ class MeskotRepository(
         FirebaseManager.recordPostView(postId, authorUid, viewerUid)
     }
 
-    fun loadAndSyncAnalytics(targetUid: String? = null, forceServerRefresh: Boolean = false) {
+    fun loadAndSyncAnalytics(
+        targetUid: String? = null,
+        timeRange: String = "Last 28 Days",
+        forceServerRefresh: Boolean = false
+    ) {
         val uid = targetUid ?: _currentUser.value?.uid ?: return
         if (uid.isBlank()) return
 
@@ -645,10 +646,16 @@ class MeskotRepository(
 
                 // 2. Compute dynamic up-to-date metrics from user's live posts and community
                 val myPosts = _posts.value.filter { it.uid == uid }
+                val myStories = _stories.value.filter { it.uid == uid }
                 val (freshInsights, freshEngagement) = FirebaseManager.computeLiveAnalyticsFromData(
                     uid = uid,
                     myPosts = myPosts,
-                    allUsers = _users.value
+                    allUsers = _users.value,
+                    myStories = myStories,
+                    friendUids = _friends.value,
+                    currentUser = _currentUser.value,
+                    timeRange = timeRange,
+                    existingInsights = _userInsights.value
                 )
 
                 _userInsights.value = freshInsights
@@ -704,19 +711,13 @@ class MeskotRepository(
             marketplaceListingsRegistration?.remove()
             marketplaceListingsRegistration = FirebaseManager.listenToMarketplaceListings { liveListings ->
                 val savedSet = _savedListingIds.value
-                val liveMap = liveListings.associateBy { it.id }
-                val mergedSeed = createInitialMarketplaceListings()
-                    .filterNot { it.id in liveMap }
-                    .map { it.copy(isSaved = savedSet.contains(it.id)) }
                 val mergedLive = liveListings.map { it.copy(isSaved = savedSet.contains(it.id)) }
-                _marketplaceListings.value = (mergedLive + mergedSeed).sortedByDescending { it.createdAt }
+                _marketplaceListings.value = mergedLive.sortedByDescending { it.createdAt }
             }
 
             marketplaceChatsRegistration?.remove()
             marketplaceChatsRegistration = FirebaseManager.listenToMarketplaceChats { liveChats ->
-                val liveKeys = liveChats.map { "${it.chatId}_${it.timestamp}" }.toSet()
-                val remainingLocal = _marketplaceChats.value.filterNot { "${it.chatId}_${it.timestamp}" in liveKeys }
-                _marketplaceChats.value = (liveChats + remainingLocal).sortedByDescending { it.timestamp }
+                _marketplaceChats.value = liveChats.sortedByDescending { it.timestamp }
             }
 
             FirebaseManager.listenToComments { liveComments ->
@@ -808,15 +809,20 @@ class MeskotRepository(
             email = email,
             pass = pass,
             onSuccess = { fbUser ->
-                _currentUser.value = fbUser
-                userRepository.setCurrentUser(fbUser)
+                val restoredUser = applyUserPersonalDetailsBackup(fbUser)
+                saveUserPersonalDetailsBackup(restoredUser)
+                _currentUser.value = restoredUser
+                userRepository.setCurrentUser(restoredUser)
                 repoScope.launch {
-                    userRepository.saveUser(fbUser)
+                    userRepository.saveUser(restoredUser)
                 }
-                setupUserSpecificListeners(fbUser.uid)
+                FirebaseManager.saveUser(restoredUser)
+                setupUserSpecificListeners(restoredUser.uid)
                 setupFirebaseListeners()
-                if (_users.value.none { it.uid == fbUser.uid }) {
-                    _users.value = _users.value + fbUser
+                if (_users.value.none { it.uid == restoredUser.uid }) {
+                    _users.value = _users.value + restoredUser
+                } else {
+                    _users.value = _users.value.map { if (it.uid == restoredUser.uid) restoredUser else it }
                 }
                 onResult?.invoke(true, null)
             },
@@ -844,6 +850,7 @@ class MeskotRepository(
             birthDate = birthDate,
             phoneNumber = phoneNumber,
             onSuccess = { fbUser ->
+                saveUserPersonalDetailsBackup(fbUser)
                 _currentUser.value = fbUser
                 userRepository.setCurrentUser(fbUser)
                 repoScope.launch {
@@ -853,6 +860,8 @@ class MeskotRepository(
                 setupFirebaseListeners()
                 if (_users.value.none { it.uid == fbUser.uid }) {
                     _users.value = _users.value + fbUser
+                } else {
+                    _users.value = _users.value.map { if (it.uid == fbUser.uid) fbUser else it }
                 }
                 onResult?.invoke(true, null)
             },
@@ -893,6 +902,7 @@ class MeskotRepository(
     fun logout() {
         val curr = _currentUser.value
         if (curr != null) {
+            saveUserPersonalDetailsBackup(curr)
             val offlineUser = curr.copy(lastSeen = 0L)
             _users.value = _users.value.map { if (it.uid == curr.uid) offlineUser else it }
             repoScope.launch {
@@ -957,8 +967,13 @@ class MeskotRepository(
             education = education.trim(),
             educationClass = educationClass.trim()
         )
+        saveUserPersonalDetailsBackup(updated)
         _currentUser.value = updated
-        _users.value = _users.value.map { if (it.uid == curr.uid) updated else it }
+        if (_users.value.none { it.uid == curr.uid }) {
+            _users.value = _users.value + updated
+        } else {
+            _users.value = _users.value.map { if (it.uid == curr.uid) updated else it }
+        }
         userRepository.setCurrentUser(updated)
         repoScope.launch {
             try {
@@ -978,6 +993,7 @@ class MeskotRepository(
     }
 
     fun updateUserProfile(user: User, onComplete: ((Boolean, String?) -> Unit)? = null) {
+        saveUserPersonalDetailsBackup(user)
         _currentUser.value = user
         _users.value = _users.value.map { if (it.uid == user.uid) user else it }
         userRepository.setCurrentUser(user)
@@ -1261,11 +1277,7 @@ class MeskotRepository(
 
     fun toggleStoryLike(storyId: String, uid: String) {
         val actor = _currentUser.value
-        val existing = _stories.value.find { it.id == storyId }
-        val baseList = if (existing == null) {
-            val seed = createSeedCommunityStories().find { it.id == storyId }
-            if (seed != null) _stories.value + seed else _stories.value
-        } else _stories.value
+        val baseList = _stories.value
 
         _stories.value = baseList.map { story ->
             if (story.id == storyId) {
@@ -1302,11 +1314,7 @@ class MeskotRepository(
 
     fun reactToStory(storyId: String, uid: String, emoji: String) {
         val actor = _currentUser.value
-        val existing = _stories.value.find { it.id == storyId }
-        val baseList = if (existing == null) {
-            val seed = createSeedCommunityStories().find { it.id == storyId }
-            if (seed != null) _stories.value + seed else _stories.value
-        } else _stories.value
+        val baseList = _stories.value
 
         _stories.value = baseList.map { story ->
             if (story.id == storyId) {
@@ -1387,21 +1395,7 @@ class MeskotRepository(
 
     fun sharePost(postId: String) {
         val user = _currentUser.value ?: return
-        val sourcePost = _posts.value.find { it.id == postId }
-        val effectivePost = sourcePost ?: run {
-            val preset = com.example.ui.components.PresetReelsCollection.find { "preset_${it.id}" == postId }
-            if (preset != null) {
-                Post(
-                    id = postId,
-                    uid = "meskot_culture",
-                    authorName = preset.title,
-                    text = preset.description,
-                    postType = "REEL",
-                    videoUrl = preset.mediaUrl,
-                    audioTrackTitle = preset.audioTitle
-                )
-            } else null
-        } ?: return
+        val effectivePost = _posts.value.find { it.id == postId } ?: return
 
         val newPost = Post(
             id = "post_" + System.currentTimeMillis(),
@@ -2160,7 +2154,7 @@ class MeskotRepository(
         paymentRef: String = "",
         totalPaidEtb: Double = dailyBudgetEtb * durationDays.coerceAtLeast(1) * 1.05
     ): Boolean {
-        val user = _currentUser.value ?: User(uid = "usr_yemane", displayName = "Yemane Tsadik")
+        val user = _currentUser.value ?: User(uid = "usr_${System.currentTimeMillis()}", displayName = "Meskot User")
         val chargeAmountEtb = if (totalPaidEtb > 0.0) totalPaidEtb else (dailyBudgetEtb * durationDays.coerceAtLeast(1) * 1.05)
 
         if (deductFromWallet && (user.creatorNetBalance < chargeAmountEtb || chargeAmountEtb <= 0)) {
@@ -2183,11 +2177,9 @@ class MeskotRepository(
             FirebaseManager.saveUser(updatedUser)
         }
 
-        val advertiserName = user.displayName.ifBlank { "Yemane Tsadik" }
+        val advertiserName = user.displayName.ifBlank { "Meskot User" }
         val advertiserAvatar = user.photoUrl
 
-        val estimatedImpressions = (dailyBudgetEtb * 18).toInt().coerceAtLeast(1250)
-        val estimatedClicks = (estimatedImpressions * 0.038).toInt().coerceAtLeast(45)
         val effectivePaymentRef = paymentRef.ifBlank {
             "CHP-AD-" + UUID.randomUUID().toString().take(8).uppercase()
         }
@@ -2198,13 +2190,13 @@ class MeskotRepository(
             objective = objective,
             status = "ACTIVE",
             dailyBudgetEtb = dailyBudgetEtb,
-            totalSpentEtb = dailyBudgetEtb,
-            impressions = estimatedImpressions,
-            clicks = estimatedClicks,
-            conversions = (estimatedClicks * 0.18).toInt().coerceAtLeast(6),
-            ctr = 3.8,
-            avgCpcEtb = (1.20 + Math.random() * 0.80).let { String.format(java.util.Locale.US, "%.2f", it).toDouble() },
-            cpmEtb = 25.0,
+            totalSpentEtb = 0.0,
+            impressions = 0,
+            clicks = 0,
+            conversions = 0,
+            ctr = 0.0,
+            avgCpcEtb = 0.0,
+            cpmEtb = 0.0,
             headline = headline,
             primaryText = primaryText,
             mediaUrl = mediaUrl,
@@ -2257,19 +2249,24 @@ class MeskotRepository(
     }
 
     fun recordAdImpression(campaignId: String) {
-        var cpm = 25.0
+        var cpm = 0.0
         _adCampaigns.value = _adCampaigns.value.map { camp ->
             if (camp.id == campaignId) {
-                cpm = camp.cpmEtb
-                val costPerImp = (camp.cpmEtb / 1000.0).coerceAtLeast(0.025)
+                val costPerImp = if (camp.dailyBudgetEtb > 0) (camp.dailyBudgetEtb / 500.0).coerceAtLeast(0.01) else 0.02
                 val newImps = camp.impressions + 1
+                val newSpent = camp.totalSpentEtb + costPerImp
                 val newCtr = if (newImps > 0) {
                     Math.round((camp.clicks.toDouble() / newImps.toDouble()) * 10000.0) / 100.0
-                } else camp.ctr
+                } else 0.0
+                val newCpm = if (newImps > 0) {
+                    Math.round((newSpent / newImps.toDouble()) * 1000.0 * 100.0) / 100.0
+                } else 0.0
+                cpm = newCpm
                 camp.copy(
                     impressions = newImps,
-                    totalSpentEtb = camp.totalSpentEtb + costPerImp,
-                    ctr = newCtr
+                    totalSpentEtb = newSpent,
+                    ctr = newCtr,
+                    cpmEtb = newCpm
                 )
             } else camp
         }
@@ -2277,20 +2274,26 @@ class MeskotRepository(
     }
 
     fun recordAdClick(campaignId: String, recordConversion: Boolean = false) {
-        var cpc = 1.45
+        var cpc = 0.0
         _adCampaigns.value = _adCampaigns.value.map { camp ->
             if (camp.id == campaignId) {
-                cpc = camp.avgCpcEtb
+                val costPerClick = if (camp.dailyBudgetEtb > 0) (camp.dailyBudgetEtb / 50.0).coerceAtLeast(0.25) else 1.0
                 val newClicks = camp.clicks + 1
                 val newConversions = if (recordConversion) camp.conversions + 1 else camp.conversions
+                val newSpent = camp.totalSpentEtb + costPerClick
                 val newCtr = if (camp.impressions > 0) {
                     Math.round((newClicks.toDouble() / camp.impressions.toDouble()) * 10000.0) / 100.0
-                } else camp.ctr
+                } else 0.0
+                val newCpc = if (newClicks > 0) {
+                    Math.round((newSpent / newClicks.toDouble()) * 100.0) / 100.0
+                } else 0.0
+                cpc = newCpc
                 camp.copy(
                     clicks = newClicks,
                     conversions = newConversions,
-                    totalSpentEtb = camp.totalSpentEtb + cpc,
-                    ctr = newCtr
+                    totalSpentEtb = newSpent,
+                    ctr = newCtr,
+                    avgCpcEtb = newCpc
                 )
             } else camp
         }
@@ -2304,53 +2307,7 @@ class MeskotRepository(
 
     // COMMENTS
     fun getCommentsForPost(postId: String): List<Comment> {
-        val existing = _comments.value[postId]
-        if (!existing.isNullOrEmpty()) return existing
-        if (postId.startsWith("preset_") || postId.startsWith("reel_")) {
-            val presets = getPresetReelComments(postId)
-            _comments.value = _comments.value + (postId to presets)
-            return presets
-        }
-        return emptyList()
-    }
-
-    private fun getPresetReelComments(postId: String): List<Comment> {
-        val now = System.currentTimeMillis()
-        return listOf(
-            Comment(
-                id = "cmt_preset_${postId}_1",
-                postId = postId,
-                uid = "selam_t",
-                authorName = "Selamawit T.",
-                authorPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
-                text = "ዋው በጣም የሚያምር ቪዲዮ ነው! 🔥🇪🇹 Truly captured the authentic vibe!",
-                createdAt = now - 3600000L * 2,
-                likes = mapOf("user_selam" to true, "user_dawit" to true),
-                isAuthorVerified = true
-            ),
-            Comment(
-                id = "cmt_preset_${postId}_2",
-                postId = postId,
-                uid = "dawit_g",
-                authorName = "Dawit Gebre",
-                authorPhoto = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
-                text = "Habesha culture at its finest! The music track pairing is amazing ☕✨",
-                createdAt = now - 3600000L * 5,
-                likes = mapOf("user_selam" to true),
-                isAuthorVerified = false
-            ),
-            Comment(
-                id = "cmt_preset_${postId}_3",
-                postId = postId,
-                uid = "kalkidan_m",
-                authorName = "Kalkidan M.",
-                authorPhoto = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",
-                text = "Keep sharing our heritage! Shared to my friends 🙌",
-                createdAt = now - 3600000L * 8,
-                likes = emptyMap(),
-                isAuthorVerified = true
-            )
-        )
+        return _comments.value[postId] ?: emptyList()
     }
 
     fun addComment(postId: String, text: String, parentId: String? = null) {
@@ -2888,7 +2845,7 @@ class MeskotRepository(
             uid = user.uid,
             title = title,
             count = 0,
-            coverUrl = "https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=500&auto=format&fit=crop&q=80",
+            coverUrl = "",
             photos = emptyList()
         )
         _albums.value = listOf(newAlbum) + _albums.value
@@ -3039,51 +2996,7 @@ class MeskotRepository(
     }
 
     // INITIAL DATA GENERATORS
-    private fun createInitialUsers(): List<User> {
-        val now = System.currentTimeMillis()
-        return listOf(
-            User(
-                uid = "user_gebreslassie",
-                displayName = "Gebreslassie Tsadik",
-                bio = "Living life with faith, courage, and purpose.",
-                photoUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300",
-                lastSeen = now - 12 * 60 * 1000L, // 12 minutes ago
-                followersCount = 384,
-                followingCount = 142,
-                location = "Mekelle, Ethiopia"
-            ),
-            User(
-                uid = "user_rahel",
-                displayName = "Rahel Tesfaye",
-                bio = "Tech innovator & community organizer 🇪🇹",
-                photoUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300",
-                lastSeen = now - 45 * 1000L, // 45 seconds ago (Active now)
-                followersCount = 512,
-                followingCount = 230,
-                location = "Addis Ababa, Ethiopia"
-            ),
-            User(
-                uid = "user_daniel",
-                displayName = "Daniel Haile",
-                bio = "Photographer & cultural heritage storyteller 📸",
-                photoUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300",
-                lastSeen = now - 2 * 3600 * 1000L, // 2 hours ago
-                followersCount = 289,
-                followingCount = 175,
-                location = "Hawassa, Ethiopia"
-            ),
-            User(
-                uid = "user_almaz",
-                displayName = "Almaz Berhe",
-                bio = "Culinary artist celebrating traditional flavors ☕",
-                photoUrl = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300",
-                lastSeen = now - 26 * 3600 * 1000L, // Yesterday
-                followersCount = 410,
-                followingCount = 190,
-                location = "Gondar, Ethiopia"
-            )
-        )
-    }
+    private fun createInitialUsers(): List<User> = emptyList()
 
     private fun createInitialPosts(): List<Post> = emptyList()
 
@@ -3093,45 +3006,37 @@ class MeskotRepository(
         return listOf(
             GroupItem(
                 id = "group_tech",
-                name = "Addis Tech & Startups (አዲስ ቴክ)",
+                name = "Addis Tech & Startups",
                 description = "Ethiopian founders, developers, engineers, and digital creators building products for Africa and the diaspora.",
                 createdBy = "meskot",
-                memberCount = 142,
+                memberCount = 1,
                 isJoined = true,
                 coverColorHex = "#2A4838",
-                coverImageUrl = "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1000&auto=format&fit=crop&q=80",
+                coverImageUrl = "",
                 isPrivate = false,
-                allowMemberPosts = true,
-                pendingApprovalsCount = 4,
-                reportedContentCount = 1,
-                potentialSpamCount = 2,
-                moderationAlertsCount = 1
+                allowMemberPosts = true
             ),
             GroupItem(
                 id = "group_culture",
-                name = "Habesha Food & Culinary Arts (የባህል ምግብ)",
+                name = "Habesha Food & Culinary Arts",
                 description = "Sharing traditional recipes, spice blends (berbere, mitmita), injera techniques, and diaspora cooking secrets.",
                 createdBy = "meskot",
-                memberCount = 89,
+                memberCount = 1,
                 isJoined = true,
                 coverColorHex = "#8C2F39",
-                coverImageUrl = "https://images.unsplash.com/photo-1544025162-d76694265947?w=1000&auto=format&fit=crop&q=80",
+                coverImageUrl = "",
                 isPrivate = false,
-                allowMemberPosts = true,
-                pendingApprovalsCount = 2,
-                reportedContentCount = 0,
-                potentialSpamCount = 1,
-                moderationAlertsCount = 0
+                allowMemberPosts = true
             ),
             GroupItem(
                 id = "group_art",
                 name = "Ethiopian Photography & Travel",
                 description = "Visual journey across Simien Mountains, Danakil Depression, Omo Valley, Harar Jugol, and modern Addis nightlife.",
                 createdBy = "meskot",
-                memberCount = 64,
+                memberCount = 1,
                 isJoined = false,
                 coverColorHex = "#B8863A",
-                coverImageUrl = "https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=1000&auto=format&fit=crop&q=80",
+                coverImageUrl = "",
                 isPrivate = false,
                 allowMemberPosts = true
             ),
@@ -3140,305 +3045,27 @@ class MeskotRepository(
                 name = "Ge'ez & Ethiopian Literature",
                 description = "Appreciating classic Ethiopian manuscripts, poetry (Qene), novels, and contemporary Habesha authors.",
                 createdBy = "meskot",
-                memberCount = 38,
+                memberCount = 1,
                 isJoined = false,
                 coverColorHex = "#4A3B5C",
-                coverImageUrl = "https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=1000&auto=format&fit=crop&q=80",
+                coverImageUrl = "",
                 isPrivate = true,
                 allowMemberPosts = true
             )
         )
     }
 
-    private fun createInitialGroupPosts(): Map<String, List<Post>> {
-        val now = System.currentTimeMillis()
-        return mapOf(
-            "group_tech" to listOf(
-                Post(
-                    id = "gpost_tech_1",
-                    uid = "user_rahel",
-                    authorName = "Rahel Tesfaye",
-                    authorPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300",
-                    text = "📌 [Announcement] Welcome to Addis Tech & Startups! Drop your current Jetpack Compose, AI, or FinTech project below so members can connect and collaborate. 🚀🇪🇹 #announcement #android #kotlin",
-                    mediaUrls = listOf("https://images.unsplash.com/photo-1531482615713-2afd69097998?w=900&auto=format&fit=crop&q=80"),
-                    postType = "PHOTO",
-                    reactions = mapOf("user_gebreslassie" to "love", "user_abebe" to "like"),
-                    commentCount = 2,
-                    createdAt = now - 2 * 3600 * 1000L,
-                    isAuthorVerified = true,
-                    tags = listOf("announcements", "photos", "android")
-                ),
-                Post(
-                    id = "gpost_tech_2",
-                    uid = "user_gebreslassie",
-                    authorName = "Gebreslassie Tsadik",
-                    authorPhoto = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300",
-                    text = "📅 [Event] Addis Developers & Founders Meetup — This Saturday at Bole Atlas! Live demos on mobile payments and Chapa SDK integration. Who's joining? #events",
-                    reactions = mapOf("user_rahel" to "like"),
-                    commentCount = 1,
-                    createdAt = now - 6 * 3600 * 1000L,
-                    tags = listOf("events")
-                )
-            )
-        )
-    }
+    private fun createInitialGroupPosts(): Map<String, List<Post>> = emptyMap()
 
     private fun createInitialAlbums(): List<AlbumItem> = emptyList()
 
-    private fun createInitialChatMessages(): Map<String, List<ChatMessage>> {
-        val gebUid = "user_gebreslassie"
-        val myUid = "user_0"
-        val cal = java.util.Calendar.getInstance()
-        fun timeFor(day: Int, hour: Int, minute: Int): Long {
-            cal.set(2026, java.util.Calendar.AUGUST, day, hour, minute, 0)
-            return cal.timeInMillis
-        }
-        val messages = listOf(
-            ChatMessage(
-                id = "geb_msg_1",
-                convoId = "convo_gebreslassie",
-                fromUid = myUid,
-                toUid = gebUid,
-                text = "Chigir yeblun eshi kifelu trah",
-                createdAt = timeFor(8, 13, 40),
-                isSeen = true
-            ),
-            ChatMessage(
-                id = "geb_msg_2",
-                convoId = "convo_gebreslassie",
-                fromUid = gebUid,
-                toUid = myUid,
-                text = "ብሰርዓት",
-                createdAt = timeFor(14, 7, 38),
-                isSeen = true
-            ),
-            ChatMessage(
-                id = "geb_msg_3",
-                convoId = "convo_gebreslassie",
-                fromUid = myUid,
-                toUid = gebUid,
-                text = "Hi",
-                createdAt = timeFor(16, 9, 50),
-                isSeen = true
-            ),
-            ChatMessage(
-                id = "geb_msg_4",
-                convoId = "convo_gebreslassie",
-                fromUid = myUid,
-                toUid = gebUid,
-                text = "Hishuka do",
-                createdAt = timeFor(16, 9, 50) + 1500L,
-                isSeen = true
-            ),
-            ChatMessage(
-                id = "geb_msg_5",
-                convoId = "convo_gebreslassie",
-                fromUid = gebUid,
-                toUid = myUid,
-                text = "Mnm lewti yelen",
-                createdAt = timeFor(16, 9, 52),
-                isSeen = true
-            ),
-            ChatMessage(
-                id = "geb_msg_6",
-                convoId = "convo_gebreslassie",
-                fromUid = myUid,
-                toUid = gebUid,
-                text = "Hikmna kedka do",
-                createdAt = timeFor(16, 9, 53),
-                isSeen = true
-            ),
-            ChatMessage(
-                id = "geb_msg_7",
-                convoId = "convo_gebreslassie",
-                fromUid = gebUid,
-                toUid = myUid,
-                text = "Aykedkun zeleku",
-                createdAt = timeFor(16, 9, 55),
-                isSeen = true
-            ),
-            ChatMessage(
-                id = "geb_msg_8",
-                convoId = "convo_gebreslassie",
-                fromUid = myUid,
-                toUid = gebUid,
-                text = "Hi",
-                createdAt = timeFor(18, 12, 13),
-                isSeen = true
-            ),
-            ChatMessage(
-                id = "geb_msg_9",
-                convoId = "convo_gebreslassie",
-                fromUid = gebUid,
-                toUid = myUid,
-                text = "Hi",
-                createdAt = timeFor(18, 12, 54),
-                isSeen = false
-            )
-        )
-        val seenIds = loadLocallySeenMsgIds()
-        val lastRead = loadLastReadTimestamps()[gebUid] ?: 0L
-        val hydrated = messages.map { msg ->
-            if (seenIds.contains(msg.id) || (lastRead > 0L && msg.createdAt <= lastRead)) {
-                msg.copy(isSeen = true)
-            } else msg
-        }
-        return mapOf(gebUid to hydrated)
-    }
+    private fun createInitialChatMessages(): Map<String, List<ChatMessage>> = emptyMap()
 
-    private fun createInitialNotifications(): List<NotificationItem> {
-        val now = System.currentTimeMillis()
-        val readIds = loadLocallyReadNotifIds()
-        return listOf(
-            NotificationItem(
-                id = "notif_init_1",
-                fromUid = "user_gebreslassie",
-                fromName = "Gebreslassie Tsadik",
-                fromPhoto = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300",
-                type = "message",
-                text = "Gebreslassie Tsadik sent you a message: 'Hi'",
-                isRead = readIds.contains("notif_init_1"),
-                createdAt = now - 14 * 60 * 1000L
-            ),
-            NotificationItem(
-                id = "notif_init_2",
-                fromUid = "user_sara",
-                fromName = "Sara Haile",
-                fromPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300",
-                type = "like",
-                text = "Sara Haile reacted ❤️ to your post",
-                isRead = readIds.contains("notif_init_2"),
-                createdAt = now - 45 * 60 * 1000L
-            ),
-            NotificationItem(
-                id = "notif_init_3",
-                fromUid = "user_abebe",
-                fromName = "Abebe Bikila",
-                fromPhoto = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300",
-                type = "comment",
-                text = "Abebe Bikila commented: 'Great perspective on this!'",
-                isRead = true,
-                createdAt = now - 3 * 3600 * 1000L
-            ),
-            NotificationItem(
-                id = "notif_init_4",
-                fromUid = "system_meskot",
-                fromName = "Meskot Studio",
-                fromPhoto = "",
-                type = "monetization_approved",
-                text = "Meskot Creator Studio approved your monetization application",
-                isRead = true,
-                createdAt = now - 24 * 3600 * 1000L
-            )
-        )
-    }
+    private fun createInitialNotifications(): List<NotificationItem> = emptyList()
 
-    private fun createInitialAdCampaigns(): List<AdCampaign> {
-        return listOf(
-            AdCampaign(
-                id = "camp_coffee_01",
-                name = "Habesha Coffee Roasters - Winter Single Origin",
-                objective = "TRAFFIC",
-                status = "ACTIVE",
-                dailyBudgetEtb = 500.0,
-                totalSpentEtb = 3420.0,
-                impressions = 48290,
-                clicks = 2140,
-                conversions = 312,
-                ctr = 4.43,
-                avgCpcEtb = 1.60,
-                cpmEtb = 70.8,
-                headline = "Single-Origin Yirgacheffe & Sidama Beans ☕",
-                primaryText = "Directly sourced from smallholder family farms in Sidama and Yirgacheffe. Freshly micro-roasted in Addis Ababa. Experience floral jasmine & citrus notes.",
-                mediaUrl = "https://images.unsplash.com/photo-1509785307050-d4066910ec1e?w=800&auto=format&fit=crop&q=80",
-                ctaText = "Shop Now",
-                destinationUrl = "https://habeshacoffee.example.com",
-                advertiserName = "Habesha Coffee Roasters",
-                advertiserAvatar = "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=150"
-            ),
-            AdCampaign(
-                id = "camp_tech_02",
-                name = "Addis Tech Summit 2026 - Early Bird Passes",
-                objective = "CONVERSIONS",
-                status = "ACTIVE",
-                dailyBudgetEtb = 1200.0,
-                totalSpentEtb = 8750.0,
-                impressions = 94800,
-                clicks = 4890,
-                conversions = 680,
-                ctr = 5.16,
-                avgCpcEtb = 1.79,
-                cpmEtb = 92.3,
-                headline = "Early Bird Tickets Now Open! 🚀 Addis Tech Summit",
-                primaryText = "Join 3,000+ engineers, founders, and venture capitalists at Millennium Hall. 40+ speakers from Silicon Valley, London, and Nairobi.",
-                mediaUrl = "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80",
-                ctaText = "Register Now",
-                destinationUrl = "https://addistechsummit.et",
-                advertiserName = "Addis Tech Network",
-                advertiserAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
-            ),
-            AdCampaign(
-                id = "camp_leather_03",
-                name = "Sheger Artisan Leather Goods",
-                objective = "AWARENESS",
-                status = "PAUSED",
-                dailyBudgetEtb = 400.0,
-                totalSpentEtb = 2100.0,
-                impressions = 31500,
-                clicks = 980,
-                conversions = 95,
-                ctr = 3.11,
-                avgCpcEtb = 2.14,
-                cpmEtb = 66.7,
-                headline = "Handcrafted Ethiopian Full-Grain Leather Bags 🎒",
-                primaryText = "Centuries of Ethiopian leather tanning craft combined with sleek modern functional aesthetics. Lifetime warranty on craftsmanship.",
-                mediaUrl = "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=800&auto=format&fit=crop&q=80",
-                ctaText = "Learn More",
-                destinationUrl = "https://shegerleather.et",
-                advertiserName = "Sheger Leather Crafts",
-                advertiserAvatar = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150"
-            )
-        )
-    }
+    private fun createInitialAdCampaigns(): List<AdCampaign> = emptyList()
 
-    private fun createInitialPayoutHistory(): List<CreatorPayoutRecord> {
-        val now = System.currentTimeMillis()
-        return listOf(
-            CreatorPayoutRecord(
-                id = "pay_01",
-                creatorUid = "meskot_creator",
-                amountEtb = 4800.0,
-                platformFeeEtb = 96.0,
-                netAmountEtb = 4704.0,
-                payoutMethod = "CBE Birr (Commercial Bank of Ethiopia)",
-                status = "COMPLETED",
-                transactionRef = "CBE-TX-98421098",
-                timestamp = now - 86400000L * 4
-            ),
-            CreatorPayoutRecord(
-                id = "pay_02",
-                creatorUid = "meskot_creator",
-                amountEtb = 3200.0,
-                platformFeeEtb = 64.0,
-                netAmountEtb = 3136.0,
-                payoutMethod = "Telebirr SuperApp",
-                status = "COMPLETED",
-                transactionRef = "TB-DISB-77218392",
-                timestamp = now - 86400000L * 12
-            ),
-            CreatorPayoutRecord(
-                id = "pay_03",
-                creatorUid = "meskot_creator",
-                amountEtb = 1500.0,
-                platformFeeEtb = 30.0,
-                netAmountEtb = 1470.0,
-                payoutMethod = "Chapa Direct Settlement",
-                status = "COMPLETED",
-                transactionRef = "CHP-REF-34891277",
-                timestamp = now - 86400000L * 25
-            )
-        )
-    }
+    private fun createInitialPayoutHistory(): List<CreatorPayoutRecord> = emptyList()
 
     fun refreshMonetizationTools() {
         _monetizationTools.value = buildDynamicMonetizationTools()
@@ -3679,112 +3306,15 @@ class MeskotRepository(
     }
 
     private fun createInitialLedger(): List<EarningsLedgerEntry> {
-        val now = System.currentTimeMillis()
-        return listOf(
-            EarningsLedgerEntry(
-                id = "led_01",
-                transactionRef = "TX-CR-88219401",
-                entryType = LedgerEntryType.AD_REVENUE_CREDIT,
-                amountEtb = 320.00,
-                balanceAfterEtb = 4960.00,
-                timestamp = now - 3600000L * 2,
-                sourceTitle = "Daily In-Stream Ad Settlement",
-                metadata = "Impressions: 14,200 · eCPM: 22.50 ETB"
-            ),
-            EarningsLedgerEntry(
-                id = "led_02",
-                transactionRef = "TX-CR-77123982",
-                entryType = LedgerEntryType.FAN_TIP_CREDIT,
-                amountEtb = 100.00,
-                balanceAfterEtb = 4640.00,
-                timestamp = now - 3600000L * 8,
-                sourceTitle = "Chapa Reader Tip via Telebirr",
-                metadata = "Sender: Almaz Bekele · Ref: CHP-9021"
-            ),
-            EarningsLedgerEntry(
-                id = "led_03",
-                transactionRef = "TX-CR-66239102",
-                entryType = LedgerEntryType.SUBSCRIPTION_CREDIT,
-                amountEtb = 280.00,
-                balanceAfterEtb = 4540.00,
-                timestamp = now - 86400000L * 1,
-                sourceTitle = "Silver VIP Renewal (Dawit Mengistu)",
-                metadata = "Gross: 350.00 ETB · Platform fee: 70.00 ETB (20%)"
-            ),
-            EarningsLedgerEntry(
-                id = "led_04",
-                transactionRef = "TX-CR-55102983",
-                entryType = LedgerEntryType.STARS_GIFT_CREDIT,
-                amountEtb = 250.00,
-                balanceAfterEtb = 4260.00,
-                timestamp = now - 86400000L * 2,
-                sourceTitle = "Live Room Micro-Gifts (250 Stars)",
-                metadata = "Audience: Adigrat Alumni Live Q&A"
-            ),
-            EarningsLedgerEntry(
-                id = "led_05",
-                transactionRef = "TXN-CBE-98421098",
-                entryType = LedgerEntryType.PAYOUT_DEBIT,
-                amountEtb = -4800.00,
-                balanceAfterEtb = 4010.00,
-                timestamp = now - 86400000L * 4,
-                sourceTitle = "Disbursement to Commercial Bank of Ethiopia (CBE)",
-                metadata = "Account: 1000***4562 · Status: Settled"
-            )
-        )
+        return emptyList()
     }
 
     private fun createInitialContentFormatMetrics(): List<ContentFormatMetric> {
-        return listOf(
-            ContentFormatMetric(
-                formatName = "Reels & Shorts",
-                icon = "⚡",
-                views = 142000L,
-                monetizableImpressions = 89400L,
-                rpmEtb = 32.50,
-                grossRevenueEtb = 2905.50,
-                netCreatorRevenueEtb = 2033.85
-            ),
-            ContentFormatMetric(
-                formatName = "Long Videos (> 3 min)",
-                icon = "🎥",
-                views = 48500L,
-                monetizableImpressions = 41200L,
-                rpmEtb = 58.00,
-                grossRevenueEtb = 2389.60,
-                netCreatorRevenueEtb = 1672.72
-            ),
-            ContentFormatMetric(
-                formatName = "Articles & Posts",
-                icon = "📝",
-                views = 68900L,
-                monetizableImpressions = 32100L,
-                rpmEtb = 18.00,
-                grossRevenueEtb = 577.80,
-                netCreatorRevenueEtb = 404.46
-            ),
-            ContentFormatMetric(
-                formatName = "Live Streams & Audio Rooms",
-                icon = "🎙️",
-                views = 12400L,
-                monetizableImpressions = 11800L,
-                rpmEtb = 42.00,
-                grossRevenueEtb = 495.60,
-                netCreatorRevenueEtb = 346.92
-            )
-        )
+        return emptyList()
     }
 
     private fun createInitialDailyEarnings(): List<DailyEarningsMetric> {
-        return listOf(
-            DailyEarningsMetric("Mon", "Sep 07", 210.0, 150.0, 350.0, 710.0),
-            DailyEarningsMetric("Tue", "Sep 08", 185.0, 90.0, 150.0, 425.0),
-            DailyEarningsMetric("Wed", "Sep 09", 340.0, 220.0, 0.0, 560.0),
-            DailyEarningsMetric("Thu", "Sep 10", 290.0, 180.0, 350.0, 820.0),
-            DailyEarningsMetric("Fri", "Sep 11", 420.0, 310.0, 150.0, 880.0),
-            DailyEarningsMetric("Sat", "Sep 12", 510.0, 440.0, 800.0, 1750.0),
-            DailyEarningsMetric("Sun", "Sep 13", 380.0, 260.0, 350.0, 990.0)
-        )
+        return emptyList()
     }
 
     private fun createInitialPayoutAccounts(): List<CreatorPayoutAccount> {
@@ -4081,8 +3611,8 @@ class MeskotRepository(
         longitude: Double,
         imageUrls: List<String>,
         isNegotiable: Boolean = true,
-        deliveryOption: String = "Meetup · Bole",
-        sellerPhone: String = "+251 911 234 567",
+        deliveryOption: String = "Local Meetup",
+        sellerPhone: String = "",
         allowChat: Boolean = true,
         allowCall: Boolean = true,
         allowWhatsApp: Boolean = false,
@@ -4090,22 +3620,23 @@ class MeskotRepository(
         tags: List<String> = emptyList()
     ): ListingItem {
         val user = _currentUser.value
+        val effectiveLocationName = locationName.ifBlank { user?.location?.ifBlank { _marketplaceLocation.value.name } ?: _marketplaceLocation.value.name }
         val item = ListingItem(
             id = "mkt_" + System.currentTimeMillis(),
             title = title.trim(),
             price = price,
             currency = currency.uppercase(),
-            imageUrls = if (imageUrls.isNotEmpty()) imageUrls else listOf("https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800"),
+            imageUrls = imageUrls,
             categoryId = categoryId,
             location = MarketplaceLocation(
                 latitude = latitude,
                 longitude = longitude,
-                name = locationName.ifBlank { _marketplaceLocation.value.name },
+                name = effectiveLocationName,
                 radiusKm = _marketplaceLocation.value.radiusKm
             ),
-            distanceKm = 0.8,
-            sellerId = user?.uid ?: "usr_current",
-            sellerName = user?.displayName ?: "Meskot Seller",
+            distanceKm = 0.0,
+            sellerId = user?.uid ?: "",
+            sellerName = user?.displayName?.ifBlank { "Meskot User" } ?: "Meskot User",
             sellerPhoto = user?.photoUrl ?: "",
             sellerVerified = user?.isVerified == true,
             description = description.trim(),
@@ -4113,8 +3644,8 @@ class MeskotRepository(
             isAvailable = true,
             createdAt = System.currentTimeMillis(),
             isNegotiable = isNegotiable,
-            deliveryOption = deliveryOption,
-            sellerPhone = sellerPhone,
+            deliveryOption = deliveryOption.ifBlank { "Meetup in $effectiveLocationName" },
+            sellerPhone = sellerPhone.ifBlank { user?.phoneNumber.orEmpty() },
             allowChat = allowChat,
             allowCall = allowCall,
             allowWhatsApp = allowWhatsApp,
@@ -4189,208 +3720,7 @@ class MeskotRepository(
         )
     }
 
-    private fun createInitialMarketplaceListings(): List<ListingItem> {
-        val now = System.currentTimeMillis()
-        return listOf(
-            ListingItem(
-                id = "mkt_01",
-                title = "2021 Toyota Hilux Double Cab 4x4 Diesel — Mint Condition",
-                price = 28500.0,
-                currency = "USD",
-                imageUrls = listOf(
-                    "https://images.unsplash.com/photo-1559416523-140ddc3d238c?w=800",
-                    "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=800"
-                ),
-                categoryId = "vehicles",
-                location = MarketplaceLocation(9.0192, 38.7525, "Ariena", 65),
-                distanceKm = 2.4,
-                sellerId = "usr_dawit",
-                sellerName = "Dawit Mekonnen",
-                sellerPhoto = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
-                sellerVerified = true,
-                description = "Single-owner 2021 Toyota Hilux Double Cab 2.8L Turbo Diesel. Full service history, leather interior, off-road suspension, and duty-paid plates. Available for inspection in Ariena / Bole.",
-                condition = "Used - Like New",
-                viewsCount = 412,
-                createdAt = now - 15 * 60 * 1000L
-            ),
-            ListingItem(
-                id = "mkt_02",
-                title = "Apple MacBook Pro 16\" M3 Max (36GB RAM, 1TB SSD)",
-                price = 1850.0,
-                currency = "USD",
-                imageUrls = listOf(
-                    "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800",
-                    "https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?w=800"
-                ),
-                categoryId = "electronics",
-                location = MarketplaceLocation(9.0054, 38.7636, "Ariena · Bole", 65),
-                distanceKm = 3.1,
-                sellerId = "usr_hana",
-                sellerName = "Hana Tadesse",
-                sellerPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
-                sellerVerified = true,
-                description = "Space Black MacBook Pro 16-inch M3 Max with 36GB unified memory and 1TB SSD. Battery cycle count only 18. Comes with original MagSafe box and 140W charger.",
-                condition = "Used - Like New",
-                viewsCount = 289,
-                createdAt = now - 45 * 60 * 1000L
-            ),
-            ListingItem(
-                id = "mkt_03",
-                title = "Modern 3-Bedroom Furnished Apartment with Balcony View",
-                price = 150000.0,
-                currency = "ETB",
-                imageUrls = listOf(
-                    "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800",
-                    "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800"
-                ),
-                categoryId = "property",
-                location = MarketplaceLocation(9.0220, 38.7460, "Ariena · Kazanchis", 65),
-                distanceKm = 4.8,
-                sellerId = "usr_yared",
-                sellerName = "Yared Kassahun",
-                sellerPhoto = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
-                sellerVerified = true,
-                description = "Luxury 3BHK fully furnished apartment with backup generator, 24/7 security, underground parking, and panoramic city view. Price is monthly rent in ETB or USD equivalent.",
-                condition = "New",
-                viewsCount = 530,
-                createdAt = now - 2 * 3600 * 1000L
-            ),
-            ListingItem(
-                id = "mkt_04",
-                title = "iPhone 15 Pro Max 256GB Natural Titanium (Factory Unlocked)",
-                price = 800.0,
-                currency = "USD",
-                imageUrls = listOf(
-                    "https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=800"
-                ),
-                categoryId = "electronics",
-                location = MarketplaceLocation(9.0110, 38.7580, "Ariena", 65),
-                distanceKm = 5.5,
-                sellerId = "usr_meron",
-                sellerName = "Meron Alemu",
-                sellerPhoto = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200",
-                sellerVerified = false,
-                description = "Factory unlocked iPhone 15 Pro Max 256GB in Natural Titanium. 96% battery health, zero scratches, includes original USB-C braided cable and Apple silicone case.",
-                condition = "Used - Like New",
-                viewsCount = 615,
-                createdAt = now - 3 * 3600 * 1000L
-            ),
-            ListingItem(
-                id = "mkt_05",
-                title = "Handcrafted L-Shaped Velvet Sectional Sofa + Solid Oak Table",
-                price = 25000.0,
-                currency = "ETB",
-                imageUrls = listOf(
-                    "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800"
-                ),
-                categoryId = "furniture",
-                location = MarketplaceLocation(9.0300, 38.7400, "Ariena · Piassa", 65),
-                distanceKm = 7.2,
-                sellerId = "usr_abebe",
-                sellerName = "Abebe Kebede",
-                sellerPhoto = "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=200",
-                sellerVerified = true,
-                description = "Custom Ethiopian highland solid wood frame L-shaped sofa upholstered in emerald stain-resistant velvet. Includes matching coffee table and 4 accent pillows.",
-                condition = "New",
-                viewsCount = 198,
-                createdAt = now - 5 * 3600 * 1000L
-            ),
-            ListingItem(
-                id = "mkt_06",
-                title = "Royal Handwoven Tibeb Habesha Kemis with Gold Tilf Embroidery",
-                price = 220.0,
-                currency = "USD",
-                imageUrls = listOf(
-                    "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=800"
-                ),
-                categoryId = "fashion",
-                location = MarketplaceLocation(9.0180, 38.7510, "Ariena · Shiro Meda", 65),
-                distanceKm = 8.9,
-                sellerId = "usr_selam",
-                sellerName = "Selamawit Bekele",
-                sellerPhoto = "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200",
-                sellerVerified = true,
-                description = "100% pure hand-spun cotton Habesha Kemis with intricate golden Tibeb border and matching Netela shawl. Ideal for weddings, Timket, and cultural celebrations.",
-                condition = "New",
-                viewsCount = 342,
-                createdAt = now - 8 * 3600 * 1000L
-            ),
-            ListingItem(
-                id = "mkt_07",
-                title = "Professional 6-String Electric Acoustic Krar + Padded Case",
-                price = 18500.0,
-                currency = "ETB",
-                imageUrls = listOf(
-                    "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800"
-                ),
-                categoryId = "musical",
-                location = MarketplaceLocation(8.9950, 38.7720, "Ariena · CMC", 65),
-                distanceKm = 11.4,
-                sellerId = "usr_yared",
-                sellerName = "Yared Kassahun",
-                sellerPhoto = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
-                sellerVerified = true,
-                description = "Concert-grade 6-string Ethiopian Krar with built-in pickup, precision tuning pegs, and cedar soundboard. Ready for stage performance or studio recording.",
-                condition = "New",
-                viewsCount = 154,
-                createdAt = now - 12 * 3600 * 1000L
-            ),
-            ListingItem(
-                id = "mkt_08",
-                title = "Complete Brass & Clay Jebena Buna Ceremony Set (12 Finiq Cups)",
-                price = 95.0,
-                currency = "USD",
-                imageUrls = listOf(
-                    "https://images.unsplash.com/photo-1509785307050-d4066910ec1e?w=800"
-                ),
-                categoryId = "coffee_cultural",
-                location = MarketplaceLocation(9.0150, 38.7500, "Ariena", 65),
-                distanceKm = 3.6,
-                sellerId = "usr_hana",
-                sellerName = "Hana Tadesse",
-                sellerPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
-                sellerVerified = true,
-                description = "Authentic handmade Gondar clay Jebena, carved wooden Rekebot tray, brass incense burner (endod/etan), and 12 porcelain Saba-patterned coffee cups + 1kg Yirgacheffe beans.",
-                condition = "New",
-                viewsCount = 420,
-                createdAt = now - 18 * 3600 * 1000L
-            )
-        )
-    }
+    private fun createInitialMarketplaceListings(): List<ListingItem> = emptyList()
 
-    private fun createInitialMarketplaceChats(): List<MarketplaceChatMessage> {
-        val now = System.currentTimeMillis()
-        return listOf(
-            MarketplaceChatMessage(
-                chatId = "mkt_chat_01",
-                senderId = "usr_dawit",
-                senderName = "Dawit Mekonnen",
-                senderPhoto = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
-                receiverId = "usr_current",
-                receiverName = "You",
-                receiverPhoto = "",
-                itemId = "mkt_01",
-                itemTitle = "2021 Toyota Hilux Double Cab 4x4 Diesel",
-                itemPriceLabel = "$28,500",
-                itemThumbUrl = "https://images.unsplash.com/photo-1559416523-140ddc3d238c?w=800",
-                messageText = "Yes, this item is still available! You can inspect it in Ariena today.",
-                timestamp = now - 25 * 60 * 1000L
-            ),
-            MarketplaceChatMessage(
-                chatId = "mkt_chat_02",
-                senderId = "usr_hana",
-                senderName = "Hana Tadesse",
-                senderPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
-                receiverId = "usr_current",
-                receiverName = "You",
-                receiverPhoto = "",
-                itemId = "mkt_02",
-                itemTitle = "Apple MacBook Pro 16\" M3 Max",
-                itemPriceLabel = "$1,850",
-                itemThumbUrl = "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800",
-                messageText = "I accept both USD and ETB via Chapa or Telebirr at the daily NBE rate.",
-                timestamp = now - 2 * 3600 * 1000L
-            )
-        )
-    }
+    private fun createInitialMarketplaceChats(): List<MarketplaceChatMessage> = emptyList()
 }

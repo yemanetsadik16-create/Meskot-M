@@ -668,33 +668,33 @@ fun CreatorDashboardScreen(
                                 StreamRow(
                                     icon = "👑",
                                     title = "Tiered VIP Fan Memberships",
-                                    subtitle = "42 Active Recurring Monthly Supporters",
-                                    amountEtb = grossEarnings * 0.52,
-                                    pct = "52%"
+                                    subtitle = "${currentUser?.vipMemberships?.size ?: 0} Active Recurring Monthly Supporters",
+                                    amountEtb = if (grossEarnings > 0) grossEarnings * 0.52 else 0.0,
+                                    pct = if (grossEarnings > 0) "52%" else "0%"
                                 )
                                 HorizontalDivider(color = LineBorder, thickness = 0.5.dp)
                                 StreamRow(
                                     icon = "⭐",
                                     title = "Virtual Stars & Micro-Gifts",
                                     subtitle = "Direct live room and post micro-tips",
-                                    amountEtb = grossEarnings * 0.28,
-                                    pct = "28%"
+                                    amountEtb = if (grossEarnings > 0) grossEarnings * 0.28 else 0.0,
+                                    pct = if (grossEarnings > 0) "28%" else "0%"
                                 )
                                 HorizontalDivider(color = LineBorder, thickness = 0.5.dp)
                                 StreamRow(
                                     icon = "💰",
                                     title = "Direct Tips (Chapa / CBE / Telebirr)",
                                     subtitle = "One-off reader tips and donations",
-                                    amountEtb = grossEarnings * 0.14,
-                                    pct = "14%"
+                                    amountEtb = if (grossEarnings > 0) grossEarnings * 0.14 else 0.0,
+                                    pct = if (grossEarnings > 0) "14%" else "0%"
                                 )
                                 HorizontalDivider(color = LineBorder, thickness = 0.5.dp)
                                 StreamRow(
                                     icon = "📢",
                                     title = "Ad Revenue Sharing (Reels & In-Stream)",
                                     subtitle = "Monetized plays, mid-rolls, and overlay banners",
-                                    amountEtb = grossEarnings * 0.06,
-                                    pct = "6%"
+                                    amountEtb = if (grossEarnings > 0) grossEarnings * 0.06 else 0.0,
+                                    pct = if (grossEarnings > 0) "6%" else "0%"
                                 )
                             }
                         }
@@ -711,9 +711,18 @@ fun CreatorDashboardScreen(
                     }
 
                     item {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            contentFormatMetrics.forEach { metric ->
-                                ContentFormatMetricCard(metric = metric)
+                        if (contentFormatMetrics.isEmpty()) {
+                            Text(
+                                text = "No monetized content format performance data recorded yet.",
+                                fontSize = 12.sp,
+                                color = MutedText,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                contentFormatMetrics.forEach { metric ->
+                                    ContentFormatMetricCard(metric = metric)
+                                }
                             }
                         }
                     }
@@ -938,15 +947,23 @@ fun DailyEarningsBarChartCard(dailyEarnings: List<DailyEarningsMetric>) {
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            val maxVal = dailyEarnings.maxOfOrNull { it.totalEtb } ?: 2000.0
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(110.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                dailyEarnings.forEach { item ->
+            if (dailyEarnings.isEmpty()) {
+                Text(
+                    text = "No daily earnings recorded in this period.",
+                    fontSize = 12.sp,
+                    color = MutedText,
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+            } else {
+                val maxVal = maxOf(1.0, dailyEarnings.maxOfOrNull { it.totalEtb } ?: 1.0)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(110.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    dailyEarnings.forEach { item ->
                     val ratio = (item.totalEtb / maxVal).coerceIn(0.1, 1.0)
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -980,8 +997,9 @@ fun DailyEarningsBarChartCard(dailyEarnings: List<DailyEarningsMetric>) {
                     }
                 }
             }
+        }
 
-            Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(10.dp))
             HorizontalDivider(color = LineBorder, thickness = 0.5.dp)
             Spacer(modifier = Modifier.height(8.dp))
 

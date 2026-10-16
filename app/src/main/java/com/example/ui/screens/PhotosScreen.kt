@@ -325,7 +325,7 @@ fun AlbumDetailScreen(
     // Quick Add Photo Dialog
     if (isAddPhotoOpen) {
         var photoUrlInput by remember {
-            mutableStateOf("https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&auto=format&fit=crop&q=80")
+            mutableStateOf("")
         }
 
         Dialog(onDismissRequest = { isAddPhotoOpen = false }) {

@@ -153,11 +153,13 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
 
     fun setInsightsTimeRange(range: String) {
         _insightsTimeRange.value = range
+        val uid = currentUser.value?.uid ?: return
+        repository.loadAndSyncAnalytics(targetUid = uid, timeRange = range)
     }
 
     fun refreshAnalytics() {
         val uid = currentUser.value?.uid ?: return
-        repository.loadAndSyncAnalytics(uid, forceServerRefresh = true)
+        repository.loadAndSyncAnalytics(targetUid = uid, timeRange = _insightsTimeRange.value, forceServerRefresh = true)
     }
 
     fun recordProfileView(targetUid: String) {
@@ -1723,6 +1725,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     }
 
     fun logout() {
+        _viewingUser.value = null
         repository.logout()
         _currentTab.value = ScreenTab.FEED
         showMessage("Logged out")
@@ -1904,8 +1907,8 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         location: MarketplaceLocation,
         condition: String = "Used - Like New",
         isNegotiable: Boolean = true,
-        deliveryOption: String = "Meetup · Bole",
-        sellerPhone: String = "+251 911 234 567",
+        deliveryOption: String = "Local Meetup",
+        sellerPhone: String = "",
         allowChat: Boolean = true,
         allowCall: Boolean = true,
         allowWhatsApp: Boolean = false,

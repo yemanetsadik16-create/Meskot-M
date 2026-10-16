@@ -173,17 +173,7 @@ fun MessagesScreen(
     }
     val activeChatUsers = remember(activeChatUids, allUsers, conversations) {
         activeChatUids.map { uid ->
-            allUsers.find { it.uid == uid } ?: if (uid == "user_gebreslassie") {
-                User(
-                    uid = "user_gebreslassie",
-                    displayName = "Gebreslassie Tsadik",
-                    bio = "Living life with faith, courage, and purpose.",
-                    photoUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300",
-                    lastSeen = System.currentTimeMillis() - 12 * 60 * 1000L
-                )
-            } else {
-                User(uid = uid, displayName = "Meskot User", bio = "")
-            }
+            allUsers.find { it.uid == uid } ?: User(uid = uid, displayName = "Meskot User", bio = "")
         }.sortedByDescending { user ->
             viewModel.getMessagesForUser(user.uid).lastOrNull()?.createdAt ?: 0L
         }

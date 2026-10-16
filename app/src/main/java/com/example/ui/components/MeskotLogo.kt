@@ -110,13 +110,6 @@ fun MeskotLogoHeader(
                 color = Ink,
                 letterSpacing = (-0.4).sp
             )
-            Text(
-                text = "· መስኮትህ ራስህ",
-                fontSize = 10.5.sp,
-                color = GoldDeep,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = 12.sp
-            )
         }
     }
 }

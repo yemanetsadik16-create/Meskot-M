@@ -71,20 +71,34 @@ import java.util.UUID
  * Saves a captured camera bitmap to an application cache file and returns the local file path.
  */
 fun saveStoryBitmapToCache(context: Context, bitmap: Bitmap): String {
-    val file = File(context.cacheDir, "story_camera_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}.jpg")
+    val dir = File(context.filesDir, "meskot_media").apply { mkdirs() }
+    val file = File(dir, "camera_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}.jpg")
     FileOutputStream(file).use { out ->
         bitmap.compress(Bitmap.CompressFormat.JPEG, 92, out)
     }
     return file.absolutePath
 }
 
-// Preset inspiration samples if device camera is unavailable
-val PresetStorySamples = listOf(
-    "https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=800&q=80" to "Addis Skyline",
-    "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=800&q=80" to "Ethiopian Coffee",
-    "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80" to "Sunset Highlands",
-    "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80" to "Mountain Lake"
-)
+/**
+ * Copies a content:// URI from the Android Photo Picker into internal app storage
+ * so the image remains readable permanently across app restarts, logouts, and re-logins.
+ */
+fun persistPickedMediaUri(context: Context, uri: android.net.Uri, prefix: String = "profile_media"): String {
+    return try {
+        val dir = File(context.filesDir, "meskot_media").apply { mkdirs() }
+        val file = File(dir, "${prefix}_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}.jpg")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            FileOutputStream(file).use { output ->
+                input.copyTo(output)
+            }
+        }
+        if (file.exists() && file.length() > 0L) file.absolutePath else uri.toString()
+    } catch (e: Exception) {
+        uri.toString()
+    }
+}
+
+val PresetStorySamples: List<Pair<String, String>> = emptyList()
 
 val StoryFilters = listOf("Normal", "Warm", "Vibrant", "Noir", "Sunset")
 
@@ -398,48 +412,50 @@ fun CreateStoryDialog(
                             }
 
                             // Quick Inspiration Presets
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = "Meskot Cultural & Scenic Presets:",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = GoldDeep
-                                )
-                                LazyRow(
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                            if (PresetStorySamples.isNotEmpty()) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    items(PresetStorySamples) { (sampleUrl, title) ->
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier
-                                                .width(84.dp)
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(GoldSurface)
-                                                .border(1.dp, GoldBorder, RoundedCornerShape(12.dp))
-                                                .clickable { photoPathOrUrl = sampleUrl }
-                                                .padding(6.dp)
-                                        ) {
-                                            AsyncImage(
-                                                model = sampleUrl,
-                                                contentDescription = title,
+                                    Text(
+                                        text = "Meskot Cultural & Scenic Presets:",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = GoldDeep
+                                    )
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        items(PresetStorySamples) { (sampleUrl, title) ->
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
                                                 modifier = Modifier
-                                                    .size(70.dp)
-                                                    .clip(RoundedCornerShape(8.dp)),
-                                                contentScale = ContentScale.Crop
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = title,
-                                                fontSize = 10.sp,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                color = Ink,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
+                                                    .width(84.dp)
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .background(GoldSurface)
+                                                    .border(1.dp, GoldBorder, RoundedCornerShape(12.dp))
+                                                    .clickable { photoPathOrUrl = sampleUrl }
+                                                    .padding(6.dp)
+                                            ) {
+                                                AsyncImage(
+                                                    model = sampleUrl,
+                                                    contentDescription = title,
+                                                    modifier = Modifier
+                                                        .size(70.dp)
+                                                        .clip(RoundedCornerShape(8.dp)),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = title,
+                                                    fontSize = 10.sp,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    color = Ink,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -1991,64 +2007,7 @@ fun StoryAvatarRingItem(
 /**
  * Inspiring Ethiopian community story samples for the Meskot story tray.
  */
-val PresetCommunityStories = listOf(
-    StoryItem(
-        id = "preset_story_1",
-        uid = "community_selam",
-        authorName = "Selamawit T.",
-        authorPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-        mediaUrl = "https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=800&q=80",
-        caption = "Addis skyline looking radiant today ✨",
-        filterName = "Sunset",
-        createdAt = System.currentTimeMillis() - 2 * 3600 * 1000L,
-        expiresAt = System.currentTimeMillis() + 22 * 3600 * 1000L,
-        likes = mapOf("community_meskot" to true, "community_dawit" to true),
-        reactions = mapOf("community_meskot" to "❤️", "community_dawit" to "🔥"),
-        commentCount = 2
-    ),
-    StoryItem(
-        id = "preset_story_2",
-        uid = "community_meskot",
-        authorName = "Meskot Official",
-        authorPhoto = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-        mediaUrl = "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=800&q=80",
-        caption = "Fresh roast traditional Buna ☕",
-        filterName = "Warm",
-        createdAt = System.currentTimeMillis() - 4 * 3600 * 1000L,
-        expiresAt = System.currentTimeMillis() + 20 * 3600 * 1000L,
-        likes = mapOf("community_selam" to true),
-        reactions = mapOf("community_selam" to "☕"),
-        commentCount = 2
-    ),
-    StoryItem(
-        id = "preset_story_3",
-        uid = "community_dawit",
-        authorName = "Dawit Gebre",
-        authorPhoto = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
-        mediaUrl = "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80",
-        caption = "Sunset over the Ethiopian highlands 🌄",
-        filterName = "Vibrant",
-        createdAt = System.currentTimeMillis() - 6 * 3600 * 1000L,
-        expiresAt = System.currentTimeMillis() + 18 * 3600 * 1000L,
-        likes = mapOf("community_selam" to true),
-        reactions = mapOf("community_selam" to "😍"),
-        commentCount = 1
-    ),
-    StoryItem(
-        id = "preset_story_4",
-        uid = "community_kalkidan",
-        authorName = "Kalkidan M.",
-        authorPhoto = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
-        mediaUrl = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80",
-        caption = "Serene lake breezes 🌿",
-        filterName = "Normal",
-        createdAt = System.currentTimeMillis() - 8 * 3600 * 1000L,
-        expiresAt = System.currentTimeMillis() + 16 * 3600 * 1000L,
-        likes = mapOf("community_dawit" to true),
-        reactions = mapOf("community_dawit" to "✨"),
-        commentCount = 1
-    )
-)
+val PresetCommunityStories: List<StoryItem> = emptyList()
 
 /**
  * Meskot Royal Stories Rail:
@@ -2069,15 +2028,7 @@ fun FacebookStoriesRail(
     }
 
     val displayStories = remember(activeStories, currentUser?.uid) {
-        val filtered = activeStories.filter { it.uid != currentUser?.uid }
-        if (filtered.isEmpty()) {
-            PresetCommunityStories
-        } else if (filtered.size < 4) {
-            val existingIds = filtered.map { it.id }.toSet()
-            filtered + PresetCommunityStories.filterNot { it.id in existingIds }.take(4 - filtered.size)
-        } else {
-            filtered
-        }
+        activeStories.filter { it.uid != currentUser?.uid }
     }
 
     Card(

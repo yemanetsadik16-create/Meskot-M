@@ -686,21 +686,21 @@ data class LiveStreamComment(
  */
 data class UserInsightsData(
     val uid: String = "",
-    val postReach: Long = 2480L,
-    val postReachGrowthPercent: Double = 128.0,
-    val profileViewsWeek: Int = 84,
-    val profileViewsTotal: Long = 1420L,
-    val profileViewsGrowthPercent: Double = 34.5,
-    val interactionRate: Double = 9.4,
-    val interactionRateStatus: String = "Above average",
-    val topLanguages: List<Pair<String, Int>> = listOf("Amharic" to 64, "English" to 36),
-    val impressionsTotal: Long = 6840L,
-    val followersReachPercent: Int = 42,
-    val nonFollowersReachPercent: Int = 58,
-    val postReachCount: Long = 1350L,
-    val reelsReachCount: Long = 3890L,
-    val storiesReachCount: Long = 920L,
-    val isServerSynced: Boolean = true,
+    val postReach: Long = 0L,
+    val postReachGrowthPercent: Double = 0.0,
+    val profileViewsWeek: Int = 0,
+    val profileViewsTotal: Long = 0L,
+    val profileViewsGrowthPercent: Double = 0.0,
+    val interactionRate: Double = 0.0,
+    val interactionRateStatus: String = "No activity yet",
+    val topLanguages: List<Pair<String, Int>> = emptyList(),
+    val impressionsTotal: Long = 0L,
+    val followersReachPercent: Int = 0,
+    val nonFollowersReachPercent: Int = 0,
+    val postReachCount: Long = 0L,
+    val reelsReachCount: Long = 0L,
+    val storiesReachCount: Long = 0L,
+    val isServerSynced: Boolean = false,
     val lastUpdated: Long = System.currentTimeMillis()
 )
 
@@ -715,34 +715,16 @@ data class DemographicsItem(
  */
 data class UserEngagementData(
     val uid: String = "",
-    val topCities: List<DemographicsItem> = listOf(
-        DemographicsItem("Addis Ababa", 52, 624),
-        DemographicsItem("Washington D.C.", 18, 216),
-        DemographicsItem("Hawassa", 12, 144),
-        DemographicsItem("Toronto", 8, 96)
-    ),
-    val topCountries: List<DemographicsItem> = listOf(
-        DemographicsItem("Ethiopia", 74, 888),
-        DemographicsItem("United States", 16, 192),
-        DemographicsItem("Canada", 6, 72),
-        DemographicsItem("Others", 4, 48)
-    ),
-    val ageDistribution: List<DemographicsItem> = listOf(
-        DemographicsItem("18–24", 28, 336),
-        DemographicsItem("25–34", 46, 552),
-        DemographicsItem("35–44", 18, 216),
-        DemographicsItem("45+", 8, 96)
-    ),
-    val genderDistribution: List<DemographicsItem> = listOf(
-        DemographicsItem("Male", 54, 648),
-        DemographicsItem("Female", 46, 552)
-    ),
-    val totalReactions: Int = 186,
-    val totalComments: Int = 42,
-    val totalShares: Int = 29,
-    val totalTipsEtb: Double = 350.0,
-    val peakActiveTime: String = "7:00 PM – 10:00 PM EAT",
-    val isServerSynced: Boolean = true,
+    val topCities: List<DemographicsItem> = emptyList(),
+    val topCountries: List<DemographicsItem> = emptyList(),
+    val ageDistribution: List<DemographicsItem> = emptyList(),
+    val genderDistribution: List<DemographicsItem> = emptyList(),
+    val totalReactions: Int = 0,
+    val totalComments: Int = 0,
+    val totalShares: Int = 0,
+    val totalTipsEtb: Double = 0.0,
+    val peakActiveTime: String = "No activity recorded yet",
+    val isServerSynced: Boolean = false,
     val lastUpdated: Long = System.currentTimeMillis()
 )
 
@@ -774,7 +756,7 @@ data class ListingItem(
     val imageUrls: List<String> = emptyList(),
     val categoryId: String = "vehicles",
     val location: MarketplaceLocation = MarketplaceLocation(),
-    val distanceKm: Double = 4.2,
+    val distanceKm: Double = 0.0,
     val sellerId: String = "",
     val sellerName: String = "",
     val sellerPhoto: String = "",
@@ -786,8 +768,8 @@ data class ListingItem(
     val viewsCount: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
     val isNegotiable: Boolean = true,
-    val deliveryOption: String = "Meetup · Bole",
-    val sellerPhone: String = "+251 911 234 567",
+    val deliveryOption: String = "Local Meetup",
+    val sellerPhone: String = "",
     val allowChat: Boolean = true,
     val allowCall: Boolean = true,
     val allowWhatsApp: Boolean = false,
@@ -795,7 +777,7 @@ data class ListingItem(
     val tags: List<String> = emptyList()
 ) {
     val primaryImageUrl: String
-        get() = imageUrls.firstOrNull() ?: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800"
+        get() = imageUrls.firstOrNull() ?: ""
 
     /**
      * Formatted currency string matching Facebook Marketplace style

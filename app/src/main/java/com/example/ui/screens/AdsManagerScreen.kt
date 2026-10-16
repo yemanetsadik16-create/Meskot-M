@@ -151,22 +151,22 @@ data class AudienceTargetingConfig(
 }
 
 data class PaymentMethodInfo(
-    val brandName: String = "MasterCard",
-    val last4Digits: String = "7228",
-    val cardholderName: String = "Yemane Tsadik",
+    val brandName: String = "",
+    val last4Digits: String = "",
+    val cardholderName: String = "",
     val cardNumber: String = "",
-    val expiryDate: String = "08/29",
+    val expiryDate: String = "",
     val cvv: String = "",
-    val isVerified: Boolean = true,
+    val isVerified: Boolean = false,
     val currency: PaymentCurrency = PaymentCurrency.USD,
     val paymentSource: AdPaymentSource = AdPaymentSource.CHAPA_GATEWAY,
     val lastTransactionRef: String = ""
 ) {
     val maskedCardLabel: String
         get() = when (paymentSource) {
-            AdPaymentSource.CHAPA_GATEWAY -> "Chapa Checkout · $brandName •••• $last4Digits"
-            AdPaymentSource.DEBIT_CREDIT_CARD -> "$brandName •••• $last4Digits"
-            AdPaymentSource.MESKOT_WALLET -> "Meskot Wallet Balance"
+            AdPaymentSource.CHAPA_GATEWAY -> "Chapa Checkout · Telebirr / CBE / Card"
+            AdPaymentSource.DEBIT_CREDIT_CARD -> if (last4Digits.isNotBlank()) "$brandName •••• $last4Digits" else "Debit or Credit Card"
+            AdPaymentSource.MESKOT_WALLET -> "Meskot Creator Wallet"
         }
 
     companion object {
@@ -190,12 +190,12 @@ data class PaymentMethodInfo(
  */
 data class CampaignSetupUiState(
     val selectedGoal: AdGoalOption = AdGoalOption.WEBSITE_VISITORS,
-    val destinationUrl: String = "https://example.com",
-    val hasInteractedWithUrl: Boolean = true,
-    val advertiserName: String = "Yemane Tsadik",
+    val destinationUrl: String = "",
+    val hasInteractedWithUrl: Boolean = false,
+    val advertiserName: String = "",
     val advertiserAvatar: String = "",
-    val postCaption: String = "Engineer is a problem solver",
-    val adMediaUrl: String = "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=900&auto=format&fit=crop&q=80",
+    val postCaption: String = "",
+    val adMediaUrl: String = "",
     val selectedCta: AdCtaButtonOption = AdCtaButtonOption.NO_BUTTON,
     val audience: AudienceTargetingConfig = AudienceTargetingConfig(),
     val dailyBudgetUsd: Double = 5.00,
@@ -306,7 +306,7 @@ data class CampaignSetupUiState(
     }
 
     val canPromoteNow: Boolean
-        get() = isUrlValid && paymentMethod.isVerified && dailyBudgetUsd > 0 && durationDays >= 1
+        get() = isUrlValid && (paymentMethod.paymentSource != AdPaymentSource.DEBIT_CREDIT_CARD || paymentMethod.isVerified) && dailyBudgetUsd > 0 && durationDays >= 1
 }
 
 /**
@@ -328,12 +328,18 @@ fun AdsManagerScreen(
     var currentRoute by remember { mutableStateOf(AdsFlowRoute.OVERVIEW_DASHBOARD) }
     var selectedTimeframe by remember { mutableStateOf("Last 7 days") }
 
-    // Campaign Setup State initialized with current user ("Yemane Tsadik" fallback)
+    val currentUserName = currentUser?.displayName?.ifBlank { "Meskot User" } ?: "Meskot User"
+    // Campaign Setup State initialized with real current user
     var setupState by remember(currentUser?.displayName, currentUser?.photoUrl) {
         mutableStateOf(
             CampaignSetupUiState(
-                advertiserName = currentUser?.displayName?.ifBlank { "Yemane Tsadik" } ?: "Yemane Tsadik",
-                advertiserAvatar = currentUser?.photoUrl.orEmpty()
+                advertiserName = currentUserName,
+                advertiserAvatar = currentUser?.photoUrl.orEmpty(),
+                paymentMethod = PaymentMethodInfo(
+                    cardholderName = currentUserName,
+                    isVerified = true,
+                    paymentSource = AdPaymentSource.CHAPA_GATEWAY
+                )
             )
         )
     }
@@ -520,28 +526,38 @@ fun AdsDashboardScreen(
         listOf("Last 7 days", "Last 28 days", "Last 90 days", "Lifetime")
     }
 
-    // Timeframe multiplier for summary metrics when campaigns exist
-    val timeframeMultiplier = when (selectedTimeframe) {
-        "Last 7 days" -> 1.0
-        "Last 28 days" -> 2.4
-        "Last 90 days" -> 4.5
-        else -> 5.0
+    val now = System.currentTimeMillis()
+    val filteredCampaigns = remember(campaigns, selectedTimeframe) {
+        val windowMs = when (selectedTimeframe) {
+            "Last 7 days" -> 7L * 24 * 60 * 60 * 1000
+            "Last 28 days" -> 28L * 24 * 60 * 60 * 1000
+            "Last 90 days" -> 90L * 24 * 60 * 60 * 1000
+            else -> Long.MAX_VALUE
+        }
+        if (windowMs == Long.MAX_VALUE) {
+            campaigns
+        } else {
+            campaigns.filter { now - it.createdAt <= windowMs }
+        }
     }
 
-    val hasAds = campaigns.isNotEmpty()
+    val hasAds = filteredCampaigns.isNotEmpty()
+    val totalImpressions = filteredCampaigns.sumOf { it.impressions }
+    val totalEngagements = filteredCampaigns.sumOf { it.clicks + it.conversions }
+    val totalClicks = filteredCampaigns.sumOf { it.clicks }
+
     val reachValue = if (hasAds) {
-        String.format(Locale.US, "%,d", (campaigns.sumOf { it.impressions } * timeframeMultiplier).roundToInt())
+        String.format(Locale.US, "%,d", totalImpressions)
     } else {
         "--"
     }
     val engagementsValue = if (hasAds) {
-        val baseEngagements = campaigns.sumOf { it.clicks + it.conversions * 3 }
-        String.format(Locale.US, "%,d", (baseEngagements * timeframeMultiplier).roundToInt())
+        String.format(Locale.US, "%,d", totalEngagements)
     } else {
         "--"
     }
     val linkClicksValue = if (hasAds) {
-        String.format(Locale.US, "%,d", (campaigns.sumOf { it.clicks } * timeframeMultiplier).roundToInt())
+        String.format(Locale.US, "%,d", totalClicks)
     } else {
         "--"
     }
@@ -599,7 +615,7 @@ fun AdsDashboardScreen(
                                     color = FbDarkText
                                 )
                                 Text(
-                                    text = "ማስታወቂያ አስተዳዳሪ · Meskot Ad Server",
+                                    text = "Ads Manager · Meskot Ad Server",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = FbBlue
@@ -2610,7 +2626,7 @@ fun CreateAdScreen(
 
                     com.example.ui.components.MeskotLocationSelectorButton(
                         locationName = selectedLocName,
-                        placeholder = "Mekelle",
+                        placeholder = "Location",
                         label = "Location",
                         onClick = { showAdLocationPicker = true }
                     )
@@ -2619,7 +2635,7 @@ fun CreateAdScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val locs = listOf(selectedLocName.trim().ifBlank { "Mekelle" })
+                        val locs = listOf(selectedLocName.trim().ifBlank { "Ethiopia" })
                         onStateChange(
                             state.copy(
                                 audience = AudienceTargetingConfig(
@@ -2925,7 +2941,7 @@ private fun DebitOrCreditCardDialog(
     onDismiss: () -> Unit,
     onSaveCard: (PaymentMethodInfo) -> Unit
 ) {
-    var nameOnCard by remember { mutableStateOf("") }
+    var nameOnCard by remember { mutableStateOf(initialPaymentMethod.cardholderName) }
     var cardNumberDigits by remember { mutableStateOf(initialPaymentMethod.cardNumber.filter { it.isDigit() }) }
     var expiryDigits by remember { mutableStateOf("") }
     var cvvDigits by remember { mutableStateOf("") }
@@ -3169,7 +3185,7 @@ private fun DebitOrCreditCardDialog(
                             color = FbSecondaryText
                         )
                     },
-                    placeholder = { Text("4532 •••• •••• 7228") },
+                    placeholder = { Text("Enter 16-digit card number") },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
                     keyboardOptions = KeyboardOptions(

@@ -70,48 +70,7 @@ data class PresetReelItem(
     val category: String
 )
 
-val PresetReelsCollection = listOf(
-    PresetReelItem(
-        id = "reel_buna",
-        title = "Traditional Coffee Ceremony",
-        mediaUrl = "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=900&auto=format&fit=crop&q=80",
-        audioTitle = "Mahmoud Ahmed - Tezeta",
-        description = "Freshly roasted beans, burning incense & jebena brewing in Bole ☕✨ #AddisAbaba #CoffeeCeremony #HabeshaCulture",
-        category = "Culture"
-    ),
-    PresetReelItem(
-        id = "reel_eskista",
-        title = "Gojjam & Gondar Eskista",
-        mediaUrl = "https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=900&auto=format&fit=crop&q=80",
-        audioTitle = "Teddy Afro - Tikur Sew",
-        description = "Fast-tempo shoulder dance rhythm at the cultural hall! 💃🇪🇹 #Eskista #MeskotReels #EthiopianDance",
-        category = "Dance"
-    ),
-    PresetReelItem(
-        id = "reel_simien",
-        title = "Simien Highlands Sunset",
-        mediaUrl = "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=900&auto=format&fit=crop&q=80",
-        audioTitle = "Aster Aweke - Hagere",
-        description = "Breathtaking peaks over 4,000m with the gelada baboons roaming free 🏔️✨ #Ethiopia #SimienMountains #TravelReels",
-        category = "Nature"
-    ),
-    PresetReelItem(
-        id = "reel_lalibela",
-        title = "Rock-Hewn Churches of Lalibela",
-        mediaUrl = "https://images.unsplash.com/photo-1578922746465-3a80a228f223?w=900&auto=format&fit=crop&q=80",
-        audioTitle = "Mulatu Astatke - Yekermo Sew",
-        description = "Centuries of timeless heritage carved into living red volcanic rock ⛪🙏 #Lalibela #Heritage #EthiopiaHistory",
-        category = "Heritage"
-    ),
-    PresetReelItem(
-        id = "reel_nightlife",
-        title = "Addis City Lights & Jazz",
-        mediaUrl = "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=900&auto=format&fit=crop&q=80",
-        audioTitle = "Rophnan - Chereqa",
-        description = "Live Ethio-Jazz night with saxophone vibes in Kazanchis 🎷🌃 #EthioJazz #AddisNightlife #MeskotVibes",
-        category = "Music"
-    )
-)
+val PresetReelsCollection: List<PresetReelItem> = emptyList()
 
 val PopularAudioTracks = listOf(
     "Teddy Afro - Tikur Sew",
@@ -141,9 +100,9 @@ fun CreateReelDialog(
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
 
-    var selectedMediaUrl by remember { mutableStateOf<String?>(PresetReelsCollection.first().mediaUrl) }
-    var captionText by remember { mutableStateOf(PresetReelsCollection.first().description) }
-    var selectedAudioTrack by remember { mutableStateOf(PresetReelsCollection.first().audioTitle) }
+    var selectedMediaUrl by remember { mutableStateOf<String?>(null) }
+    var captionText by remember { mutableStateOf("") }
+    var selectedAudioTrack by remember { mutableStateOf(PopularAudioTracks.first()) }
     var customAudioInput by remember { mutableStateOf("") }
     var isCustomAudioOpen by remember { mutableStateOf(false) }
     var selectedVisibility by remember { mutableStateOf("public") }
@@ -239,7 +198,7 @@ fun CreateReelDialog(
 
                     Button(
                         onClick = {
-                            val url = selectedMediaUrl ?: PresetReelsCollection.first().mediaUrl
+                            val url = selectedMediaUrl ?: ""
                             val audio = if (customAudioInput.isNotBlank()) customAudioInput else selectedAudioTrack
                             isUploading = true
                             onSubmitReel(url, captionText, audio, url, selectedVisibility)
@@ -558,80 +517,7 @@ fun CreateReelDialog(
                         }
                     }
 
-                    // Habesha Cultural Preset Reels Library
-                    item {
-                        Text(
-                            text = "🇪🇹 HABESHA CULTURAL REEL PRESETS:",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Gold,
-                            letterSpacing = 0.5.sp
-                        )
 
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        LazyRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(PresetReelsCollection) { preset ->
-                                val isSelected = selectedMediaUrl == preset.mediaUrl
-                                Column(
-                                    modifier = Modifier
-                                        .width(100.dp)
-                                        .clickable {
-                                            selectedMediaUrl = preset.mediaUrl
-                                            captionText = preset.description
-                                            selectedAudioTrack = preset.audioTitle
-                                        },
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .width(100.dp)
-                                            .aspectRatio(9f / 16f)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .border(
-                                                width = if (isSelected) 2.5.dp else 0.8.dp,
-                                                color = if (isSelected) Gold else Color.White.copy(alpha = 0.25f),
-                                                shape = RoundedCornerShape(12.dp)
-                                            )
-                                    ) {
-                                        AsyncImage(
-                                            model = preset.mediaUrl,
-                                            contentDescription = preset.title,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .align(Alignment.BottomCenter)
-                                                .fillMaxWidth()
-                                                .background(Color.Black.copy(alpha = 0.7f))
-                                                .padding(vertical = 3.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = preset.category,
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isSelected) Gold else Color.White
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = preset.title,
-                                        fontSize = 11.sp,
-                                        color = if (isSelected) Gold else Color.White.copy(alpha = 0.8f),
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
-                    }
 
                     // Caption Input with Ethiopian Cultural Hashtag Chips
                     item {
@@ -1169,7 +1055,7 @@ fun ReelViewerDialog(
                                 .background(GoldSurface)
                                 .border(1.2.dp, Gold, CircleShape)
                         ) {
-                            Text(text = "ብር", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = GoldDeep)
+                            Text(text = "ETB", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = GoldDeep)
                         }
                         Text(
                             text = "Tip",
@@ -1932,29 +1818,6 @@ fun MeskotReelsRail(
                     reel = reel,
                     onClick = { onReelClick(reel) }
                 )
-            }
-
-            // If user has few or no reels, also display Ethiopian cultural preset reels
-            if (reels.size < 3) {
-                val samplePresets = PresetReelsCollection.take(3)
-                items(samplePresets, key = { "preset_rail_${it.id}" }) { preset ->
-                    val mockPost = Post(
-                        id = "preset_${preset.id}",
-                        uid = "meskot_official",
-                        authorName = "Meskot Culture",
-                        authorPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
-                        text = preset.description,
-                        postType = "REEL",
-                        videoUrl = preset.mediaUrl,
-                        audioTrackTitle = preset.audioTitle,
-                        viewsCount = 1840,
-                        createdAt = System.currentTimeMillis()
-                    )
-                    ReelRailCard(
-                        reel = mockPost,
-                        onClick = { onReelClick(mockPost) }
-                    )
-                }
             }
         }
     }

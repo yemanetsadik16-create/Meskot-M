@@ -7,13 +7,13 @@ import java.util.Locale
 
 enum class AppLanguage(val code: String, val label: String) {
     EN("en", "EN"),
-    AM("am", "አማ")
+    AM("am", "EN")
 }
 
 object MeskotStrings {
     private val en = mapOf(
         "appName" to "Meskot",
-        "appSubtitle" to "መስኮት · Your window to your community",
+        "appSubtitle" to "Meskot · Your window to your community",
         "welcomeBack" to "Welcome back",
         "loginSub" to "Log in to see what your circle is sharing",
         "email" to "Email",
@@ -486,10 +486,7 @@ object MeskotStrings {
     )
 
     fun get(key: String, lang: AppLanguage): String {
-        return when (lang) {
-            AppLanguage.AM -> am[key] ?: en[key] ?: key
-            AppLanguage.EN -> en[key] ?: key
-        }
+        return en[key] ?: key
     }
 
     fun isOnline(lastSeenMs: Long, nowMs: Long = System.currentTimeMillis()): Boolean {
@@ -500,7 +497,7 @@ object MeskotStrings {
     }
 
     fun formatActiveStatus(lastSeenMs: Long, lang: AppLanguage, nowMs: Long = System.currentTimeMillis()): String {
-        if (lastSeenMs <= 0L) return if (lang == AppLanguage.AM) "ከመስመር ውጭ" else "Offline"
+        if (lastSeenMs <= 0L) return "Offline"
         val diffMs = (nowMs - lastSeenMs).coerceAtLeast(0L)
         val diffSec = diffMs / 1000
         val diffMins = diffSec / 60
@@ -517,27 +514,23 @@ object MeskotStrings {
         val timeFormatted = SimpleDateFormat("h:mm a", Locale.US).format(Date(lastSeenMs))
 
         return when {
-            diffSec < 120 -> {
-                if (lang == AppLanguage.AM) "አሁን በመስመር ላይ" else "Active now"
-            }
+            diffSec < 120 -> "Active now"
             diffMins < 60 -> {
                 val m = diffMins.coerceAtLeast(1)
-                if (lang == AppLanguage.AM) "ከ $m ደቂቃ በፊት ንቁ ነበር" else "Active ${m}m ago"
+                "Active ${m}m ago"
             }
             diffHours < 24 && isToday -> {
                 val h = diffHours.coerceAtLeast(1)
-                if (lang == AppLanguage.AM) "ከ $h ሰዓት በፊት ($timeFormatted) ንቁ ነበር" else "Active ${h}h ago ($timeFormatted)"
+                "Active ${h}h ago ($timeFormatted)"
             }
-            isYesterday -> {
-                if (lang == AppLanguage.AM) "ትናንት በ $timeFormatted ንቁ ነበር" else "Active yesterday at $timeFormatted"
-            }
+            isYesterday -> "Active yesterday at $timeFormatted"
             diffDays < 7 -> {
                 val dayOfWeek = SimpleDateFormat("EEE", Locale.US).format(Date(lastSeenMs))
-                if (lang == AppLanguage.AM) "በ $dayOfWeek $timeFormatted ንቁ ነበር" else "Active $dayOfWeek at $timeFormatted"
+                "Active $dayOfWeek at $timeFormatted"
             }
             else -> {
                 val dateStr = SimpleDateFormat("MMM d, yyyy", Locale.US).format(Date(lastSeenMs))
-                if (lang == AppLanguage.AM) "በ $dateStr ንቁ ነበር" else "Active $dateStr"
+                "Active $dateStr"
             }
         }
     }
@@ -549,21 +542,21 @@ object MeskotStrings {
             diffSec < 60 -> get("justNow", lang)
             diffSec < 3600 -> {
                 val mins = (diffSec / 60).coerceAtLeast(1)
-                if (lang == AppLanguage.AM) "$mins ደቂቃ በፊት" else "${mins}m ago"
+                "${mins}m ago"
             }
             diffSec < 86400 -> {
                 val hrs = (diffSec / 3600).coerceAtLeast(1)
-                if (lang == AppLanguage.AM) "$hrs ሰዓት በፊት" else "${hrs}h ago"
+                "${hrs}h ago"
             }
             else -> {
                 val days = (diffSec / 86400).coerceAtLeast(1)
-                if (lang == AppLanguage.AM) "$days ቀን በፊት" else "${days}d ago"
+                "${days}d ago"
             }
         }
     }
 
     fun formatPostTime(timestampMs: Long, lang: AppLanguage, nowMs: Long = System.currentTimeMillis()): String {
-        if (timestampMs <= 0L) return if (lang == AppLanguage.AM) "አሁን" else "Just now"
+        if (timestampMs <= 0L) return "Just now"
         val diffMs = (nowMs - timestampMs).coerceAtLeast(0L)
         val diffSec = diffMs / 1000
         val diffMins = diffSec / 60
@@ -579,18 +572,10 @@ object MeskotStrings {
         val timeStr = SimpleDateFormat("h:mm a", Locale.US).format(Date(timestampMs))
 
         return when {
-            diffSec < 60 -> if (lang == AppLanguage.AM) "አሁን · Just now" else "Just now"
-            diffMins < 60 -> {
-                val rel = if (lang == AppLanguage.AM) "${diffMins} ደቂቃ በፊት" else "${diffMins}m ago"
-                "$rel · $timeStr"
-            }
-            diffHours < 24 && isToday -> {
-                val rel = if (lang == AppLanguage.AM) "${diffHours} ሰዓት በፊት" else "${diffHours}h ago"
-                "$rel · $timeStr"
-            }
-            isYesterday -> {
-                if (lang == AppLanguage.AM) "ትናንት በ $timeStr" else "Yesterday at $timeStr"
-            }
+            diffSec < 60 -> "Just now"
+            diffMins < 60 -> "${diffMins}m ago · $timeStr"
+            diffHours < 24 && isToday -> "${diffHours}h ago · $timeStr"
+            isYesterday -> "Yesterday at $timeStr"
             calNow.get(Calendar.YEAR) == calThen.get(Calendar.YEAR) -> {
                 val dateStr = SimpleDateFormat("MMM d", Locale.US).format(Date(timestampMs))
                 "$dateStr at $timeStr"

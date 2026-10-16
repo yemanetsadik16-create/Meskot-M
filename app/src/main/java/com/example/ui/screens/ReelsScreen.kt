@@ -44,7 +44,6 @@ import com.example.data.Post
 import com.example.data.User
 import com.example.ui.MeskotViewModel
 import com.example.ui.components.EqualizerBarsAnimation
-import com.example.ui.components.PresetReelsCollection
 import com.example.ui.components.ReelCommentsBottomSheet
 import com.example.ui.components.UserAvatar
 import com.example.ui.theme.*
@@ -74,37 +73,9 @@ fun ReelsScreen(
     val reelReactions by viewModel.reelReactions.collectAsState()
     var activeCommentReel by remember { mutableStateOf<Post?>(null) }
 
-    // Aggregate user-created reels + preset cultural reels
+    // Aggregate real user-created reels
     val communityReels = remember(posts) {
         posts.filter { it.postType == "REEL" || it.videoUrl.isNotBlank() }
-    }
-
-    // Convert cultural presets into Post model for unified feed rendering
-    val presetReelPosts = remember(posts) {
-        PresetReelsCollection.mapIndexed { idx, preset ->
-            val presetId = "preset_${preset.id}"
-            val existing = posts.find { it.id == presetId }
-            val presetTags = listOf(preset.category.lowercase(), "culture", "ethiopia", "habesha", "music")
-            existing ?: Post(
-                id = presetId,
-                uid = "meskot_culture_$idx",
-                authorName = when (preset.category) {
-                    "Culture" -> "Addis Coffee House"
-                    "Dance" -> "Gondar Eskista Troupe"
-                    "Nature" -> "Simien Highlands Park"
-                    else -> "Lalibela Heritage"
-                },
-                authorPhoto = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
-                isAuthorVerified = true,
-                text = preset.description,
-                postType = "REEL",
-                videoUrl = preset.mediaUrl,
-                audioTrackTitle = preset.audioTitle,
-                viewsCount = 14200 + (idx * 3150),
-                createdAt = System.currentTimeMillis() - (idx * 3600000L * 4),
-                tags = presetTags
-            )
-        }
     }
 
     val activeInterestProfile by viewModel.userInterestProfile.collectAsState()
@@ -113,20 +84,26 @@ fun ReelsScreen(
         when (selectedFilterIndex) {
             0 -> {
                 // "For You" - Personalize by UserInterestTracker algorithm
-                val combined = (communityReels + presetReelPosts).distinctBy { it.id }
-                combined.sortedByDescending { reel ->
+                communityReels.sortedByDescending { reel ->
                     UserInterestTracker.computePostRelevanceWeight(reel)
                 }
             }
             1 -> {
-                // "Habesha Heritage" - presets and culture-tagged reels
-                presetReelPosts
+                // "Habesha Heritage" - culture and heritage tagged community reels
+                communityReels.filter { reel ->
+                    reel.tags.any { tag ->
+                        tag.contains("culture", ignoreCase = true) ||
+                        tag.contains("heritage", ignoreCase = true) ||
+                        tag.contains("habesha", ignoreCase = true) ||
+                        tag.contains("ethiopia", ignoreCase = true)
+                    }
+                }
             }
             2 -> {
                 // "My Reels" - Only reels created by current user
                 communityReels.filter { it.uid == currentUser?.uid }
             }
-            else -> communityReels + presetReelPosts
+            else -> communityReels
         }
     }
 
@@ -279,8 +256,8 @@ fun ReelsScreen(
             }
         }
 
-        // Empty state for My Reels tab
-        if (selectedFilterIndex == 2 && displayReels.isEmpty()) {
+        // Empty state for Reels feed
+        if (displayReels.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -308,14 +285,18 @@ fun ReelsScreen(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Share Your First Reel",
+                        text = if (selectedFilterIndex == 2) "Share Your First Reel" else "No Reels Yet",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Create captivating short-form videos with traditional music, filters, and reach thousands of Habesha viewers.",
+                        text = if (selectedFilterIndex == 2) {
+                            "Create captivating short-form videos with music, filters, and reach viewers across Ethiopia."
+                        } else {
+                            "Be the first to share a reel with the community! Capture or upload a video now."
+                        },
                         fontSize = 13.sp,
                         color = Color.White.copy(alpha = 0.7f),
                         textAlign = TextAlign.Center

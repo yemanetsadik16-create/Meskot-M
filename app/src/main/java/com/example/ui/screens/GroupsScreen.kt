@@ -113,7 +113,7 @@ fun GroupsScreen(
                             color = Ink
                         )
                         Text(
-                            text = "ማኅበራት በመስኮት · Habesha Communities & Circles",
+                            text = "Meskot Groups · Habesha Communities & Circles",
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = com.example.ui.theme.GoldDeep

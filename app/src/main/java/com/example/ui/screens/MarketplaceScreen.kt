@@ -197,10 +197,12 @@ fun MarketplaceScreen(
                     item.location.latitude,
                     item.location.longitude
                 )
-                val effectiveDist = if (item.distanceKm > 0 && (currentLocation.name.equals("Ariena", ignoreCase = true) || currentLocation.name.equals("Mekelle", ignoreCase = true))) {
+                val effectiveDist = if (item.location.latitude != 0.0 && currentLocation.latitude != 0.0) {
+                    computedDist
+                } else if (item.distanceKm > 0.0) {
                     item.distanceKm
                 } else {
-                    computedDist
+                    0.0
                 }
                 item.copy(
                     distanceKm = effectiveDist,
@@ -312,7 +314,7 @@ fun MarketplaceScreen(
                                 color = FbDarkText
                             )
                             Text(
-                                text = "ገበያ በመስኮት · Buy, Sell & Escrow Locally",
+                                text = "Meskot Marketplace · Buy, Sell & Escrow Locally",
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = FbBlue
@@ -833,7 +835,7 @@ fun MarketplaceScreen(
         )
     }
 
-    // "Sell" Flow (Sell on Meskot · ሽያጭ በመስኮት Modal)
+    // "Sell" Flow (Sell on Meskot Modal)
     if (showSellModal) {
         SellOnMeskotModal(
             categories = categories.filter { it.id != "all" },
@@ -1561,19 +1563,7 @@ private fun CreateListingModal(
     var imageUrlInput by remember { mutableStateOf("") }
 
     val selectedPhotos = remember {
-        mutableStateListOf(
-            "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=800&auto=format&fit=crop&q=80"
-        )
-    }
-
-    val sampleGalleryPhotos = remember {
-        listOf(
-            "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=800&auto=format&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&auto=format&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&auto=format&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800&auto=format&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=800&auto=format&fit=crop&q=80"
-        )
+        mutableStateListOf<String>()
     }
 
     // Zero-permission Android Photo Picker for multiple images
@@ -1631,7 +1621,7 @@ private fun CreateListingModal(
                                         MarketplaceLocation(
                                             latitude = latitudeInput.toDoubleOrNull() ?: defaultLocation.latitude,
                                             longitude = longitudeInput.toDoubleOrNull() ?: defaultLocation.longitude,
-                                            name = locationName.trim().ifBlank { "Ariena" }
+                                            name = locationName.trim().ifBlank { defaultLocation.name.ifBlank { "Location" } }
                                         ),
                                         condition
                                     )
@@ -1752,14 +1742,11 @@ private fun CreateListingModal(
                             if (imageUrlInput.isNotBlank()) {
                                 selectedPhotos.add(0, imageUrlInput.trim())
                                 imageUrlInput = ""
-                            } else {
-                                val nextSample = sampleGalleryPhotos.firstOrNull { !selectedPhotos.contains(it) }
-                                    ?: sampleGalleryPhotos.random()
-                                selectedPhotos.add(0, nextSample)
                             }
-                        }
+                        },
+                        enabled = imageUrlInput.isNotBlank()
                     ) {
-                        Text(if (imageUrlInput.isNotBlank()) "Add URL" else "+ Sample")
+                        Text("Add URL")
                     }
                 }
 
@@ -1855,7 +1842,7 @@ private fun CreateListingModal(
 
                 com.example.ui.components.MeskotLocationSelectorButton(
                     locationName = locationName,
-                    placeholder = "Mekelle",
+                    placeholder = defaultLocation.name.ifBlank { "Location" },
                     label = "Location",
                     onClick = { showSellMapPicker = true }
                 )
@@ -2106,8 +2093,9 @@ private fun MarketplaceProductDetailModal(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
+                        val distLabel = if (item.distanceKm <= 0.5) "Nearby" else "${String.format(Locale.US, "%.1f", item.distanceKm)} km away"
                         Text(
-                            text = "Listed in ${item.location.name} · ${item.distanceKm.toInt()} km away · ${item.condition} · ${item.viewsCount} views",
+                            text = "Listed in ${item.location.name} · $distLabel · ${item.condition} · ${item.viewsCount} views",
                             fontSize = 13.sp,
                             color = FbSecondaryText
                         )
@@ -2427,8 +2415,17 @@ private fun MarketplaceProductDetailModal(
                                         VerifiedBadge(size = 15.dp)
                                     }
                                 }
+                                val sellerSince = remember(item.createdAt) {
+                                    if (item.createdAt > 0L) {
+                                        val cal = java.util.Calendar.getInstance()
+                                        cal.timeInMillis = item.createdAt
+                                        "Active Seller · Listed ${cal.get(java.util.Calendar.YEAR)}"
+                                    } else {
+                                        "Active Seller on Meskot"
+                                    }
+                                }
                                 Text(
-                                    text = "Joined Meskot Marketplace · Active Seller",
+                                    text = if (item.sellerVerified) "Verified Seller · $sellerSince" else sellerSince,
                                     fontSize = 12.sp,
                                     color = FbSecondaryText
                                 )

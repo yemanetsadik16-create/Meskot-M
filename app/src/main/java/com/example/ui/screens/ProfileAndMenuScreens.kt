@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import com.example.ui.components.saveStoryBitmapToCache
+import com.example.ui.components.persistPickedMediaUri
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.foundation.layout.height
@@ -349,12 +350,12 @@ fun ProfileScreen(
         isMe || MeskotStrings.isOnline(user.lastSeen, nowMs)
     }
 
-    val fbBlue = Color(0xFF1877F2)
-    val fbLightGray = Color(0xFFE4E6EB)
-    val fbTextGray = Color(0xFF65676B)
-    val fbDark = Color(0xFF050505)
-    val fbBadgeRed = Color(0xFFE41E3F)
-    val fbGreen = Color(0xFF31A24C)
+    val fbBlue = GoldDeep
+    val fbLightGray = Paper2
+    val fbTextGray = MutedText
+    val fbDark = Ink
+    val fbBadgeRed = CrossRed
+    val fbGreen = ActiveGreen
 
     var selectedTab by remember { mutableStateOf(0) } // 0: All, 1: Reels, 2: Photos
     var isSearchOpen by remember { mutableStateOf(false) }
@@ -393,13 +394,8 @@ fun ProfileScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (_: Exception) {}
-            saveUploadedPhoto(uri.toString(), isCover = false)
+            val savedPath = persistPickedMediaUri(context, uri, "avatar")
+            saveUploadedPhoto(savedPath, isCover = false)
             Toast.makeText(context, "Profile picture updated!", Toast.LENGTH_SHORT).show()
         }
     }
@@ -409,7 +405,7 @@ fun ProfileScreen(
     ) { bitmap ->
         if (bitmap != null) {
             val savedPath = saveStoryBitmapToCache(context, bitmap)
-            if (savedPath != null) {
+            if (savedPath.isNotBlank()) {
                 saveUploadedPhoto(savedPath, isCover = false)
                 Toast.makeText(context, "Profile picture captured!", Toast.LENGTH_SHORT).show()
             }
@@ -420,13 +416,8 @@ fun ProfileScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (_: Exception) {}
-            saveUploadedPhoto(uri.toString(), isCover = true)
+            val savedPath = persistPickedMediaUri(context, uri, "cover")
+            saveUploadedPhoto(savedPath, isCover = true)
             Toast.makeText(context, "Cover photo updated!", Toast.LENGTH_SHORT).show()
         }
     }
@@ -436,7 +427,7 @@ fun ProfileScreen(
     ) { bitmap ->
         if (bitmap != null) {
             val savedPath = saveStoryBitmapToCache(context, bitmap)
-            if (savedPath != null) {
+            if (savedPath.isNotBlank()) {
                 saveUploadedPhoto(savedPath, isCover = true)
                 Toast.makeText(context, "Cover photo captured!", Toast.LENGTH_SHORT).show()
             }
@@ -486,14 +477,14 @@ fun ProfileScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(Paper)
             .testTag("profile_screen")
     ) {
-        // TOP BAR: Clean Facebook-Style Profile Navigation Bar (Screenshot 1 & 2)
+        // TOP BAR: Meskot-Styled Profile Navigation Bar
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            color = Color.White,
-            shadowElevation = 1.dp
+            color = CardBg,
+            shadowElevation = 2.dp
         ) {
             Column {
                 Row(
@@ -653,7 +644,7 @@ fun ProfileScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFFE7F3FF))
+                            .background(GoldSurface)
                             .padding(horizontal = 14.dp, vertical = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
@@ -662,13 +653,13 @@ fun ProfileScreen(
                             text = "👁️ Viewing how others see your profile",
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = fbBlue
+                            color = GoldDeep
                         )
                         Text(
                             text = "Exit View As",
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Bold,
-                            color = fbBlue,
+                            color = GoldDeep,
                             modifier = Modifier.clickable { viewAsOtherMode = false }
                         )
                     }
@@ -747,7 +738,7 @@ fun ProfileScreen(
                             }
                         }
 
-                        // Camera Icon Button on Cover Photo (Bottom Right - Only when viewing own profile like Screenshot 2)
+                        // Camera Icon Button on Cover Photo (Bottom Right - Meskot Branded)
                         if (effectiveIsMe) {
                             Box(
                                 modifier = Modifier
@@ -755,22 +746,22 @@ fun ProfileScreen(
                                     .padding(12.dp)
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .background(fbLightGray)
-                                    .border(1.5.dp, Color.White, CircleShape)
+                                    .background(GoldSurface)
+                                    .border(1.5.dp, Gold, CircleShape)
                                     .clickable { showPhotoSourceSheet = "COVER" },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PhotoCamera,
                                     contentDescription = "Change Cover Photo",
-                                    tint = fbDark,
+                                    tint = GoldDeep,
                                     modifier = Modifier.size(19.dp)
                                 )
                             }
                         }
                     }
 
-                    // Left-Aligned Overlapping Profile Avatar (Matching Screenshot 1 & 2)
+                    // Left-Aligned Overlapping Profile Avatar (Meskot Gold Ring)
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
@@ -790,26 +781,26 @@ fun ProfileScreen(
                             size = 116,
                             modifier = Modifier
                                 .size(116.dp)
-                                .border(4.dp, Color.White, CircleShape)
+                                .border(3.5.dp, Gold, CircleShape)
                         )
 
                         if (effectiveIsMe) {
-                            // Camera Icon Button on Avatar (Bottom Right - Screenshot 2)
+                            // Camera Icon Button on Avatar (Bottom Right - Meskot Branded)
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
                                     .offset(x = (-2).dp, y = (-2).dp)
                                     .size(34.dp)
                                     .clip(CircleShape)
-                                    .background(fbLightGray)
-                                    .border(2.dp, Color.White, CircleShape)
+                                    .background(GoldSurface)
+                                    .border(2.dp, Gold, CircleShape)
                                     .clickable { showPhotoSourceSheet = "AVATAR" },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PhotoCamera,
                                     contentDescription = "Change Profile Photo",
-                                    tint = fbDark,
+                                    tint = GoldDeep,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -938,7 +929,7 @@ fun ProfileScreen(
                         Button(
                             onClick = { viewModel.navigateTo(ScreenTab.DASHBOARD) },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = fbBlue,
+                                containerColor = Gold,
                                 contentColor = Color.White
                             ),
                             shape = RoundedCornerShape(8.dp),
@@ -967,9 +958,10 @@ fun ProfileScreen(
                             Button(
                                 onClick = { viewModel.openComposer() },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = fbLightGray,
-                                    contentColor = fbDark
+                                    containerColor = GoldSurface,
+                                    contentColor = GoldDeep
                                 ),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
                                 shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                 modifier = Modifier
@@ -980,23 +972,24 @@ fun ProfileScreen(
                                     imageVector = Icons.Default.Add,
                                     contentDescription = "Add to story",
                                     modifier = Modifier.size(18.dp),
-                                    tint = fbDark
+                                    tint = GoldDeep
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Add to story",
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = fbDark
+                                    color = GoldDeep
                                 )
                             }
 
                             Button(
                                 onClick = { viewModel.openEditProfile() },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = fbLightGray,
-                                    contentColor = fbDark
+                                    containerColor = Paper2,
+                                    contentColor = Ink
                                 ),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder),
                                 shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                 modifier = Modifier
@@ -1007,14 +1000,14 @@ fun ProfileScreen(
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = "Edit profile",
                                     modifier = Modifier.size(16.dp),
-                                    tint = fbDark
+                                    tint = GoldDeep
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Edit profile",
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = fbDark
+                                    color = Ink
                                 )
                             }
 
@@ -1022,14 +1015,15 @@ fun ProfileScreen(
                                 modifier = Modifier
                                     .size(38.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(fbLightGray)
+                                    .background(Paper2)
+                                    .border(1.dp, LineBorder, RoundedCornerShape(8.dp))
                                     .clickable { isMoreOptionsOpen = true },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.MoreVert,
                                     contentDescription = "More",
-                                    tint = fbDark,
+                                    tint = Ink,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -1123,7 +1117,8 @@ fun ProfileScreen(
                 item {
                     Card(
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                        colors = CardDefaults.cardColors(containerColor = Ink),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Gold.copy(alpha = 0.45f)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -1141,7 +1136,8 @@ fun ProfileScreen(
                                     modifier = Modifier
                                         .size(38.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF334155)),
+                                        .background(Gold.copy(alpha = 0.22f))
+                                        .border(1.dp, Gold, CircleShape),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(text = "👑", fontSize = 18.sp)
@@ -1159,16 +1155,16 @@ fun ProfileScreen(
                                         Box(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(4.dp))
-                                                .background(Color(0xFF065F46))
+                                                .background(ActiveGreen.copy(alpha = 0.22f))
                                                 .padding(horizontal = 5.dp, vertical = 1.dp)
                                         ) {
-                                            Text(text = "ACTIVE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF34D399))
+                                            Text(text = "ACTIVE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = GoldLight)
                                         }
                                     }
                                     Text(
                                         text = "Net Balance: ${String.format(java.util.Locale.US, "%,.2f", user.creatorNetBalance)} ETB · Ledger & Payouts",
                                         fontSize = 11.sp,
-                                        color = Color(0xFF94A3B8)
+                                        color = GoldBorder
                                     )
                                 }
                             }
@@ -1177,7 +1173,7 @@ fun ProfileScreen(
                                 text = "Open →",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFBBF24)
+                                color = GoldLight
                             )
                         }
                     }
@@ -1188,11 +1184,11 @@ fun ProfileScreen(
                     Card(
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (user.isVerified) GoldSurface else CardBg
+                            containerColor = GoldSurface
                         ),
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
-                            if (user.isVerified) GoldBorder else LineBorder
+                            GoldBorder
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1228,7 +1224,7 @@ fun ProfileScreen(
                                             text = if (user.isVerified) "Meskot Verified · Active Subscriber" else "Meskot Verified",
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 13.sp,
-                                            color = if (user.isVerified) GoldDeep else Ink
+                                            color = GoldDeep
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Box(
@@ -1256,7 +1252,7 @@ fun ProfileScreen(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
                                 contentDescription = null,
-                                tint = if (user.isVerified) GoldDeep else MutedText,
+                                tint = GoldDeep,
                                 modifier = Modifier.size(12.dp)
                             )
                         }
@@ -1267,8 +1263,8 @@ fun ProfileScreen(
                 item {
                     Card(
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        colors = CardDefaults.cardColors(containerColor = GoldSurface),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -1288,12 +1284,12 @@ fun ProfileScreen(
                                         text = "${user.starBalance} Stars  •  ${PaymentCurrency.USD.formatFromEtb(user.creatorNetBalance)}",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = fbDark
+                                        color = Ink
                                     )
                                     Text(
                                         text = "≈ ${String.format(java.util.Locale.US, "%,.0f", user.creatorNetBalance)} ETB (1 USD = ${ExchangeRateManager.formattedRate()} ETB NBE)",
                                         fontSize = 10.5.sp,
-                                        color = fbTextGray
+                                        color = MutedText
                                     )
                                 }
                             }
@@ -1313,7 +1309,7 @@ fun ProfileScreen(
                                 }
                                 Button(
                                     onClick = { viewModel.buyStarsViaChapa(500, 200.0, "ETB") },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Gold),
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                                 ) {
@@ -1329,9 +1325,13 @@ fun ProfileScreen(
                 }
             }
 
-            // NAVIGATION TABS: All | Reels | Photos
+            // NAVIGATION TABS: All | Reels | Photos (Meskot Branded)
             item {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(CardBg)
+                ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1350,7 +1350,7 @@ fun ProfileScreen(
                                     text = title,
                                     fontSize = 15.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) fbBlue else fbTextGray
+                                    color = if (isSelected) GoldDeep else MutedText
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Box(
@@ -1358,59 +1358,81 @@ fun ProfileScreen(
                                         .width(36.dp)
                                         .height(3.dp)
                                         .clip(RoundedCornerShape(2.dp))
-                                        .background(if (isSelected) fbBlue else Color.Transparent)
+                                        .background(if (isSelected) Gold else Color.Transparent)
                                 )
                             }
                         }
                     }
-                    HorizontalDivider(color = fbLightGray, thickness = 1.dp)
+                    HorizontalDivider(color = GoldBorder, thickness = 1.dp)
                 }
             }
 
-            // PERSONAL DETAILS SECTION (Facebook style Screenshot 1 & 2, shown in 'All' tab)
+            // PERSONAL DETAILS SECTION (Meskot Brand Styled Card)
             if (selectedTab == 0) {
                 item {
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardBg),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .padding(16.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .width(4.dp)
+                                .height(20.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Gold)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Personal details",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            color = fbDark
+                            fontFamily = FontFamily.Serif,
+                            color = Ink
                         )
                         Spacer(modifier = Modifier.weight(1f))
                         if (effectiveIsMe) {
-                            IconButton(
+                            Surface(
                                 onClick = { viewModel.openEditProfile() },
+                                shape = CircleShape,
+                                color = GoldSurface,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
                                 modifier = Modifier.size(32.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Edit personal details",
-                                    tint = fbDark,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "Edit personal details",
+                                        tint = GoldDeep,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    val cleanProfession = user.profession.trim().ifBlank { "Public figure" }
-                    val cleanLocation = user.location.trim().ifBlank { "Addis Ababa, Ethiopia" }
-                    val cleanHometown = user.hometown.trim().ifBlank { cleanLocation }
-                    val cleanBirthDate = user.birthDate.trim().ifBlank { "August 29, 2002" }
+                    val cleanProfession = user.profession.trim()
+                    val cleanLocation = user.location.trim()
+                    val cleanHometown = user.hometown.trim()
+                    val cleanBirthDate = user.birthDate.trim()
                     val cleanGender = user.gender.trim()
 
-                    // 1. Category / Profession (Screenshot 2: "Profile · Public figure")
-                    if (effectiveIsMe || user.profession.isNotBlank()) {
+                    // 1. Category / Profession
+                    if (cleanProfession.isNotBlank() || effectiveIsMe) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -1423,94 +1445,37 @@ fun ProfileScreen(
                             Icon(
                                 imageVector = Icons.Default.Info,
                                 contentDescription = "Profile category",
-                                tint = fbTextGray,
+                                tint = GoldDeep,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = buildAnnotatedString {
-                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
-                                        append("Profile")
-                                    }
-                                    append(" · ")
-                                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = fbDark)) {
-                                        append(cleanProfession)
-                                    }
-                                },
-                                fontSize = 14.5.sp,
-                                color = fbDark
-                            )
+                            if (cleanProfession.isNotBlank()) {
+                                Text(
+                                    text = buildAnnotatedString {
+                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Ink)) {
+                                            append("Profile")
+                                        }
+                                        append(" · ")
+                                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = GoldDeep)) {
+                                            append(cleanProfession)
+                                        }
+                                    },
+                                    fontSize = 14.5.sp,
+                                    color = Ink
+                                )
+                            } else {
+                                Text(
+                                    text = "+ Add profession / category",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = GoldDeep
+                                )
+                            }
                         }
                     }
 
-                    // 2. Current City / Location (Screenshot 1 & 2: Home icon + City)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                if (effectiveIsMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
-                            }
-                            .padding(vertical = 5.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Home,
-                            contentDescription = "Current city",
-                            tint = fbTextGray,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = if (effectiveIsMe) {
-                                buildAnnotatedString { append(cleanLocation) }
-                            } else {
-                                buildAnnotatedString {
-                                    append("Lives in ")
-                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
-                                        append(cleanLocation)
-                                    }
-                                }
-                            },
-                            fontSize = 14.5.sp,
-                            color = fbDark
-                        )
-                    }
-
-                    // 3. Hometown (Screenshot 1 & 2: Pin icon + Hometown)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                if (effectiveIsMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
-                            }
-                            .padding(vertical = 5.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = "Hometown",
-                            tint = fbTextGray,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = if (effectiveIsMe) {
-                                buildAnnotatedString { append(cleanHometown) }
-                            } else {
-                                buildAnnotatedString {
-                                    append("From ")
-                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
-                                        append(cleanHometown)
-                                    }
-                                }
-                            },
-                            fontSize = 14.5.sp,
-                            color = fbDark
-                        )
-                    }
-
-                    // 4. Birthday (Screenshot 2: Cake icon + Date + Lock icon)
-                    if (effectiveIsMe || user.birthDate.isNotBlank()) {
+                    // 2. Current City / Location
+                    if (cleanLocation.isNotBlank() || effectiveIsMe) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -1521,84 +1486,379 @@ fun ProfileScreen(
                                 .padding(vertical = 5.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Cake,
-                                contentDescription = "Birthday",
-                                tint = fbTextGray,
+                                imageVector = Icons.Default.Home,
+                                contentDescription = "Current city",
+                                tint = GoldDeep,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = cleanBirthDate,
-                                fontSize = 14.5.sp,
-                                color = fbDark
-                            )
-                            if (effectiveIsMe) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = "Only me",
-                                    tint = fbTextGray,
-                                    modifier = Modifier.size(14.dp)
+                            if (cleanLocation.isNotBlank()) {
+                                Text(
+                                    text = if (effectiveIsMe) {
+                                        buildAnnotatedString {
+                                            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = Ink)) {
+                                                append(cleanLocation)
+                                            }
+                                        }
+                                    } else {
+                                        buildAnnotatedString {
+                                            append("Lives in ")
+                                            withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Ink)) {
+                                                append(cleanLocation)
+                                            }
+                                        }
+                                    },
+                                    fontSize = 14.5.sp,
+                                    color = Ink
+                                )
+                            } else {
+                                Text(
+                                    text = "+ Add current city",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = GoldDeep
                                 )
                             }
                         }
                     }
 
-                    // 5. Work & Education lines inside Personal details when viewing Other's Profile (Screenshot 1)
-                    if (!effectiveIsMe) {
-                        val visitorWork = user.workplace.trim().ifBlank { "Engineering & Technology" }
-                        val visitorEdu = user.education.trim().ifBlank { "Adigrat University" }
-
+                    // 3. Hometown
+                    if (cleanHometown.isNotBlank() || effectiveIsMe) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { isSeeMoreDetailsOpen = true }
+                                .clickable {
+                                    if (effectiveIsMe) viewModel.openEditProfile() else isSeeMoreDetailsOpen = true
+                                }
                                 .padding(vertical = 5.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Work,
-                                contentDescription = "Work",
-                                tint = fbTextGray,
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = "Hometown",
+                                tint = GoldDeep,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = buildAnnotatedString {
-                                    append("Works at ")
-                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
-                                        append(visitorWork)
-                                    }
-                                },
-                                fontSize = 14.5.sp,
-                                color = fbDark
+                            if (cleanHometown.isNotBlank()) {
+                                Text(
+                                    text = if (effectiveIsMe) {
+                                        buildAnnotatedString {
+                                            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = Ink)) {
+                                                append(cleanHometown)
+                                            }
+                                        }
+                                    } else {
+                                        buildAnnotatedString {
+                                            append("From ")
+                                            withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Ink)) {
+                                                append(cleanHometown)
+                                            }
+                                        }
+                                    },
+                                    fontSize = 14.5.sp,
+                                    color = Ink
+                                )
+                            } else {
+                                Text(
+                                    text = "+ Add hometown",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = GoldDeep
+                                )
+                            }
+                        }
+                    }
+
+                    // 4. Birthday (Create Account style 3-dropdown Month / Day / Year selector)
+                    if (effectiveIsMe || cleanBirthDate.isNotBlank()) {
+                        val bdayMonths = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                        val bdayDays = (1..31).map { it.toString() }
+                        val bdayYears = (2012 downTo 1940).map { it.toString() }
+
+                        val parsedBday = remember(cleanBirthDate) {
+                            if (cleanBirthDate.isNotBlank()) {
+                                val parts = cleanBirthDate.replace(",", " ")
+                                    .split(Regex("\\s+"))
+                                    .filter { it.isNotBlank() }
+                                val rawM = parts.getOrNull(0) ?: "Jan"
+                                val m = bdayMonths.firstOrNull { rawM.startsWith(it, ignoreCase = true) } ?: "Jan"
+                                val d = parts.getOrNull(1)?.filter { it.isDigit() }?.takeIf { it in bdayDays } ?: "1"
+                                val y = parts.getOrNull(2)?.filter { it.isDigit() }?.takeIf { it in bdayYears } ?: "2000"
+                                Triple(m, d, y)
+                            } else {
+                                Triple("Jan", "1", "2000")
+                            }
+                        }
+
+                        var profileMonth by remember(parsedBday) { mutableStateOf(parsedBday.first) }
+                        var isProfileMonthExpanded by remember { mutableStateOf(false) }
+
+                        var profileDay by remember(parsedBday) { mutableStateOf(parsedBday.second) }
+                        var isProfileDayExpanded by remember { mutableStateOf(false) }
+
+                        var profileYear by remember(parsedBday) { mutableStateOf(parsedBday.third) }
+                        var isProfileYearExpanded by remember { mutableStateOf(false) }
+
+                        fun saveProfileBirthday(newMonth: String, newDay: String, newYear: String) {
+                            if (!effectiveIsMe || currentUser == null) return
+                            val updatedBirthDate = "$newMonth $newDay, $newYear"
+                            viewModel.saveProfile(
+                                name = currentUser.displayName,
+                                bio = currentUser.bio,
+                                photoUrl = currentUser.photoUrl,
+                                gender = currentUser.gender,
+                                birthDate = updatedBirthDate,
+                                coverPhotoUrl = currentUser.coverPhotoUrl,
+                                profession = currentUser.profession,
+                                location = currentUser.location,
+                                hometown = currentUser.hometown,
+                                workplace = currentUser.workplace,
+                                workRole = currentUser.workRole,
+                                education = currentUser.education,
+                                educationClass = currentUser.educationClass
                             )
                         }
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { isSeeMoreDetailsOpen = true }
-                                .padding(vertical = 5.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(GoldSurface)
+                                .border(1.dp, GoldBorder, RoundedCornerShape(10.dp))
+                                .padding(10.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.School,
-                                contentDescription = "Education",
-                                tint = fbTextGray,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = buildAnnotatedString {
-                                    append("Studied at ")
-                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
-                                        append(visitorEdu)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Cake,
+                                    contentDescription = "Birthday",
+                                    tint = GoldDeep,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = MeskotStrings.get("birthday", currentLanguage),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Ink
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = GoldDeep,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                if (effectiveIsMe) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "Only me",
+                                        tint = GoldDeep,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                }
+                            }
+                            if (effectiveIsMe) {
+                                Text(
+                                    text = MeskotStrings.get("birthdaySub", currentLanguage),
+                                    fontSize = 11.sp,
+                                    color = MutedText,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // 3 Dropdown Pickers: Month, Day, Year (Meskot Gold & Paper styled)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Month Selector
+                                Box(modifier = Modifier.weight(1.1f)) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                                        color = CardBg,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable(enabled = effectiveIsMe) { isProfileMonthExpanded = true }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(text = profileMonth, fontSize = 13.sp, color = Ink, fontWeight = FontWeight.SemiBold)
+                                            if (effectiveIsMe) {
+                                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = GoldDeep)
+                                            }
+                                        }
                                     }
-                                },
-                                fontSize = 14.5.sp,
-                                color = fbDark
-                            )
+                                    if (effectiveIsMe) {
+                                        DropdownMenu(
+                                            expanded = isProfileMonthExpanded,
+                                            onDismissRequest = { isProfileMonthExpanded = false }
+                                        ) {
+                                            bdayMonths.forEach { m ->
+                                                DropdownMenuItem(
+                                                    text = { Text(m) },
+                                                    onClick = {
+                                                        profileMonth = m
+                                                        isProfileMonthExpanded = false
+                                                        saveProfileBirthday(profileMonth, profileDay, profileYear)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Day Selector
+                                Box(modifier = Modifier.weight(0.9f)) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                                        color = CardBg,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable(enabled = effectiveIsMe) { isProfileDayExpanded = true }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(text = profileDay, fontSize = 13.sp, color = Ink, fontWeight = FontWeight.SemiBold)
+                                            if (effectiveIsMe) {
+                                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = GoldDeep)
+                                            }
+                                        }
+                                    }
+                                    if (effectiveIsMe) {
+                                        DropdownMenu(
+                                            expanded = isProfileDayExpanded,
+                                            onDismissRequest = { isProfileDayExpanded = false }
+                                        ) {
+                                            bdayDays.forEach { d ->
+                                                DropdownMenuItem(
+                                                    text = { Text(d) },
+                                                    onClick = {
+                                                        profileDay = d
+                                                        isProfileDayExpanded = false
+                                                        saveProfileBirthday(profileMonth, profileDay, profileYear)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Year Selector
+                                Box(modifier = Modifier.weight(1.1f)) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                                        color = CardBg,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable(enabled = effectiveIsMe) { isProfileYearExpanded = true }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(text = profileYear, fontSize = 13.sp, color = Ink, fontWeight = FontWeight.SemiBold)
+                                            if (effectiveIsMe) {
+                                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = GoldDeep)
+                                            }
+                                        }
+                                    }
+                                    if (effectiveIsMe) {
+                                        DropdownMenu(
+                                            expanded = isProfileYearExpanded,
+                                            onDismissRequest = { isProfileYearExpanded = false }
+                                        ) {
+                                            bdayYears.forEach { y ->
+                                                DropdownMenuItem(
+                                                    text = { Text(y) },
+                                                    onClick = {
+                                                        profileYear = y
+                                                        isProfileYearExpanded = false
+                                                        saveProfileBirthday(profileMonth, profileDay, profileYear)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 5. Work & Education lines inside Personal details when viewing Other's Profile
+                    if (!effectiveIsMe) {
+                        val visitorWork = user.workplace.trim()
+                        val visitorEdu = user.education.trim()
+
+                        if (visitorWork.isNotBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { isSeeMoreDetailsOpen = true }
+                                    .padding(vertical = 5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Work,
+                                    contentDescription = "Work",
+                                    tint = GoldDeep,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = buildAnnotatedString {
+                                        append("Works at ")
+                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Ink)) {
+                                            append(visitorWork)
+                                        }
+                                    },
+                                    fontSize = 14.5.sp,
+                                    color = Ink
+                                )
+                            }
+                        }
+
+                        if (visitorEdu.isNotBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { isSeeMoreDetailsOpen = true }
+                                    .padding(vertical = 5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.School,
+                                    contentDescription = "Education",
+                                    tint = GoldDeep,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = buildAnnotatedString {
+                                        append("Studied at ")
+                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Ink)) {
+                                            append(visitorEdu)
+                                        }
+                                    },
+                                    fontSize = 14.5.sp,
+                                    color = Ink
+                                )
+                            }
                         }
                     }
 
@@ -1613,423 +1873,509 @@ fun ProfileScreen(
                             Icon(
                                 imageVector = Icons.Default.Person,
                                 contentDescription = "Gender",
-                                tint = fbTextGray,
+                                tint = GoldDeep,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = cleanGender,
                                 fontSize = 14.5.sp,
-                                color = fbDark
+                                fontWeight = FontWeight.Medium,
+                                color = Ink
                             )
                         }
                     }
 
                     // 7. "See more personal details" / "See more about <FirstName>" link
                     val firstName = user.displayName.split(" ").firstOrNull() ?: user.displayName
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = if (effectiveIsMe) "See more personal details" else "See more about $firstName",
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = fbTextGray,
+                        text = if (effectiveIsMe) "See more personal details →" else "See more about $firstName →",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = GoldDeep,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { isSeeMoreDetailsOpen = true }
-                            .padding(vertical = 6.dp)
+                            .padding(vertical = 4.dp)
                     )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-                    HorizontalDivider(color = fbLightGray, thickness = 1.dp)
+                }
                 }
             }
 
-            // WORK SECTION (Screenshot 2: Dedicated section when viewing Own Profile)
+            // WORK SECTION (Meskot Brand Styled Card when viewing Own Profile)
             if (effectiveIsMe) {
                 item {
-                    Column(
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardBg),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Work",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = fbDark
-                            )
-                            Spacer(modifier = Modifier.weight(1f))
-                            IconButton(
-                                onClick = { viewModel.openEditProfile() },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Edit work",
-                                    tint = fbDark,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        val cleanWorkplace = user.workplace.trim().ifBlank { "Adigrat University _Engineering Sciences" }
-                        val cleanWorkRole = user.workRole.trim().ifBlank { "Civil Engineering" }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { viewModel.openEditProfile() }
-                                .padding(vertical = 4.dp)
+                                .padding(16.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(fbLightGray),
-                                contentAlignment = Alignment.Center
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Work,
-                                    contentDescription = "Work",
-                                    tint = fbDark,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = cleanWorkplace,
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = fbDark
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = "Private",
-                                        tint = fbTextGray,
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = cleanWorkRole,
-                                    fontSize = 13.sp,
-                                    color = fbTextGray
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = "See more work",
-                            fontSize = 14.sp,
-                            color = fbTextGray,
-                            modifier = Modifier
-                                .clickable { isSeeMoreWorkOpen = true }
-                                .padding(vertical = 4.dp)
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HorizontalDivider(color = fbLightGray, thickness = 1.dp)
-                    }
-                }
-
-                // EDUCATION SECTION (Screenshot 2: Dedicated section when viewing Own Profile)
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Education",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = fbDark
-                            )
-                            Spacer(modifier = Modifier.weight(1f))
-                            IconButton(
-                                onClick = { viewModel.openEditProfile() },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Edit education",
-                                    tint = fbDark,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        val cleanEdu = user.education.trim().ifBlank { "Adigrat University" }
-                        val cleanEduClass = user.educationClass.trim().ifBlank { "Class of 2025" }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.openEditProfile() }
-                                .padding(vertical = 4.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(fbLightGray),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.School,
-                                    contentDescription = "Education",
-                                    tint = fbDark,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = cleanEdu,
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = fbDark
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = "Private",
-                                        tint = fbTextGray,
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = cleanEduClass,
-                                    fontSize = 13.sp,
-                                    color = fbTextGray
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HorizontalDivider(color = fbLightGray, thickness = 1.dp)
-                    }
-                }
-            }
-
-            // FRIENDS SECTION (Screenshot 1: 3x2 Rectangular Card Grid | Screenshot 2: 4 Circular Avatars Row)
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "Friends",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = fbDark
-                            )
-                            if (!effectiveIsMe) {
-                                val totalFriendsCount = user.followersCount.takeIf { it > 0 && it != 8500 } ?: displayFriends.size.coerceAtLeast(1)
-                                Text(
-                                    text = "$totalFriendsCount friends",
-                                    fontSize = 13.sp,
-                                    color = fbTextGray
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.weight(1f))
-                        TextButton(onClick = { viewModel.navigateTo(ScreenTab.FRIENDS) }) {
-                            Text(
-                                text = if (effectiveIsMe) "See all" else "Find Friends",
-                                color = fbBlue,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    if (effectiveIsMe) {
-                        // Screenshot 2: 4 Circular Avatars with green online dot and mutual friend count
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            displayFriends.take(4).forEachIndexed { idx, friend ->
-                                val mutualCount = (idx + 1) * 2
-                                val isFriendOnline = remember(friend.lastSeen, nowMs) {
-                                    MeskotStrings.isOnline(friend.lastSeen, nowMs)
-                                }
-                                Column(
+                                Box(
                                     modifier = Modifier
-                                        .weight(1f)
-                                        .padding(horizontal = 4.dp)
-                                        .clickable { viewModel.openProfile(friend) },
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                        .width(4.dp)
+                                        .height(18.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(Gold)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Work",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Serif,
+                                    color = Ink
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                Surface(
+                                    onClick = { viewModel.openEditProfile() },
+                                    shape = CircleShape,
+                                    color = GoldSurface,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                                    modifier = Modifier.size(30.dp)
                                 ) {
-                                    Box(modifier = Modifier.size(68.dp)) {
-                                        UserAvatar(
-                                            photoUrl = friend.photoUrl,
-                                            name = friend.displayName,
-                                            size = 68,
-                                            modifier = Modifier.clip(CircleShape)
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Edit work",
+                                            tint = GoldDeep,
+                                            modifier = Modifier.size(15.dp)
                                         )
-                                        if (isFriendOnline) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .align(Alignment.BottomEnd)
-                                                    .offset(x = (-2).dp, y = (-2).dp)
-                                                    .size(14.dp)
-                                                    .clip(CircleShape)
-                                                    .background(fbGreen)
-                                                    .border(2.dp, Color.White, CircleShape)
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            val cleanWorkplace = user.workplace.trim()
+                            val cleanWorkRole = user.workRole.trim()
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.openEditProfile() }
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(GoldSurface)
+                                        .border(1.dp, GoldBorder, RoundedCornerShape(10.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Work,
+                                        contentDescription = "Work",
+                                        tint = GoldDeep,
+                                        modifier = Modifier.size(21.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                if (cleanWorkplace.isNotBlank() || cleanWorkRole.isNotBlank()) {
+                                    Column {
+                                        if (cleanWorkplace.isNotBlank()) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = cleanWorkplace,
+                                                    fontSize = 14.5.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = Ink
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Icon(
+                                                    imageVector = Icons.Default.Lock,
+                                                    contentDescription = "Private",
+                                                    tint = GoldDeep,
+                                                    modifier = Modifier.size(13.dp)
+                                                )
+                                            }
+                                        }
+                                        if (cleanWorkRole.isNotBlank()) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = cleanWorkRole,
+                                                fontSize = 13.sp,
+                                                color = MutedText
                                             )
                                         }
                                     }
-
-                                    Spacer(modifier = Modifier.height(6.dp))
-
+                                } else {
                                     Text(
-                                        text = friend.displayName,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = fbDark,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-
-                                    Spacer(modifier = Modifier.height(2.dp))
-
-                                    Text(
-                                        text = "$mutualCount mutual friends",
-                                        fontSize = 10.5.sp,
-                                        color = fbTextGray,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 1
+                                        text = "+ Add work experience",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = GoldDeep
                                     )
                                 }
                             }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Text(
+                                text = "See more work →",
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = GoldDeep,
+                                modifier = Modifier
+                                    .clickable { isSeeMoreWorkOpen = true }
+                                    .padding(vertical = 4.dp)
+                            )
                         }
-                    } else {
-                        // Screenshot 1: 3x2 Rectangular Card Grid + "See all friends" gray full-width button
-                        val gridFriends = displayFriends.take(6)
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            gridFriends.chunked(3).forEach { rowList ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    }
+                }
+
+                // EDUCATION SECTION (Meskot Brand Styled Card when viewing Own Profile)
+                item {
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardBg),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(4.dp)
+                                        .height(18.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(Gold)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Education",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Serif,
+                                    color = Ink
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                Surface(
+                                    onClick = { viewModel.openEditProfile() },
+                                    shape = CircleShape,
+                                    color = GoldSurface,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                                    modifier = Modifier.size(30.dp)
                                 ) {
-                                    rowList.forEachIndexed { idx, friend ->
-                                        Card(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clickable { viewModel.openProfile(friend) },
-                                            shape = RoundedCornerShape(8.dp),
-                                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                                        ) {
-                                            Column {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .aspectRatio(1f)
-                                                        .background(Color(0xFFF0F2F5)),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    if (friend.photoUrl.isNotBlank()) {
-                                                        AsyncImage(
-                                                            model = friend.photoUrl,
-                                                            contentDescription = friend.displayName,
-                                                            modifier = Modifier.fillMaxSize(),
-                                                            contentScale = ContentScale.Crop
-                                                        )
-                                                    } else {
-                                                        UserAvatar(
-                                                            photoUrl = "",
-                                                            name = friend.displayName,
-                                                            size = 64
-                                                        )
-                                                    }
-                                                }
-                                                Column(modifier = Modifier.padding(6.dp)) {
-                                                    Text(
-                                                        text = friend.displayName,
-                                                        fontSize = 12.5.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = fbDark,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                    Text(
-                                                        text = "${(idx + 1) * 3} mutual friends",
-                                                        fontSize = 10.5.sp,
-                                                        color = fbTextGray,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    repeat(3 - rowList.size) {
-                                        Spacer(modifier = Modifier.weight(1f))
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Edit education",
+                                            tint = GoldDeep,
+                                            modifier = Modifier.size(15.dp)
+                                        )
                                     }
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
-                            Button(
-                                onClick = { viewModel.navigateTo(ScreenTab.FRIENDS) },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = fbLightGray,
-                                    contentColor = fbDark
-                                ),
-                                shape = RoundedCornerShape(8.dp),
+                            val cleanEdu = user.education.trim()
+                            val cleanEduClass = user.educationClass.trim()
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(38.dp)
+                                    .clickable { viewModel.openEditProfile() }
+                                    .padding(vertical = 4.dp)
                             ) {
-                                Text(
-                                    text = "See all friends",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = fbDark
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(GoldSurface)
+                                        .border(1.dp, GoldBorder, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.School,
+                                        contentDescription = "Education",
+                                        tint = GoldDeep,
+                                        modifier = Modifier.size(21.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                if (cleanEdu.isNotBlank() || cleanEduClass.isNotBlank()) {
+                                    Column {
+                                        if (cleanEdu.isNotBlank()) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = cleanEdu,
+                                                    fontSize = 14.5.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = Ink
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Icon(
+                                                    imageVector = Icons.Default.Lock,
+                                                    contentDescription = "Private",
+                                                    tint = GoldDeep,
+                                                    modifier = Modifier.size(13.dp)
+                                                )
+                                            }
+                                        }
+                                        if (cleanEduClass.isNotBlank()) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = cleanEduClass,
+                                                fontSize = 13.sp,
+                                                color = MutedText
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Text(
+                                        text = "+ Add college or high school",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = GoldDeep
+                                    )
+                                }
                             }
                         }
                     }
+                }
+            }
 
-                    Spacer(modifier = Modifier.height(14.dp))
-                    HorizontalDivider(color = fbLightGray, thickness = 1.dp)
+            // FRIENDS SECTION (Meskot Brand Styled Card)
+            item {
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardBg),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(4.dp)
+                                    .height(18.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(Gold)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "Friends",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Serif,
+                                    color = Ink
+                                )
+                                if (!effectiveIsMe) {
+                                    val totalFriendsCount = user.followersCount.takeIf { it > 0 && it != 8500 } ?: displayFriends.size.coerceAtLeast(1)
+                                    Text(
+                                        text = "$totalFriendsCount friends",
+                                        fontSize = 13.sp,
+                                        color = MutedText
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.weight(1f))
+                            TextButton(onClick = { viewModel.navigateTo(ScreenTab.FRIENDS) }) {
+                                Text(
+                                    text = if (effectiveIsMe) "See all" else "Find Friends",
+                                    color = GoldDeep,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        if (effectiveIsMe) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                displayFriends.take(4).forEachIndexed { idx, friend ->
+                                    val mutualCount = (idx + 1) * 2
+                                    val isFriendOnline = remember(friend.lastSeen, nowMs) {
+                                        MeskotStrings.isOnline(friend.lastSeen, nowMs)
+                                    }
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 4.dp)
+                                            .clickable { viewModel.openProfile(friend) },
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Box(modifier = Modifier.size(68.dp)) {
+                                            UserAvatar(
+                                                photoUrl = friend.photoUrl,
+                                                name = friend.displayName,
+                                                size = 68,
+                                                modifier = Modifier
+                                                    .clip(CircleShape)
+                                                    .border(1.5.dp, GoldBorder, CircleShape)
+                                            )
+                                            if (isFriendOnline) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .align(Alignment.BottomEnd)
+                                                        .offset(x = (-2).dp, y = (-2).dp)
+                                                        .size(14.dp)
+                                                        .clip(CircleShape)
+                                                        .background(fbGreen)
+                                                        .border(2.dp, Color.White, CircleShape)
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(6.dp))
+
+                                        Text(
+                                            text = friend.displayName,
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Ink,
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+
+                                        Spacer(modifier = Modifier.height(2.dp))
+
+                                        Text(
+                                            text = "$mutualCount mutual friends",
+                                            fontSize = 10.5.sp,
+                                            color = MutedText,
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            val gridFriends = displayFriends.take(6)
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                gridFriends.chunked(3).forEach { rowList ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        rowList.forEachIndexed { idx, friend ->
+                                            Card(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clickable { viewModel.openProfile(friend) },
+                                                shape = RoundedCornerShape(8.dp),
+                                                colors = CardDefaults.cardColors(containerColor = GoldSurface),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                                                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                                            ) {
+                                                Column {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .aspectRatio(1f)
+                                                            .background(Paper2),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        if (friend.photoUrl.isNotBlank()) {
+                                                            AsyncImage(
+                                                                model = friend.photoUrl,
+                                                                contentDescription = friend.displayName,
+                                                                modifier = Modifier.fillMaxSize(),
+                                                                contentScale = ContentScale.Crop
+                                                            )
+                                                        } else {
+                                                            UserAvatar(
+                                                                photoUrl = "",
+                                                                name = friend.displayName,
+                                                                size = 64
+                                                            )
+                                                        }
+                                                    }
+                                                    Column(modifier = Modifier.padding(6.dp)) {
+                                                        Text(
+                                                            text = friend.displayName,
+                                                            fontSize = 12.5.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Ink,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                        Text(
+                                                            text = "${(idx + 1) * 3} mutual friends",
+                                                            fontSize = 10.5.sp,
+                                                            color = MutedText,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        repeat(3 - rowList.size) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Button(
+                                    onClick = { viewModel.navigateTo(ScreenTab.FRIENDS) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = GoldSurface,
+                                        contentColor = GoldDeep
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(38.dp)
+                                ) {
+                                    Text(
+                                        text = "See all friends",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = GoldDeep
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -2060,16 +2406,16 @@ fun ProfileScreen(
                 }
             }
 
-            // "WHAT'S ON YOUR MIND?" COMPOSER BOX (Only on Own Profile - Screenshot 2)
+            // "WHAT'S ON YOUR MIND?" COMPOSER BOX (Meskot Brand Styled)
             if (effectiveIsMe) {
                 item {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 6.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, fbLightGray)
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardBg),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder)
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Row(
@@ -2087,14 +2433,15 @@ fun ProfileScreen(
                                         .weight(1f)
                                         .height(38.dp)
                                         .clip(RoundedCornerShape(20.dp))
-                                        .background(Color(0xFFF0F2F5))
+                                        .background(GoldSurface)
+                                        .border(1.dp, GoldBorder, RoundedCornerShape(20.dp))
                                         .clickable { viewModel.openComposer() }
                                         .padding(horizontal = 14.dp),
                                     contentAlignment = Alignment.CenterStart
                                 ) {
                                     Text(
                                         text = "What's on your mind?",
-                                        color = fbTextGray,
+                                        color = MutedText,
                                         fontSize = 14.sp
                                     )
                                 }
@@ -2103,7 +2450,7 @@ fun ProfileScreen(
                                     Icon(
                                         imageVector = Icons.Default.PhotoLibrary,
                                         contentDescription = "Upload Photo",
-                                        tint = fbGreen,
+                                        tint = GoldDeep,
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
@@ -3458,7 +3805,7 @@ fun MenuScreen(
         item {
             Column(modifier = Modifier.fillMaxWidth()) {
                 LuxuryMenuSectionHeader(
-                    eyebrow = "EXECUTIVE SUITE · የንግድ ማዕከል",
+                    eyebrow = "EXECUTIVE SUITE",
                     title = "Commerce & Creator Lounge"
                 )
                 Spacer(modifier = Modifier.height(10.dp))
@@ -3470,7 +3817,7 @@ fun MenuScreen(
                     LuxuryExecutivePillarCard(
                         icon = Icons.Default.Storefront,
                         title = "Marketplace",
-                        amharicTag = "ገበያ",
+                        amharicTag = "",
                         metricBadge = "NBE Live",
                         isDarkObsidian = false,
                         onClick = { viewModel.navigateTo(ScreenTab.MARKETPLACE) },
@@ -3479,7 +3826,7 @@ fun MenuScreen(
                     LuxuryExecutivePillarCard(
                         icon = Icons.Default.Campaign,
                         title = "Ads Manager",
-                        amharicTag = "ማስታወቂያ",
+                        amharicTag = "",
                         metricBadge = "${adCampaigns.count { it.status == "ACTIVE" }} Active",
                         isDarkObsidian = true,
                         onClick = { viewModel.navigateTo(ScreenTab.ADS_MANAGER) },
@@ -3488,7 +3835,7 @@ fun MenuScreen(
                     LuxuryExecutivePillarCard(
                         icon = Icons.Default.WorkspacePremium,
                         title = "Creator Studio",
-                        amharicTag = "ፈጣሪዎች",
+                        amharicTag = "",
                         metricBadge = "Chapa Pay",
                         isDarkObsidian = false,
                         onClick = { viewModel.navigateTo(ScreenTab.CREATOR_STUDIO) },
@@ -3502,7 +3849,7 @@ fun MenuScreen(
         item {
             Column(modifier = Modifier.fillMaxWidth()) {
                 LuxuryMenuSectionHeader(
-                    eyebrow = "MESKOT PORTALS · የማህበረሰብ መስኮቶች",
+                    eyebrow = "MESKOT PORTALS",
                     title = "Community & Experiences"
                 )
                 Spacer(modifier = Modifier.height(10.dp))
@@ -3683,7 +4030,7 @@ fun MenuScreen(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "መስኮት · Premier Ethiopian & Habesha Global Network\nEdition 2.4 · Crafted with Heritage & Gold",
+                        text = "Meskot · Premier Ethiopian & Habesha Global Network\nEdition 2.4 · Crafted with Heritage & Gold",
                         fontSize = 11.sp,
                         color = MutedText,
                         textAlign = TextAlign.Center,
@@ -3782,7 +4129,7 @@ private fun LuxuryMenuSectionHeader(
                 .padding(horizontal = 8.dp, vertical = 3.dp)
         ) {
             Text(
-                text = "✦ मेስኮት",
+                text = "✦ MESKOT",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = GoldDeep
@@ -3867,12 +4214,14 @@ private fun LuxuryExecutivePillarCard(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Text(
-                    text = amharicTag,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isDarkObsidian) GoldLight else GoldDeep
-                )
+                if (amharicTag.isNotBlank()) {
+                    Text(
+                        text = amharicTag,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isDarkObsidian) GoldLight else GoldDeep
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(6.dp))
 
@@ -4164,7 +4513,7 @@ fun AuthScreen(
             letterSpacing = (-0.5).sp
         )
         Text(
-            text = "መስኮት · Ethiopian & Habesha Community Network",
+            text = "Meskot · Ethiopian & Habesha Community Network",
             fontSize = 12.sp,
             color = MutedText,
             textAlign = TextAlign.Center

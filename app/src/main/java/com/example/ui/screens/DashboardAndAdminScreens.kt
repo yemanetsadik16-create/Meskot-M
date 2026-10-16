@@ -321,30 +321,40 @@ fun DashboardScreen(
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(10.dp))
+                                val growthPrefix = if (userInsights.postReachGrowthPercent > 0) "+" else ""
+                                val growthText = if (userInsights.postReachGrowthPercent != 0.0) {
+                                    "$growthPrefix${userInsights.postReachGrowthPercent.toInt()}% vs previous period"
+                                } else {
+                                    "0% vs previous period"
+                                }
                                 InsightRow(
                                     label = "Post Reach",
-                                    value = "+${userInsights.postReachGrowthPercent.toInt()}% vs previous month",
+                                    value = growthText,
                                     isPositive = userInsights.postReachGrowthPercent >= 0
                                 )
                                 InsightRow(
                                     label = "Accounts Reached",
                                     value = "${java.text.NumberFormat.getIntegerInstance().format(userInsights.postReach)} accounts",
-                                    isPositive = true
+                                    isPositive = userInsights.postReach > 0
                                 )
                                 InsightRow(
                                     label = "Profile Views",
-                                    value = "+${userInsights.profileViewsWeek} views this week",
-                                    isPositive = true
+                                    value = if (userInsights.profileViewsWeek > 0) "+${userInsights.profileViewsWeek} views this week" else "0 views this week",
+                                    isPositive = userInsights.profileViewsWeek > 0
                                 )
                                 InsightRow(
                                     label = "Interaction Rate",
                                     value = "${userInsights.interactionRate}% (${userInsights.interactionRateStatus})",
-                                    isPositive = true
+                                    isPositive = userInsights.interactionRate > 0
                                 )
                                 InsightRow(
                                     label = "Top Language",
-                                    value = userInsights.topLanguages.joinToString(", ") { "${it.first} (${it.second}%)" },
-                                    isPositive = true
+                                    value = if (userInsights.topLanguages.isNotEmpty()) {
+                                        userInsights.topLanguages.joinToString(", ") { "${it.first} (${it.second}%)" }
+                                    } else {
+                                        "No text posts yet"
+                                    },
+                                    isPositive = userInsights.topLanguages.isNotEmpty()
                                 )
                             }
                         }
@@ -368,28 +378,36 @@ fun DashboardScreen(
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
 
-                                val totalReach = maxOf(1L, userInsights.reelsReachCount + userInsights.postReachCount + userInsights.storiesReachCount)
+                                val totalReach = userInsights.reelsReachCount + userInsights.postReachCount + userInsights.storiesReachCount
 
-                                FormatReachRow(
-                                    format = "📹 Reels",
-                                    count = userInsights.reelsReachCount,
-                                    percentage = ((userInsights.reelsReachCount.toDouble() / totalReach) * 100).toInt(),
-                                    barColor = Color(0xFFE91E63)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                FormatReachRow(
-                                    format = "📝 Posts & Photos",
-                                    count = userInsights.postReachCount,
-                                    percentage = ((userInsights.postReachCount.toDouble() / totalReach) * 100).toInt(),
-                                    barColor = GoldDeep
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                FormatReachRow(
-                                    format = "⏱️ Stories",
-                                    count = userInsights.storiesReachCount,
-                                    percentage = ((userInsights.storiesReachCount.toDouble() / totalReach) * 100).toInt(),
-                                    barColor = Color(0xFF1976D2)
-                                )
+                                if (totalReach == 0L) {
+                                    Text(
+                                        text = "No content format reach recorded for this period.",
+                                        fontSize = 12.sp,
+                                        color = MutedText
+                                    )
+                                } else {
+                                    FormatReachRow(
+                                        format = "📹 Reels",
+                                        count = userInsights.reelsReachCount,
+                                        percentage = ((userInsights.reelsReachCount.toDouble() / totalReach) * 100).toInt(),
+                                        barColor = Color(0xFFE91E63)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    FormatReachRow(
+                                        format = "📝 Posts & Photos",
+                                        count = userInsights.postReachCount,
+                                        percentage = ((userInsights.postReachCount.toDouble() / totalReach) * 100).toInt(),
+                                        barColor = GoldDeep
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    FormatReachRow(
+                                        format = "⏱️ Stories",
+                                        count = userInsights.storiesReachCount,
+                                        percentage = ((userInsights.storiesReachCount.toDouble() / totalReach) * 100).toInt(),
+                                        barColor = Color(0xFF1976D2)
+                                    )
+                                }
                             }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
@@ -411,42 +429,62 @@ fun DashboardScreen(
                                     color = Ink
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
+
+                                val followersPct = userInsights.followersReachPercent
+                                val nonFollowersPct = userInsights.nonFollowersReachPercent
+
+                                if (followersPct == 0 && nonFollowersPct == 0) {
                                     Text(
-                                        text = "Followers: ${userInsights.followersReachPercent}%",
+                                        text = "No audience reach distribution recorded for this period.",
                                         fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = Ink
-                                    )
-                                    Text(
-                                        text = "Non-followers: ${userInsights.nonFollowersReachPercent}%",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
                                         color = MutedText
                                     )
-                                }
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(8.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                ) {
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     Box(
                                         modifier = Modifier
-                                            .weight(userInsights.followersReachPercent.toFloat())
-                                            .fillMaxSize()
-                                            .background(GoldDeep)
+                                            .fillMaxWidth()
+                                            .height(8.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(LineBorder)
                                     )
-                                    Box(
+                                } else {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "Followers: $followersPct%",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Ink
+                                        )
+                                        Text(
+                                            text = "Non-followers: $nonFollowersPct%",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MutedText
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(
                                         modifier = Modifier
-                                            .weight(userInsights.nonFollowersReachPercent.toFloat())
-                                            .fillMaxSize()
-                                            .background(Color(0xFF64B5F6))
-                                    )
+                                            .fillMaxWidth()
+                                            .height(8.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(maxOf(0.001f, followersPct.toFloat()))
+                                                .fillMaxSize()
+                                                .background(GoldDeep)
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(maxOf(0.001f, nonFollowersPct.toFloat()))
+                                                .fillMaxSize()
+                                                .background(Color(0xFF64B5F6))
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -549,42 +587,94 @@ fun DashboardScreen(
                                     color = Ink
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    text = "Top Cities:",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Ink
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                userEngagement.topCities.forEachIndexed { index, city ->
-                                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Text(
-                                                text = "${index + 1}. ${city.label}",
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = Ink
-                                            )
-                                            Text(
-                                                text = "${city.percentage}%" + (if (city.count > 0) " (${city.count})" else ""),
-                                                fontSize = 12.sp,
-                                                color = MutedText
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        LinearProgressIndicator(
-                                            progress = { (city.percentage / 100f).coerceIn(0f, 1f) },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(5.dp)
-                                                .clip(RoundedCornerShape(3.dp)),
-                                            color = GoldDeep,
-                                            trackColor = LineBorder
+                                if (userEngagement.topCities.isEmpty() && userEngagement.topCountries.isEmpty()) {
+                                    Text(
+                                        text = "No audience location data recorded yet. As community members engage with your posts, their cities will appear here.",
+                                        fontSize = 12.sp,
+                                        color = MutedText
+                                    )
+                                } else {
+                                    if (userEngagement.topCities.isNotEmpty()) {
+                                        Text(
+                                            text = "Top Cities:",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Ink
                                         )
+                                        Spacer(modifier = Modifier.height(6.dp))
+
+                                        userEngagement.topCities.forEachIndexed { index, city ->
+                                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Text(
+                                                        text = "${index + 1}. ${city.label}",
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = Ink
+                                                    )
+                                                    Text(
+                                                        text = "${city.percentage}%" + (if (city.count > 0) " (${city.count})" else ""),
+                                                        fontSize = 12.sp,
+                                                        color = MutedText
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                LinearProgressIndicator(
+                                                    progress = { (city.percentage / 100f).coerceIn(0f, 1f) },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(5.dp)
+                                                        .clip(RoundedCornerShape(3.dp)),
+                                                    color = GoldDeep,
+                                                    trackColor = LineBorder
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (userEngagement.topCountries.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Text(
+                                            text = "Top Countries:",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Ink
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+
+                                        userEngagement.topCountries.forEachIndexed { index, country ->
+                                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Text(
+                                                        text = "${index + 1}. ${country.label}",
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = Ink
+                                                    )
+                                                    Text(
+                                                        text = "${country.percentage}%" + (if (country.count > 0) " (${country.count})" else ""),
+                                                        fontSize = 12.sp,
+                                                        color = MutedText
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                LinearProgressIndicator(
+                                                    progress = { (country.percentage / 100f).coerceIn(0f, 1f) },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(5.dp)
+                                                        .clip(RoundedCornerShape(3.dp)),
+                                                    color = GoldDeep,
+                                                    trackColor = LineBorder
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -665,58 +755,83 @@ fun DashboardScreen(
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
 
-                                Text(text = "Age Groups:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    userEngagement.ageDistribution.forEach { ageItem ->
-                                        Column(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(Paper2)
-                                                .padding(vertical = 8.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally
+                                val hasAge = userEngagement.ageDistribution.isNotEmpty()
+                                val hasGender = userEngagement.genderDistribution.isNotEmpty()
+
+                                if (!hasAge && !hasGender) {
+                                    Text(
+                                        text = "No age or gender demographic data recorded yet.",
+                                        fontSize = 12.sp,
+                                        color = MutedText
+                                    )
+                                } else {
+                                    if (hasAge) {
+                                        Text(text = "Age Groups:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Text(text = ageItem.label, fontSize = 11.sp, color = MutedText)
-                                            Text(text = "${ageItem.percentage}%", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
+                                            userEngagement.ageDistribution.forEach { ageItem ->
+                                                Column(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(Paper2)
+                                                        .padding(vertical = 8.dp),
+                                                    horizontalAlignment = Alignment.CenterHorizontally
+                                                ) {
+                                                    Text(text = ageItem.label, fontSize = 11.sp, color = MutedText)
+                                                    Text(text = "${ageItem.percentage}%", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
+                                                }
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                    }
+
+                                    if (hasGender) {
+                                        Text(text = "Gender Split:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        val malePct = userEngagement.genderDistribution.find { it.label.equals("Male", ignoreCase = true) }?.percentage ?: 0
+                                        val femalePct = userEngagement.genderDistribution.find { it.label.equals("Female", ignoreCase = true) }?.percentage ?: 0
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(text = "Male: $malePct%", fontSize = 11.sp, color = Ink)
+                                            Text(text = "Female: $femalePct%", fontSize = 11.sp, color = Ink)
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        if (malePct + femalePct > 0) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(6.dp)
+                                                    .clip(RoundedCornerShape(3.dp))
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(maxOf(0.001f, malePct.toFloat()))
+                                                        .fillMaxSize()
+                                                        .background(Color(0xFF1976D2))
+                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(maxOf(0.001f, femalePct.toFloat()))
+                                                        .fillMaxSize()
+                                                        .background(Color(0xFFE91E63))
+                                                )
+                                            }
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(6.dp)
+                                                    .clip(RoundedCornerShape(3.dp))
+                                                    .background(LineBorder)
+                                            )
                                         }
                                     }
-                                }
-
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(text = "Gender Split:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                val malePct = userEngagement.genderDistribution.find { it.label == "Male" }?.percentage ?: 54
-                                val femalePct = userEngagement.genderDistribution.find { it.label == "Female" }?.percentage ?: 46
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(text = "Male: $malePct%", fontSize = 11.sp, color = Ink)
-                                    Text(text = "Female: $femalePct%", fontSize = 11.sp, color = Ink)
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp))
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(malePct.toFloat())
-                                            .fillMaxSize()
-                                            .background(Color(0xFF1976D2))
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(femalePct.toFloat())
-                                            .fillMaxSize()
-                                            .background(Color(0xFFE91E63))
-                                    )
                                 }
                             }
                         }
@@ -752,7 +867,11 @@ fun DashboardScreen(
                                             color = GoldDeep
                                         )
                                         Text(
-                                            text = "Ethiopian & Diaspora audiences are most active during these hours.",
+                                            text = if (userEngagement.peakActiveTime != "No activity recorded yet") {
+                                                "Calculated from your content's real audience engagement hours."
+                                            } else {
+                                                "Post more content to discover your audience's peak engagement hours."
+                                            },
                                             fontSize = 11.sp,
                                             color = MutedText
                                         )

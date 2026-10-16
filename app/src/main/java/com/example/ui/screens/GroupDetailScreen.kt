@@ -121,12 +121,7 @@ private val GroupCategoryPills = listOf(
     GroupCategoryPill("Events", Icons.Default.Event)
 )
 
-private val CoverPhotoPresets = listOf(
-    "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1000&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1544025162-d76694265947?w=1000&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=1000&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=1000&auto=format&fit=crop&q=80"
-)
+private val CoverPhotoPresets: List<String> = emptyList()
 
 @Composable
 fun GroupDetailScreen(
@@ -1345,35 +1340,10 @@ private fun EditGroupCoverDialog(
                 )
 
                 Text(
-                    text = "Choose a preset 16:9 banner or paste an image URL:",
+                    text = "Enter a direct 16:9 banner image URL:",
                     fontSize = 12.5.sp,
                     color = MutedText
                 )
-
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(CoverPhotoPresets) { presetUrl ->
-                        val isSelected = customUrl == presetUrl
-                        Box(
-                            modifier = Modifier
-                                .width(120.dp)
-                                .aspectRatio(16f / 9f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .border(
-                                    width = if (isSelected) 2.5.dp else 1.dp,
-                                    color = if (isSelected) Gold else LineBorder,
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                                .clickable { customUrl = presetUrl }
-                        ) {
-                            AsyncImage(
-                                model = presetUrl,
-                                contentDescription = "Preset Cover",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
-                }
 
                 OutlinedTextField(
                     value = customUrl,

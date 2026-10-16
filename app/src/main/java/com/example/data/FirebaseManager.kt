@@ -1916,82 +1916,51 @@ object FirebaseManager {
             val l = m["lang"] as? String ?: return@mapNotNull null
             val p = (m["percent"] as? Number)?.toInt() ?: 0
             l to p
-        } ?: listOf("Amharic" to 64, "English" to 36)
+        } ?: emptyList()
 
         return UserInsightsData(
             uid = uid,
-            postReach = (d["postReach"] as? Number)?.toLong() ?: 2480L,
-            postReachGrowthPercent = (d["postReachGrowthPercent"] as? Number)?.toDouble() ?: 128.0,
-            profileViewsWeek = (d["profileViewsWeek"] as? Number)?.toInt() ?: 84,
-            profileViewsTotal = (d["profileViewsTotal"] as? Number)?.toLong() ?: 1420L,
-            profileViewsGrowthPercent = (d["profileViewsGrowthPercent"] as? Number)?.toDouble() ?: 34.5,
-            interactionRate = (d["interactionRate"] as? Number)?.toDouble() ?: 9.4,
-            interactionRateStatus = d["interactionRateStatus"] as? String ?: "Above average",
-            topLanguages = if (topLangsRaw.isNotEmpty()) topLangsRaw else listOf("Amharic" to 64, "English" to 36),
-            impressionsTotal = (d["impressionsTotal"] as? Number)?.toLong() ?: 6840L,
-            followersReachPercent = (d["followersReachPercent"] as? Number)?.toInt() ?: 42,
-            nonFollowersReachPercent = (d["nonFollowersReachPercent"] as? Number)?.toInt() ?: 58,
-            postReachCount = (d["postReachCount"] as? Number)?.toLong() ?: 1350L,
-            reelsReachCount = (d["reelsReachCount"] as? Number)?.toLong() ?: 3890L,
-            storiesReachCount = (d["storiesReachCount"] as? Number)?.toLong() ?: 920L,
+            postReach = (d["postReach"] as? Number)?.toLong() ?: 0L,
+            postReachGrowthPercent = (d["postReachGrowthPercent"] as? Number)?.toDouble() ?: 0.0,
+            profileViewsWeek = (d["profileViewsWeek"] as? Number)?.toInt() ?: 0,
+            profileViewsTotal = (d["profileViewsTotal"] as? Number)?.toLong() ?: 0L,
+            profileViewsGrowthPercent = (d["profileViewsGrowthPercent"] as? Number)?.toDouble() ?: 0.0,
+            interactionRate = (d["interactionRate"] as? Number)?.toDouble() ?: 0.0,
+            interactionRateStatus = d["interactionRateStatus"] as? String ?: "No activity yet",
+            topLanguages = topLangsRaw,
+            impressionsTotal = (d["impressionsTotal"] as? Number)?.toLong() ?: 0L,
+            followersReachPercent = (d["followersReachPercent"] as? Number)?.toInt() ?: 0,
+            nonFollowersReachPercent = (d["nonFollowersReachPercent"] as? Number)?.toInt() ?: 0,
+            postReachCount = (d["postReachCount"] as? Number)?.toLong() ?: 0L,
+            reelsReachCount = (d["reelsReachCount"] as? Number)?.toLong() ?: 0L,
+            storiesReachCount = (d["storiesReachCount"] as? Number)?.toLong() ?: 0L,
             isServerSynced = true,
             lastUpdated = (d["lastUpdated"] as? Number)?.toLong() ?: System.currentTimeMillis()
         )
     }
 
     private fun parseUserEngagement(uid: String, d: Map<String, Any?>): UserEngagementData {
-        fun parseDemographics(key: String, default: List<DemographicsItem>): List<DemographicsItem> {
-            val list = (d[key] as? List<*>)?.mapNotNull { item ->
+        fun parseDemographics(key: String): List<DemographicsItem> {
+            return (d[key] as? List<*>)?.mapNotNull { item ->
                 val m = item as? Map<*, *> ?: return@mapNotNull null
                 val label = m["label"] as? String ?: return@mapNotNull null
                 val pct = (m["percentage"] as? Number)?.toInt() ?: 0
                 val count = (m["count"] as? Number)?.toInt() ?: 0
                 DemographicsItem(label, pct, count)
-            }
-            return if (!list.isNullOrEmpty()) list else default
+            } ?: emptyList()
         }
 
         return UserEngagementData(
             uid = uid,
-            topCities = parseDemographics(
-                "topCities",
-                listOf(
-                    DemographicsItem("Addis Ababa", 52, 624),
-                    DemographicsItem("Washington D.C.", 18, 216),
-                    DemographicsItem("Hawassa", 12, 144),
-                    DemographicsItem("Toronto", 8, 96)
-                )
-            ),
-            topCountries = parseDemographics(
-                "topCountries",
-                listOf(
-                    DemographicsItem("Ethiopia", 74, 888),
-                    DemographicsItem("United States", 16, 192),
-                    DemographicsItem("Canada", 6, 72),
-                    DemographicsItem("Others", 4, 48)
-                )
-            ),
-            ageDistribution = parseDemographics(
-                "ageDistribution",
-                listOf(
-                    DemographicsItem("18–24", 28, 336),
-                    DemographicsItem("25–34", 46, 552),
-                    DemographicsItem("35–44", 18, 216),
-                    DemographicsItem("45+", 8, 96)
-                )
-            ),
-            genderDistribution = parseDemographics(
-                "genderDistribution",
-                listOf(
-                    DemographicsItem("Male", 54, 648),
-                    DemographicsItem("Female", 46, 552)
-                )
-            ),
-            totalReactions = (d["totalReactions"] as? Number)?.toInt() ?: 186,
-            totalComments = (d["totalComments"] as? Number)?.toInt() ?: 42,
-            totalShares = (d["totalShares"] as? Number)?.toInt() ?: 29,
-            totalTipsEtb = (d["totalTipsEtb"] as? Number)?.toDouble() ?: 350.0,
-            peakActiveTime = d["peakActiveTime"] as? String ?: "7:00 PM – 10:00 PM EAT",
+            topCities = parseDemographics("topCities"),
+            topCountries = parseDemographics("topCountries"),
+            ageDistribution = parseDemographics("ageDistribution"),
+            genderDistribution = parseDemographics("genderDistribution"),
+            totalReactions = (d["totalReactions"] as? Number)?.toInt() ?: 0,
+            totalComments = (d["totalComments"] as? Number)?.toInt() ?: 0,
+            totalShares = (d["totalShares"] as? Number)?.toInt() ?: 0,
+            totalTipsEtb = (d["totalTipsEtb"] as? Number)?.toDouble() ?: 0.0,
+            peakActiveTime = d["peakActiveTime"] as? String ?: "No activity recorded yet",
             isServerSynced = true,
             lastUpdated = (d["lastUpdated"] as? Number)?.toLong() ?: System.currentTimeMillis()
         )
@@ -1999,45 +1968,98 @@ object FirebaseManager {
 
     /**
      * Computes live functional analytics based on real posts, reactions, comments,
-     * tips, and community users stored in Firestore.
+     * tips, stories, and community users stored in Firestore.
      */
     fun computeLiveAnalyticsFromData(
         uid: String,
         myPosts: List<Post>,
-        allUsers: List<User>
+        allUsers: List<User> = emptyList(),
+        myStories: List<StoryItem> = emptyList(),
+        friendUids: Set<String> = emptySet(),
+        currentUser: User? = null,
+        timeRange: String = "Last 28 Days",
+        existingInsights: UserInsightsData? = null
     ): Pair<UserInsightsData, UserEngagementData> {
-        val totalLikes = myPosts.sumOf { it.reactions.size }
-        val totalComments = myPosts.sumOf { it.commentCount }
-        val totalShares = myPosts.sumOf { it.sharesCount }
-        val totalTips = myPosts.sumOf { it.tipTotal }
-        val recordedViews = myPosts.sumOf { it.viewsCount }
+        val now = System.currentTimeMillis()
+        val windowDurationMs = when (timeRange) {
+            "Last 7 Days" -> 7L * 24 * 60 * 60 * 1000
+            "Last 28 Days" -> 28L * 24 * 60 * 60 * 1000
+            "Last 90 Days" -> 90L * 24 * 60 * 60 * 1000
+            else -> 0L // "All Time"
+        }
+        val startTime = if (windowDurationMs > 0L) now - windowDurationMs else 0L
+        val priorStartTime = if (windowDurationMs > 0L) startTime - windowDurationMs else 0L
+        val priorEndTime = startTime
 
-        // Reach calculation
-        val postReach = if (recordedViews > 0) {
-            maxOf(recordedViews.toLong(), 2480L)
-        } else {
-            maxOf(2480L, (myPosts.size * 320L + totalLikes * 16L + totalComments * 28L))
+        val rangePosts = if (startTime > 0L) myPosts.filter { it.createdAt >= startTime } else myPosts
+        val priorPosts = if (startTime > 0L) myPosts.filter { it.createdAt in priorStartTime until priorEndTime } else emptyList()
+        val rangeStories = if (startTime > 0L) myStories.filter { it.createdAt >= startTime } else myStories
+
+        val totalLikes = rangePosts.sumOf { it.reactions.size }
+        val totalComments = rangePosts.sumOf { it.commentCount }
+        val totalShares = rangePosts.sumOf { it.sharesCount }
+        val totalTips = rangePosts.sumOf { it.tipTotal }
+
+        // Formats breakdown (views on real content)
+        val reelsPosts = rangePosts.filter { it.postType == "REEL" }
+        val reelsReach = reelsPosts.sumOf { maxOf(it.viewsCount.toLong(), (it.reactions.size + it.commentCount).toLong()) }
+
+        val regularPosts = rangePosts.filter { it.postType != "REEL" }
+        val regularPostsReach = regularPosts.sumOf { maxOf(it.viewsCount.toLong(), (it.reactions.size + it.commentCount).toLong()) }
+
+        val storiesReach = rangeStories.sumOf { maxOf(it.viewers.size.toLong(), (it.likes.size + it.reactions.size).toLong()) }
+
+        val totalFormatReach = reelsReach + regularPostsReach + storiesReach
+
+        // Reach calculation: count of unique accounts that viewed/reacted to content
+        val interactingUids = mutableSetOf<String>()
+        rangePosts.forEach { post ->
+            interactingUids.addAll(post.reactions.keys)
+        }
+        rangeStories.forEach { story ->
+            interactingUids.addAll(story.viewers)
+            interactingUids.addAll(story.likes.keys)
+            interactingUids.addAll(story.reactions.keys)
+        }
+        interactingUids.remove(uid) // Exclude current user from viewer stats
+
+        val postReach = maxOf(interactingUids.size.toLong(), totalFormatReach)
+
+        // Prior period reach for growth calculation
+        val priorReelsReach = priorPosts.filter { it.postType == "REEL" }.sumOf { maxOf(it.viewsCount.toLong(), (it.reactions.size + it.commentCount).toLong()) }
+        val priorRegReach = priorPosts.filter { it.postType != "REEL" }.sumOf { maxOf(it.viewsCount.toLong(), (it.reactions.size + it.commentCount).toLong()) }
+        val priorInteractingUids = priorPosts.flatMap { it.reactions.keys }.filter { it != uid }.toSet()
+        val priorReach = maxOf(priorInteractingUids.size.toLong(), priorReelsReach + priorRegReach)
+
+        val reachGrowthPercent = when {
+            priorReach > 0L -> ((postReach - priorReach).toDouble() / priorReach.toDouble()) * 100.0
+            postReach > 0L -> 100.0
+            else -> 0.0
         }
 
-        // Total impressions
-        val impressions = (postReach * 2.75).toLong().coerceAtLeast(6840L)
+        val impressions = maxOf(postReach, rangePosts.sumOf { it.viewsCount.toLong() } + storiesReach)
 
-        // Interaction rate
-        val interactionsSum = totalLikes + totalComments + totalShares + (if (totalTips > 0) 10 else 0)
-        val computedRate = if (postReach > 0) {
-            String.format(java.util.Locale.US, "%.1f", (interactionsSum.toDouble() * 100.0 / postReach.toDouble()).coerceIn(4.5, 32.0)).toDouble()
-        } else 9.4
+        // Interaction rate based on real engagement
+        val interactionsSum = totalLikes + totalComments + totalShares + (if (totalTips > 0) 1 else 0)
+        val computedRate = if (postReach > 0L) {
+            String.format(java.util.Locale.US, "%.1f", (interactionsSum.toDouble() * 100.0 / postReach.toDouble()).coerceIn(0.0, 100.0)).toDouble()
+        } else if (interactionsSum > 0) {
+            100.0
+        } else {
+            0.0
+        }
 
         val rateStatus = when {
-            computedRate >= 12.0 -> "Exceptional"
+            computedRate >= 15.0 -> "Exceptional"
             computedRate >= 7.0 -> "Above average"
-            else -> "Growing"
+            computedRate > 0.0 -> "Active"
+            else -> "No activity yet"
         }
 
-        // Language analysis from post text
+        // Language analysis from real post text
         var amharicCharCount = 0
         var englishCharCount = 0
-        myPosts.forEach { post ->
+        rangePosts.forEach { post ->
             post.text.forEach { ch ->
                 if (ch in '\u1200'..'\u137F') {
                     amharicCharCount++
@@ -2046,97 +2068,168 @@ object FirebaseManager {
                 }
             }
         }
-        val topLangs = if (amharicCharCount + englishCharCount > 15) {
-            val total = (amharicCharCount + englishCharCount).toDouble()
-            val amharicPct = ((amharicCharCount / total) * 100).toInt().coerceIn(15, 90)
+        val totalChars = amharicCharCount + englishCharCount
+        val topLangs = if (totalChars > 0) {
+            val amharicPct = ((amharicCharCount.toDouble() / totalChars) * 100).toInt()
             val englishPct = 100 - amharicPct
-            listOf("Amharic" to amharicPct, "English" to englishPct)
+            listOf("Amharic" to amharicPct, "English" to englishPct).filter { it.second > 0 }
         } else {
-            listOf("Amharic" to 64, "English" to 36)
+            emptyList()
         }
 
-        // Formats breakdown
-        val reelsPosts = myPosts.filter { it.postType == "REEL" }
-        val reelsReach = if (reelsPosts.isNotEmpty()) {
-            reelsPosts.sumOf { maxOf(it.viewsCount.toLong(), 1800L) }
-        } else 3890L
-
-        val regularPostsReach = myPosts.filter { it.postType != "REEL" }.let { list ->
-            if (list.isNotEmpty()) list.sumOf { maxOf(it.viewsCount.toLong(), 450L) } else 1350L
+        // Followers vs Non-followers reach
+        val (followersPct, nonFollowersPct) = if (interactingUids.isNotEmpty()) {
+            val followersCount = interactingUids.count { friendUids.contains(it) }
+            val fPct = ((followersCount.toDouble() / interactingUids.size) * 100).toInt()
+            Pair(fPct, 100 - fPct)
+        } else {
+            Pair(0, 0)
         }
 
         val insights = UserInsightsData(
             uid = uid,
             postReach = postReach,
-            postReachGrowthPercent = if (myPosts.isNotEmpty()) 128.0 else 18.0,
-            profileViewsWeek = 84 + (myPosts.size * 6),
-            profileViewsTotal = 1420L + (myPosts.size * 42),
-            profileViewsGrowthPercent = 34.5,
+            postReachGrowthPercent = reachGrowthPercent,
+            profileViewsWeek = existingInsights?.profileViewsWeek ?: 0,
+            profileViewsTotal = existingInsights?.profileViewsTotal ?: 0L,
+            profileViewsGrowthPercent = existingInsights?.profileViewsGrowthPercent ?: 0.0,
             interactionRate = computedRate,
             interactionRateStatus = rateStatus,
             topLanguages = topLangs,
             impressionsTotal = impressions,
-            followersReachPercent = 42,
-            nonFollowersReachPercent = 58,
+            followersReachPercent = followersPct,
+            nonFollowersReachPercent = nonFollowersPct,
             postReachCount = regularPostsReach,
             reelsReachCount = reelsReach,
-            storiesReachCount = 920L,
+            storiesReachCount = storiesReach,
             isServerSynced = true,
             lastUpdated = System.currentTimeMillis()
         )
 
-        // Audience Demographics from registered Firestore users
+        // Audience Demographics from real users in Firestore
+        val targetUids = if (interactingUids.isNotEmpty()) interactingUids else friendUids
+        val audienceUsers = allUsers.filter { targetUids.contains(it.uid) }
+
         val citiesMap = mutableMapOf<String, Int>()
-        allUsers.forEach { u ->
-            val city = when {
+        val countriesMap = mutableMapOf<String, Int>()
+        audienceUsers.forEach { u ->
+            val rawLoc = when {
                 u.location.isNotBlank() -> u.location.trim()
                 u.hometown.isNotBlank() -> u.hometown.trim()
                 else -> ""
             }
-            if (city.isNotBlank()) {
+            if (rawLoc.isNotBlank()) {
+                val parts = rawLoc.split(",").map { it.trim() }
+                val city = parts.firstOrNull()?.takeIf { it.isNotBlank() } ?: rawLoc
+                val country = if (parts.size > 1) parts.last() else "Ethiopia"
                 citiesMap[city] = (citiesMap[city] ?: 0) + 1
+                countriesMap[country] = (countriesMap[country] ?: 0) + 1
             }
         }
 
-        val topCities = if (citiesMap.size >= 2) {
-            val totalCityUsers = citiesMap.values.sum().toDouble()
-            citiesMap.entries.sortedByDescending { it.value }.take(4).map { entry ->
-                val pct = ((entry.value / totalCityUsers) * 100).toInt().coerceAtLeast(5)
-                DemographicsItem(entry.key, pct, entry.value * 24)
+        val topCities = if (citiesMap.isNotEmpty()) {
+            val totalCityCount = citiesMap.values.sum().toDouble()
+            citiesMap.entries.sortedByDescending { it.value }.take(5).map { entry ->
+                val pct = ((entry.value / totalCityCount) * 100).toInt()
+                DemographicsItem(entry.key, pct, entry.value)
             }
         } else {
-            listOf(
-                DemographicsItem("Addis Ababa", 52, 624),
-                DemographicsItem("Washington D.C.", 18, 216),
-                DemographicsItem("Hawassa", 12, 144),
-                DemographicsItem("Toronto", 8, 96)
-            )
+            emptyList()
+        }
+
+        val topCountries = if (countriesMap.isNotEmpty()) {
+            val totalCountryCount = countriesMap.values.sum().toDouble()
+            countriesMap.entries.sortedByDescending { it.value }.take(5).map { entry ->
+                val pct = ((entry.value / totalCountryCount) * 100).toInt()
+                DemographicsItem(entry.key, pct, entry.value)
+            }
+        } else {
+            emptyList()
+        }
+
+        // Age distribution from real birth dates
+        val ageBuckets = mutableMapOf("18–24" to 0, "25–34" to 0, "35–44" to 0, "45+" to 0)
+        var totalAgeKnown = 0
+        val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+
+        audienceUsers.forEach { u ->
+            if (u.birthDate.isNotBlank()) {
+                val year = u.birthDate.take(4).toIntOrNull()
+                if (year != null && year in 1920..currentYear) {
+                    val age = currentYear - year
+                    when {
+                        age in 18..24 -> ageBuckets["18–24"] = (ageBuckets["18–24"] ?: 0) + 1
+                        age in 25..34 -> ageBuckets["25–34"] = (ageBuckets["25–34"] ?: 0) + 1
+                        age in 35..44 -> ageBuckets["35–44"] = (ageBuckets["35–44"] ?: 0) + 1
+                        age >= 45 -> ageBuckets["45+"] = (ageBuckets["45+"] ?: 0) + 1
+                    }
+                    totalAgeKnown++
+                }
+            }
+        }
+
+        val ageDistribution = if (totalAgeKnown > 0) {
+            ageBuckets.map { (bucket, count) ->
+                val pct = ((count.toDouble() / totalAgeKnown) * 100).toInt()
+                DemographicsItem(bucket, pct, count)
+            }
+        } else {
+            emptyList()
+        }
+
+        // Gender distribution from real profiles
+        val genderCounts = mutableMapOf<String, Int>()
+        audienceUsers.forEach { u ->
+            if (u.gender.isNotBlank()) {
+                val g = u.gender.trim().lowercase().replaceFirstChar { it.uppercase() }
+                if (g == "Male" || g == "Female") {
+                    genderCounts[g] = (genderCounts[g] ?: 0) + 1
+                }
+            }
+        }
+
+        val totalGenderKnown = genderCounts.values.sum()
+        val genderDistribution = if (totalGenderKnown > 0) {
+            listOf("Male", "Female").map { g ->
+                val count = genderCounts[g] ?: 0
+                val pct = ((count.toDouble() / totalGenderKnown) * 100).toInt()
+                DemographicsItem(g, pct, count)
+            }
+        } else {
+            emptyList()
+        }
+
+        // Peak active time from real post timestamps
+        val peakActiveTime = if (rangePosts.isNotEmpty()) {
+            val hourCounts = mutableMapOf<Int, Int>()
+            rangePosts.forEach { post ->
+                val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("GMT+3"))
+                cal.timeInMillis = post.createdAt
+                val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
+                hourCounts[hour] = (hourCounts[hour] ?: 0) + 1
+            }
+            val peakHour = hourCounts.maxByOrNull { it.value }?.key ?: 19
+            val startH = if (peakHour % 12 == 0) 12 else peakHour % 12
+            val startAmPm = if (peakHour < 12) "AM" else "PM"
+            val endH24 = (peakHour + 3) % 24
+            val endH = if (endH24 % 12 == 0) 12 else endH24 % 12
+            val endAmPm = if (endH24 < 12) "AM" else "PM"
+            "$startH:00 $startAmPm – $endH:00 $endAmPm EAT"
+        } else {
+            "No activity recorded yet"
         }
 
         val engagement = UserEngagementData(
             uid = uid,
             topCities = topCities,
-            topCountries = listOf(
-                DemographicsItem("Ethiopia", 74, 888),
-                DemographicsItem("United States", 16, 192),
-                DemographicsItem("Canada", 6, 72),
-                DemographicsItem("Others", 4, 48)
-            ),
-            ageDistribution = listOf(
-                DemographicsItem("18–24", 28, 336),
-                DemographicsItem("25–34", 46, 552),
-                DemographicsItem("35–44", 18, 216),
-                DemographicsItem("45+", 8, 96)
-            ),
-            genderDistribution = listOf(
-                DemographicsItem("Male", 54, 648),
-                DemographicsItem("Female", 46, 552)
-            ),
-            totalReactions = totalLikes.coerceAtLeast(186),
-            totalComments = totalComments.coerceAtLeast(42),
-            totalShares = totalShares.coerceAtLeast(29),
-            totalTipsEtb = if (totalTips > 0) totalTips else 350.0,
-            peakActiveTime = "7:00 PM – 10:00 PM EAT",
+            topCountries = topCountries,
+            ageDistribution = ageDistribution,
+            genderDistribution = genderDistribution,
+            totalReactions = totalLikes,
+            totalComments = totalComments,
+            totalShares = totalShares,
+            totalTipsEtb = totalTips,
+            peakActiveTime = peakActiveTime,
             isServerSynced = true,
             lastUpdated = System.currentTimeMillis()
         )
@@ -2354,9 +2447,9 @@ object FirebaseManager {
             imageUrls = imgs,
             categoryId = d["categoryId"] as? String ?: "vehicles",
             location = loc,
-            distanceKm = (d["distanceKm"] as? Number)?.toDouble() ?: 4.2,
+            distanceKm = (d["distanceKm"] as? Number)?.toDouble() ?: 0.0,
             sellerId = d["sellerId"] as? String ?: "",
-            sellerName = d["sellerName"] as? String ?: "Meskot Seller",
+            sellerName = d["sellerName"] as? String ?: "Meskot User",
             sellerPhoto = d["sellerPhoto"] as? String ?: "",
             sellerVerified = d["sellerVerified"] as? Boolean ?: false,
             description = d["description"] as? String ?: "",
@@ -2365,8 +2458,8 @@ object FirebaseManager {
             viewsCount = (d["viewsCount"] as? Number)?.toInt() ?: 0,
             createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
             isNegotiable = d["isNegotiable"] as? Boolean ?: true,
-            deliveryOption = d["deliveryOption"] as? String ?: "Meetup · Bole",
-            sellerPhone = d["sellerPhone"] as? String ?: "+251 911 234 567",
+            deliveryOption = d["deliveryOption"] as? String ?: "Local Meetup",
+            sellerPhone = d["sellerPhone"] as? String ?: "",
             allowChat = d["allowChat"] as? Boolean ?: true,
             allowCall = d["allowCall"] as? Boolean ?: true,
             allowWhatsApp = d["allowWhatsApp"] as? Boolean ?: false,
@@ -2538,14 +2631,14 @@ object FirebaseManager {
             clicks = clicks,
             conversions = (d["conversions"] as? Number)?.toInt() ?: 0,
             ctr = computedCtr,
-            avgCpcEtb = (d["avgCpcEtb"] as? Number)?.toDouble() ?: 1.45,
-            cpmEtb = (d["cpmEtb"] as? Number)?.toDouble() ?: 25.0,
+            avgCpcEtb = (d["avgCpcEtb"] as? Number)?.toDouble() ?: 0.0,
+            cpmEtb = (d["cpmEtb"] as? Number)?.toDouble() ?: 0.0,
             headline = d["headline"] as? String ?: "EXAMPLE.COM",
             primaryText = d["primaryText"] as? String ?: "",
             mediaUrl = d["mediaUrl"] as? String ?: "",
             ctaText = d["ctaText"] as? String ?: "Learn More",
             destinationUrl = d["destinationUrl"] as? String ?: "https://example.com",
-            advertiserName = d["advertiserName"] as? String ?: "Yemane Tsadik",
+            advertiserName = d["advertiserName"] as? String ?: "Meskot User",
             advertiserAvatar = d["advertiserAvatar"] as? String ?: "",
             advertiserUid = d["advertiserUid"] as? String ?: "",
             durationDays = (d["durationDays"] as? Number)?.toInt() ?: 5,

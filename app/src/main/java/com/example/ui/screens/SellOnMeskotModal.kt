@@ -628,7 +628,7 @@ fun SellOnMeskotModal(
                             lineHeight = 22.sp
                         )
                         Text(
-                            text = "መስኮት · New listing",
+                            text = "Meskot · New listing",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = c.bz
