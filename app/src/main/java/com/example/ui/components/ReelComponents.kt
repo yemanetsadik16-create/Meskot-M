@@ -188,7 +188,7 @@ fun CreateReelDialog(
                         Icon(imageVector = Icons.Default.PlayCircle, contentDescription = null, tint = Gold, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Create Meskot Reel",
+                            text = "Create Meskot Clip",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
@@ -211,7 +211,7 @@ fun CreateReelDialog(
                         if (isUploading) {
                             CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                         } else {
-                            Text("Post Reel", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("Post Clip", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                     }
                 }
@@ -243,7 +243,7 @@ fun CreateReelDialog(
                                         color = Color.White
                                     )
                                     Text(
-                                        text = "Sharing to Meskot Reels Feed",
+                                        text = "Sharing to Meskot Clips Feed",
                                         fontSize = 12.sp,
                                         color = Color.White.copy(alpha = 0.6f)
                                     )
@@ -320,7 +320,7 @@ fun CreateReelDialog(
                             if (!selectedMediaUrl.isNullOrBlank()) {
                                 AsyncImage(
                                     model = selectedMediaUrl,
-                                    contentDescription = "Reel Visual",
+                                    contentDescription = "Clip Visual",
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop,
                                     colorFilter = colorFilter
@@ -380,7 +380,7 @@ fun CreateReelDialog(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(imageVector = Icons.Default.PlayCircle, contentDescription = null, tint = Gold, modifier = Modifier.size(13.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("REEL", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text("CLIP", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                             }
 
@@ -452,7 +452,7 @@ fun CreateReelDialog(
                     // Video Source Selectors: Camera / Device Gallery / Presets
                     item {
                         Text(
-                            text = "CHOOSE REEL VIDEO SOURCE",
+                            text = "CHOOSE CLIP VIDEO SOURCE",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -533,7 +533,7 @@ fun CreateReelDialog(
                         OutlinedTextField(
                             value = captionText,
                             onValueChange = { captionText = it },
-                            placeholder = { Text("Write a catchy caption for your Reel...", color = Color.White.copy(alpha = 0.5f)) },
+                            placeholder = { Text("Write a catchy caption for your clip...", color = Color.White.copy(alpha = 0.5f)) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(95.dp),
@@ -556,7 +556,7 @@ fun CreateReelDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            val tags = listOf("#MeskotReels", "#HabeshaVibes", "#AddisAbaba", "#EthiopianCulture", "#ViralReels")
+                            val tags = listOf("#MeskotClips", "#HabeshaVibes", "#AddisAbaba", "#EthiopianCulture", "#ViralClips")
                             items(tags) { tag ->
                                 Surface(
                                     onClick = {
@@ -672,7 +672,7 @@ fun CreateReelDialog(
                     // Visual Filter Style
                     item {
                         Text(
-                            text = "REEL COLOR FILTER",
+                            text = "CLIP COLOR FILTER",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -872,7 +872,7 @@ fun ReelViewerDialog(
                     ) {
                         AsyncImage(
                             model = mediaUrl,
-                            contentDescription = "Reel Content",
+                            contentDescription = "Clip Content",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
                         )
@@ -935,7 +935,7 @@ fun ReelViewerDialog(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(imageVector = Icons.Default.PlayCircle, contentDescription = null, tint = Gold, modifier = Modifier.size(13.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("REEL", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text("CLIP", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         }
                     }
@@ -1368,7 +1368,7 @@ fun ReelCommentsBottomSheet(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Be the first to share your thoughts on this reel! ✨",
+                                text = "Be the first to share your thoughts on this clip! ✨",
                                 color = Color.White.copy(alpha = 0.6f),
                                 fontSize = 13.sp,
                                 textAlign = TextAlign.Center
@@ -1705,7 +1705,7 @@ fun MeskotReelsRail(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Meskot Reels",
+                    text = "Meskot Clips",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = Ink
@@ -1744,7 +1744,7 @@ fun MeskotReelsRail(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Create Reel",
+                        text = "Create Clip",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = GoldDeep
@@ -1790,14 +1790,14 @@ fun MeskotReelsRail(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
-                                contentDescription = "Create Reel",
+                                contentDescription = "Create Clip",
                                 tint = Color.White,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "Create Reel",
+                            text = "Create Clip",
                             color = Color.White,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold

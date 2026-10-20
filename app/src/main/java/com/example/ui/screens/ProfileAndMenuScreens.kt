@@ -1338,7 +1338,7 @@ fun ProfileScreen(
                             .padding(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.Start
                     ) {
-                        listOf("All", "Reels", "Photos").forEachIndexed { index, title ->
+                        listOf("All", "Clips", "Photos").forEachIndexed { index, title ->
                             val isSelected = selectedTab == index
                             Column(
                                 modifier = Modifier
@@ -2496,13 +2496,13 @@ fun ProfileScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.VideoCameraBack,
-                                        contentDescription = "Reel",
+                                        contentDescription = "Clip",
                                         tint = GoldDeep,
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Reel",
+                                        text = "Clip",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = fbDark
@@ -2619,7 +2619,7 @@ fun ProfileScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Reels",
+                                text = "Clips",
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = fbDark
@@ -2652,7 +2652,7 @@ fun ProfileScreen(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "Create Reel",
+                                        text = "Create Clip",
                                         fontSize = 12.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = GoldDeep
@@ -2688,14 +2688,14 @@ fun ProfileScreen(
                             }
                             Spacer(modifier = Modifier.height(14.dp))
                             Text(
-                                text = if (isMe) "No reels posted yet" else "No reels posted by ${user.displayName}",
+                                text = if (isMe) "No clips posted yet" else "No clips posted by ${user.displayName}",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = fbDark
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = if (isMe) "Share short video clips, music vibes, and cultural moments with your audience" else "When they share a reel, it will appear here.",
+                                text = if (isMe) "Share short video clips, music vibes, and cultural moments with your audience" else "When they share a clip, it will appear here.",
                                 fontSize = 13.sp,
                                 color = fbTextGray,
                                 textAlign = TextAlign.Center
@@ -2709,7 +2709,7 @@ fun ProfileScreen(
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Create First Reel", fontWeight = FontWeight.Bold)
+                                    Text("Create First Clip", fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -3816,7 +3816,7 @@ fun MenuScreen(
                 ) {
                     LuxuryExecutivePillarCard(
                         icon = Icons.Default.Storefront,
-                        title = "Marketplace",
+                        title = "Bazaar",
                         amharicTag = "",
                         metricBadge = "NBE Live",
                         isDarkObsidian = false,
@@ -3858,7 +3858,7 @@ fun MenuScreen(
                     LuxuryPortalItem(
                         icon = Icons.Default.DynamicFeed,
                         title = MeskotStrings.get("navFeed", currentLanguage),
-                        subtitle = "Stories, Reels & Pulse",
+                        subtitle = "Stories, Clips & Pulse",
                         badgeText = "LIVE",
                         tab = ScreenTab.FEED,
                         isFeaturedGold = false

@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,24 +28,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.outlined.People
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.outlined.PhotoLibrary
-import androidx.compose.material.icons.filled.OndemandVideo
-import androidx.compose.material.icons.outlined.OndemandVideo
-import androidx.compose.material.icons.filled.Storefront
-import androidx.compose.material.icons.outlined.Storefront
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.filled.DynamicFeed
+import androidx.compose.material.icons.outlined.DynamicFeed
+import androidx.compose.material.icons.filled.Diversity3
+import androidx.compose.material.icons.outlined.Diversity3
+import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.outlined.PlayCircle
+import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.outlined.ShoppingBag
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.outlined.Campaign
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.Badge
@@ -61,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -113,7 +112,7 @@ fun TopNavBar(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = Color.White.copy(alpha = 0.96f),
+        color = Color.White,
         shadowElevation = 3.dp
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -135,35 +134,58 @@ fun TopNavBar(
                     )
             )
 
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .padding(horizontal = 14.dp, vertical = 9.dp)
             ) {
-                // Left: Brand Logo & Title
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f, fill = false)
-                ) {
-                    // Modern, Attractive Meskot Brand Logo & Subtitle
-                    MeskotLogoHeader(
-                        size = 34.dp,
-                        onClick = { onProfileClick() }
+                // Left: User profile avatar
+                if (currentUser != null) {
+                    UserAvatar(
+                        photoUrl = currentUser.photoUrl,
+                        name = currentUser.displayName,
+                        size = 34,
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .clickable { onProfileClick() }
                     )
                 }
 
-                // Right Action Controls: [🔍]
+                // Center Top: Meskot Brand Logo & Title
+                MeskotLogoHeader(
+                    size = 34.dp,
+                    onClick = { onProfileClick() },
+                    modifier = Modifier.align(Alignment.Center)
+                )
+
+                // Right: Language Switch + Search Button
                 Row(
+                    modifier = Modifier.align(Alignment.CenterEnd),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // [🔍] Search button with luxury frosted gold tint & soft contour
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .height(34.dp)
+                            .clip(RoundedCornerShape(17.dp))
+                            .background(GoldSurface)
+                            .border(1.dp, GoldBorder.copy(alpha = 0.8f), RoundedCornerShape(17.dp))
+                            .clickable { onToggleLanguage() }
+                            .padding(horizontal = 9.dp)
+                            .testTag("nav_lang_toggle_btn"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (currentLanguage == AppLanguage.AM) "አማ" else "EN",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = GoldDeep
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
                             .clip(CircleShape)
                             .background(GoldSurface)
                             .border(1.dp, GoldBorder.copy(alpha = 0.8f), CircleShape)
@@ -199,34 +221,55 @@ fun IconNavBar(
     unreadMsgCount: Int,
     unreadNotifCount: Int,
     isAdmin: Boolean,
+    currentLanguage: AppLanguage = AppLanguage.EN,
     onTabSelected: (ScreenTab) -> Unit
 ) {
+    val isAm = currentLanguage == AppLanguage.AM
+    val homeLabel = if (isAm) "መነሻ" else "Home"
+    val connectionsLabel = if (isAm) "ወዳጆች" else "Connections"
+    val chatsLabel = if (isAm) "ውይይት" else "Chats"
+    val clipsLabel = if (isAm) "ክሊፖች" else "Clips"
+    val bazaarLabel = if (isAm) "ባዛር" else "Bazaar"
+    val activityLabel = if (isAm) "እንቅስቃሴ" else "Activity"
+    val hubLabel = if (isAm) "ማዕከል" else "Hub"
+    val adminLabel = if (isAm) "አስተዳዳሪ" else "Admin"
+
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = Color(0xFFFCFBF8).copy(alpha = 0.98f),
-        shadowElevation = 2.dp
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding(),
+        color = Color.White,
+        shadowElevation = 8.dp
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
+            // Micro hairline top divider
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(0.6.dp)
+                    .background(LineBorder.copy(alpha = 0.7f))
+            )
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                    .padding(horizontal = 6.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 NavLuxuryItem(
-                    activeIcon = Icons.Filled.Home,
-                    inactiveIcon = Icons.Outlined.Home,
-                    label = "Feed",
+                    activeIcon = Icons.Filled.DynamicFeed,
+                    inactiveIcon = Icons.Outlined.DynamicFeed,
+                    label = homeLabel,
                     isSelected = currentTab == ScreenTab.FEED,
                     onClick = { onTabSelected(ScreenTab.FEED) },
                     testTag = "tab_feed"
                 )
 
                 NavLuxuryItem(
-                    activeIcon = Icons.Filled.People,
-                    inactiveIcon = Icons.Outlined.People,
-                    label = "Friends",
+                    activeIcon = Icons.Filled.Diversity3,
+                    inactiveIcon = Icons.Outlined.Diversity3,
+                    label = connectionsLabel,
                     badgeCount = unreadReqCount,
                     isSelected = currentTab == ScreenTab.FRIENDS,
                     onClick = { onTabSelected(ScreenTab.FRIENDS) },
@@ -234,9 +277,9 @@ fun IconNavBar(
                 )
 
                 NavLuxuryItem(
-                    activeIcon = Icons.Filled.ChatBubble,
-                    inactiveIcon = Icons.Outlined.ChatBubbleOutline,
-                    label = "Messages",
+                    activeIcon = Icons.Filled.Forum,
+                    inactiveIcon = Icons.Outlined.Forum,
+                    label = chatsLabel,
                     badgeCount = unreadMsgCount,
                     isSelected = currentTab == ScreenTab.MESSAGES || currentTab == ScreenTab.CHAT,
                     onClick = { onTabSelected(ScreenTab.MESSAGES) },
@@ -244,27 +287,27 @@ fun IconNavBar(
                 )
 
                 NavLuxuryItem(
-                    activeIcon = Icons.Filled.OndemandVideo,
-                    inactiveIcon = Icons.Outlined.OndemandVideo,
-                    label = "Reels",
+                    activeIcon = Icons.Filled.PlayCircle,
+                    inactiveIcon = Icons.Outlined.PlayCircle,
+                    label = clipsLabel,
                     isSelected = currentTab == ScreenTab.REELS,
                     onClick = { onTabSelected(ScreenTab.REELS) },
                     testTag = "tab_reels"
                 )
 
                 NavLuxuryItem(
-                    activeIcon = Icons.Filled.Storefront,
-                    inactiveIcon = Icons.Outlined.Storefront,
-                    label = "Market",
+                    activeIcon = Icons.Filled.ShoppingBag,
+                    inactiveIcon = Icons.Outlined.ShoppingBag,
+                    label = bazaarLabel,
                     isSelected = currentTab == ScreenTab.MARKETPLACE,
                     onClick = { onTabSelected(ScreenTab.MARKETPLACE) },
                     testTag = "tab_marketplace"
                 )
 
                 NavLuxuryItem(
-                    activeIcon = Icons.Filled.Notifications,
-                    inactiveIcon = Icons.Outlined.Notifications,
-                    label = "Alerts",
+                    activeIcon = Icons.Filled.Campaign,
+                    inactiveIcon = Icons.Outlined.Campaign,
+                    label = activityLabel,
                     badgeCount = unreadNotifCount,
                     isSelected = currentTab == ScreenTab.NOTIFICATIONS,
                     onClick = { onTabSelected(ScreenTab.NOTIFICATIONS) },
@@ -272,9 +315,9 @@ fun IconNavBar(
                 )
 
                 NavLuxuryItem(
-                    activeIcon = Icons.Default.Menu,
-                    inactiveIcon = Icons.Default.Menu,
-                    label = "Menu",
+                    activeIcon = Icons.Filled.GridView,
+                    inactiveIcon = Icons.Outlined.GridView,
+                    label = hubLabel,
                     isSelected = currentTab == ScreenTab.MENU,
                     onClick = { onTabSelected(ScreenTab.MENU) },
                     testTag = "tab_menu"
@@ -284,21 +327,13 @@ fun IconNavBar(
                     NavLuxuryItem(
                         activeIcon = Icons.Filled.Security,
                         inactiveIcon = Icons.Outlined.Security,
-                        label = "Admin",
+                        label = adminLabel,
                         isSelected = currentTab == ScreenTab.ADMIN,
                         onClick = { onTabSelected(ScreenTab.ADMIN) },
                         testTag = "tab_admin"
                     )
                 }
             }
-
-            // Micro hairline bottom divider
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(0.5.dp)
-                    .background(LineBorder.copy(alpha = 0.5f))
-            )
         }
     }
 }
@@ -324,24 +359,25 @@ private fun NavLuxuryItem(
         label = "nav_item_tint"
     )
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Box(
+        contentAlignment = Alignment.Center,
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .defaultMinSize(minWidth = 44.dp, minHeight = 44.dp)
+            .clip(RoundedCornerShape(16.dp))
             .background(
-                if (isSelected) LuxuryGoldShimmer.copy(alpha = 0.7f) else Color.Transparent
+                if (isSelected) LuxuryGoldShimmer.copy(alpha = 0.5f) else Color.Transparent
             )
             .border(
-                width = 1.dp,
-                color = if (isSelected) GoldBorder.copy(alpha = 0.65f) else Color.Transparent,
-                shape = RoundedCornerShape(12.dp)
+                width = if (isSelected) 1.5.dp else 0.dp,
+                color = if (isSelected) Color(0xFFC48F37) else Color.Transparent,
+                shape = RoundedCornerShape(16.dp)
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 7.dp, vertical = 5.dp)
+            .padding(horizontal = 10.dp, vertical = 7.dp)
             .scale(scale)
             .testTag(testTag)
     ) {
@@ -366,36 +402,9 @@ private fun NavLuxuryItem(
                 imageVector = if (isSelected) activeIcon else inactiveIcon,
                 contentDescription = label,
                 tint = iconTint,
-                modifier = Modifier.size(21.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
-
-        Spacer(modifier = Modifier.height(2.dp))
-
-        Text(
-            text = label,
-            fontSize = 9.5.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) Ink else MutedText,
-            letterSpacing = (-0.2).sp
-        )
-
-        Spacer(modifier = Modifier.height(2.dp))
-
-        // Active indicator pill with radiant Meskot gold gradient
-        Box(
-            modifier = Modifier
-                .width(if (isSelected) 18.dp else 0.dp)
-                .height(2.5.dp)
-                .clip(RoundedCornerShape(1.5.dp))
-                .background(
-                    if (isSelected) {
-                        Brush.horizontalGradient(listOf(GoldLight, LuxuryGoldAccent, GoldDeep))
-                    } else {
-                        Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
-                    }
-                )
-        )
     }
 }
 
@@ -435,3 +444,4 @@ fun UserAvatar(
         }
     }
 }
+

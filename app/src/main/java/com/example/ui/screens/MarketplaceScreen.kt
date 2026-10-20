@@ -308,13 +308,13 @@ fun MarketplaceScreen(
                         }
                         Column {
                             Text(
-                                text = "Meskot Marketplace",
+                                text = "Meskot Bazaar",
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = FbDarkText
                             )
                             Text(
-                                text = "Meskot Marketplace · Buy, Sell & Escrow Locally",
+                                text = "Meskot Bazaar · Buy, Sell & Escrow Locally",
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = FbBlue
@@ -335,7 +335,7 @@ fun MarketplaceScreen(
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Tune,
-                                    contentDescription = "Filter & Sort Marketplace",
+                                    contentDescription = "Filter & Sort Bazaar",
                                     tint = if (activeFilterCount > 0) Color.White else FbBlue,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -354,7 +354,7 @@ fun MarketplaceScreen(
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Search,
-                                    contentDescription = "Search Marketplace",
+                                    contentDescription = "Search Bazaar",
                                     tint = FbBlue,
                                     modifier = Modifier.size(21.dp)
                                 )
@@ -374,7 +374,7 @@ fun MarketplaceScreen(
                         onValueChange = { searchQuery = it },
                         placeholder = {
                             Text(
-                                "Search Marketplace for vehicles, phones, houses...",
+                                "Search Bazaar for vehicles, phones, houses...",
                                 fontSize = 14.sp,
                                 color = FbSecondaryText
                             )
@@ -459,7 +459,7 @@ fun MarketplaceScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Person,
-                                        contentDescription = "Your Marketplace Profile",
+                                        contentDescription = "Your Bazaar Profile",
                                         tint = FbBlue,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -587,7 +587,7 @@ fun MarketplaceScreen(
                     ) {
                         Column {
                             Text(
-                                text = if (showOnlySaved) "Saved Marketplace Items" else "Today's picks",
+                                text = if (showOnlySaved) "Saved Bazaar Items" else "Today's picks",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = FbDarkText
@@ -735,7 +735,7 @@ fun MarketplaceScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = if (showOnlySaved) "Tap the bookmark icon on any Marketplace listing to save it for later."
+                            text = if (showOnlySaved) "Tap the bookmark icon on any Bazaar listing to save it for later."
                             else "Try expanding your distance radius or clearing the category and price filters.",
                             fontSize = 14.sp,
                             color = FbSecondaryText
@@ -1268,7 +1268,7 @@ private fun MarketplaceFilterSortBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Sort & Filter Marketplace",
+                    text = "Sort & Filter Bazaar",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = FbDarkText
@@ -1597,7 +1597,7 @@ private fun CreateListingModal(
                 TopAppBar(
                     title = {
                         Text(
-                            "New Marketplace Listing",
+                            "New Bazaar Listing",
                             fontWeight = FontWeight.Bold,
                             fontSize = 19.sp
                         )
@@ -1952,7 +1952,7 @@ private fun MarketplaceProductDetailModal(
                                     type = "text/plain"
                                     putExtra(
                                         android.content.Intent.EXTRA_TEXT,
-                                        "Check out \"${item.title}\" (${item.formattedPrice}) on Meskot Marketplace in ${item.location.name}!"
+                                        "Check out \"${item.title}\" (${item.formattedPrice}) on Meskot Bazaar in ${item.location.name}!"
                                     )
                                 }
                                 context.startActivity(android.content.Intent.createChooser(sendIntent, "Share Listing"))
@@ -2693,7 +2693,7 @@ private fun MarketplaceProductDetailModal(
             containerColor = MeskotCardPaper,
             title = { Text("Delete Listing?", fontWeight = FontWeight.Bold) },
             text = {
-                Text("Are you sure you want to permanently remove \"${item.title}\" from Meskot Marketplace?")
+                Text("Are you sure you want to permanently remove \"${item.title}\" from Meskot Bazaar?")
             },
             confirmButton = {
                 Button(
@@ -2737,7 +2737,7 @@ private fun MarketplaceInboxModal(
                 TopAppBar(
                     title = {
                         Text(
-                            text = "Marketplace Inbox",
+                            text = "Bazaar Inbox",
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp
                         )
@@ -2776,7 +2776,7 @@ private fun MarketplaceInboxModal(
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "No Marketplace messages yet",
+                            text = "No Bazaar messages yet",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = FbDarkText
@@ -2824,7 +2824,7 @@ private fun MarketplaceInboxModal(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = lastMsg.itemTitle.ifBlank { item?.title ?: "Marketplace Item" },
+                                        text = lastMsg.itemTitle.ifBlank { item?.title ?: "Bazaar Item" },
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = FbDarkText,

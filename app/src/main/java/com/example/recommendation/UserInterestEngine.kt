@@ -128,7 +128,9 @@ You are an Advanced Recommendation & User Interest Analysis Engine for a content
 
     private fun getApiKey(): String? {
         return try {
-            BuildConfig.GEMINI_API_KEY
+            val field = BuildConfig::class.java.getField("GEMINI_API_KEY")
+            val value = field.get(null) as? String
+            value?.takeIf { it.isNotBlank() }
         } catch (e: Throwable) {
             null
         }

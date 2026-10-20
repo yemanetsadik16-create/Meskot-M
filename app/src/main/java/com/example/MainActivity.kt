@@ -25,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -290,34 +291,44 @@ fun MeskotApp(viewModel: MeskotViewModel) {
             currentLanguage = currentLanguage
         )
     } else {
+        val showNavBars = currentTab != ScreenTab.PROFILE &&
+            currentTab != ScreenTab.CHAT &&
+            currentTab != ScreenTab.ADS_MANAGER &&
+            currentTab != ScreenTab.CREATOR_STUDIO &&
+            currentTab != ScreenTab.GROUP_DETAIL &&
+            currentTab != ScreenTab.GROUP_ADMIN_DASHBOARD &&
+            currentTab != ScreenTab.MARKETPLACE
+
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            containerColor = Color(0xFFF0F2F5),
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                if (currentTab != ScreenTab.PROFILE && currentTab != ScreenTab.CHAT && currentTab != ScreenTab.ADS_MANAGER && currentTab != ScreenTab.CREATOR_STUDIO && currentTab != ScreenTab.GROUP_DETAIL && currentTab != ScreenTab.GROUP_ADMIN_DASHBOARD && currentTab != ScreenTab.MARKETPLACE) {
-                    Column {
-                        TopNavBar(
-                            currentUser = currentUser,
-                            currentLanguage = currentLanguage,
-                            onToggleLanguage = { viewModel.toggleLanguage() },
-                            onOpenComposer = { viewModel.openComposer() },
-                            onOpenLive = { viewModel.openLiveStream() },
-                            onOpenSearch = { viewModel.navigateTo(ScreenTab.FRIENDS) },
-                            onOpenMenu = { viewModel.navigateTo(ScreenTab.MENU) },
-                            onProfileClick = { currentUser?.let { viewModel.openProfile(it) } },
-                            onLogout = { viewModel.logout() }
-                        )
-
-                        // Web App's exact Icon Nav Bar with Badges
-                        IconNavBar(
-                            currentTab = currentTab,
-                            unreadReqCount = incomingReqs.size,
-                            unreadMsgCount = unreadMsgCount,
-                            unreadNotifCount = unreadNotifsCount,
-                            isAdmin = currentUser?.isAdmin == true,
-                            onTabSelected = { viewModel.navigateTo(it) }
-                        )
-                    }
+                if (showNavBars) {
+                    TopNavBar(
+                        currentUser = currentUser,
+                        currentLanguage = currentLanguage,
+                        onToggleLanguage = { viewModel.toggleLanguage() },
+                        onOpenComposer = { viewModel.openComposer() },
+                        onOpenLive = { viewModel.openLiveStream() },
+                        onOpenSearch = { viewModel.navigateTo(ScreenTab.FRIENDS) },
+                        onOpenMenu = { viewModel.navigateTo(ScreenTab.MENU) },
+                        onProfileClick = { currentUser?.let { viewModel.openProfile(it) } },
+                        onLogout = { viewModel.logout() }
+                    )
+                }
+            },
+            bottomBar = {
+                if (showNavBars) {
+                    IconNavBar(
+                        currentTab = currentTab,
+                        unreadReqCount = incomingReqs.size,
+                        unreadMsgCount = unreadMsgCount,
+                        unreadNotifCount = unreadNotifsCount,
+                        isAdmin = currentUser?.isAdmin == true,
+                        currentLanguage = currentLanguage,
+                        onTabSelected = { viewModel.navigateTo(it) }
+                    )
                 }
             }
         ) { innerPadding ->
@@ -325,7 +336,7 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .background(Paper)
+                    .background(Color(0xFFF0F2F5))
             ) {
                 // Navigation Screen Router
                 when (currentTab) {
@@ -644,10 +655,10 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                             viewModel.sharePost(currentReel.id)
                             val sendIntent = android.content.Intent().apply {
                                 action = android.content.Intent.ACTION_SEND
-                                putExtra(android.content.Intent.EXTRA_TEXT, "Watch this reel by ${currentReel.authorName} on Meskot: ${currentReel.text}")
+                                putExtra(android.content.Intent.EXTRA_TEXT, "Watch this clip by ${currentReel.authorName} on Meskot: ${currentReel.text}")
                                 type = "text/plain"
                             }
-                            val shareIntent = android.content.Intent.createChooser(sendIntent, "Share Reel")
+                            val shareIntent = android.content.Intent.createChooser(sendIntent, "Share Clip")
                             context.startActivity(shareIntent)
                         },
                         onTip = {

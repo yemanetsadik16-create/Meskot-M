@@ -388,7 +388,7 @@ fun DashboardScreen(
                                     )
                                 } else {
                                     FormatReachRow(
-                                        format = "📹 Reels",
+                                        format = "📹 Clips",
                                         count = userInsights.reelsReachCount,
                                         percentage = ((userInsights.reelsReachCount.toDouble() / totalReach) * 100).toInt(),
                                         barColor = Color(0xFFE91E63)

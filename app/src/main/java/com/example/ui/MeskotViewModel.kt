@@ -427,7 +427,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
             visibility = visibility
         )
         closeCreateReel()
-        showMessage("🎥 Reel posted successfully!")
+        showMessage("🎥 Clip posted successfully!")
     }
 
     private val _activeChapaSession = MutableStateFlow<ChapaPaymentSession?>(null)
@@ -766,7 +766,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
             )
         }
         closeComposer()
-        val msg = if (postType == "REEL") "🎥 Reel posted!" else if (mediaUrls.isNotEmpty()) "📸 Photo post published!" else "Posted successfully"
+        val msg = if (postType == "REEL") "🎥 Clip posted!" else if (mediaUrls.isNotEmpty()) "📸 Photo post published!" else "Posted successfully"
         showMessage(msg)
     }
 
@@ -1262,7 +1262,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         val isNowFollowing = !repository.isFollowing(targetUid)
         repository.toggleFollow(targetUid)
         if (isNowFollowing) {
-            showMessage("👤 Following creator! You'll see their latest posts and reels.")
+            showMessage("👤 Following creator! You'll see their latest posts and clips.")
         } else {
             showMessage("Unfollowed.")
         }
@@ -1767,7 +1767,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     fun toggleSaveListing(itemId: String) {
         repository.toggleSaveListing(itemId)
         val isNowSaved = repository.savedListingIds.value.contains(itemId)
-        showMessage(if (isNowSaved) "Saved to your Marketplace items" else "Removed from Saved items")
+        showMessage(if (isNowSaved) "Saved to your Bazaar items" else "Removed from Saved items")
     }
 
     fun incrementMarketplaceListingViews(itemId: String) {
@@ -1835,14 +1835,14 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
                 onPaymentCompleted = { txRef ->
                     repository.promoteMarketplaceListing(item.id)
                     repository.createAdCampaign(
-                        name = "Marketplace Boost: ${item.title.take(28)}",
+                        name = "Bazaar Boost: ${item.title.take(28)}",
                         objective = "CONVERSIONS",
                         dailyBudgetEtb = dailyBudgetEtb,
                         headline = "${item.formattedPrice} · ${item.title}",
                         primaryText = item.description.take(180),
                         mediaUrl = item.primaryImageUrl,
                         ctaText = "Shop Now",
-                        destinationUrl = "https://meskot.app/marketplace/${item.id}",
+                        destinationUrl = "https://meskot.app/bazaar/${item.id}",
                         durationDays = durationDays,
                         targetAudience = "${item.location.name} (+${item.location.radiusKm} km)",
                         paymentMethod = "Chapa Checkout",
@@ -1936,7 +1936,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
             isPromoted = isPromoted,
             tags = tags
         )
-        showMessage("Listed \"${created.title}\" on Meskot Marketplace!")
+        showMessage("Listed \"${created.title}\" on Meskot Bazaar!")
         onDone(true)
     }
 
@@ -1947,7 +1947,7 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     fun startChatWithSeller(item: ListingItem, initialMessage: String? = null) {
         val sellerUser = users.value.find { it.uid == item.sellerId } ?: User(
             uid = item.sellerId,
-            displayName = item.sellerName.ifBlank { "Marketplace Seller" },
+            displayName = item.sellerName.ifBlank { "Bazaar Seller" },
             email = "${item.sellerId}@meskot.app",
             photoUrl = item.sellerPhoto,
             isVerified = item.sellerVerified

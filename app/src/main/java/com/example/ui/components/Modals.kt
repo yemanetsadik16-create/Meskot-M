@@ -577,12 +577,12 @@ fun ComposerDialog(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.VideoCameraBack,
-                                    contentDescription = "Create Reel",
+                                    contentDescription = "Create Clip",
                                     tint = GoldDeep,
                                     modifier = Modifier.size(15.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Reel", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GoldDeep)
+                                Text(if (currentLanguage == AppLanguage.AM) "ክሊፕ" else "Clip", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GoldDeep)
                             }
                         }
                     }

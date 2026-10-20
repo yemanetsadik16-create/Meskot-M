@@ -2031,24 +2031,19 @@ fun FacebookStoriesRail(
         activeStories.filter { it.uid != currentUser?.uid }
     }
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        border = BorderStroke(1.2.dp, GoldBorder.copy(alpha = 0.85f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-    ) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = androidx.compose.ui.graphics.RectangleShape,
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = null,
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(GoldSurface.copy(alpha = 0.7f), CardBg)
-                    )
-                )
-                .padding(vertical = 12.dp)
+                .background(Color.White)
+                .padding(vertical = 10.dp)
         ) {
             // Meskot Stories Brand Header Row
             Row(
@@ -2151,6 +2146,8 @@ fun FacebookStoriesRail(
             }
         }
     }
+    FacebookPostDivider(testTag = "stories_separator")
+}
 }
 
 /**

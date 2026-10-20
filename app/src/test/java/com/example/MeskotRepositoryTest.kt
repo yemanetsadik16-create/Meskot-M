@@ -21,8 +21,10 @@ class MeskotRepositoryTest {
     fun testBilingualStrings() {
         assertEquals("Meskot", MeskotStrings.get("appName", AppLanguage.EN))
         assertEquals("መስኮት", MeskotStrings.get("appName", AppLanguage.AM))
-        assertEquals("News Feed", MeskotStrings.get("navFeed", AppLanguage.EN))
-        assertEquals("ዜና ምግብ", MeskotStrings.get("navFeed", AppLanguage.AM))
+        assertEquals("Home", MeskotStrings.get("navFeed", AppLanguage.EN))
+        assertEquals("መነሻ", MeskotStrings.get("navFeed", AppLanguage.AM))
+        assertEquals("Connections", MeskotStrings.get("navFriends", AppLanguage.EN))
+        assertEquals("ወዳጆች", MeskotStrings.get("navFriends", AppLanguage.AM))
     }
 
     @Test

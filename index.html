@@ -3,679 +3,99 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Meskot (መስኮት) - Social & Live Streaming</title>
-  <style>
-    :root {
-      --primary: #6366f1;
-      --primary-dark: #4f46e5;
-      --accent: #f43f5e;
-      --bg: #0f172a;
-      --card: #1e293b;
-      --border: #334155;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --input-bg: #090e1a;
-      --live-red: #ef4444;
-      --success: #10b981;
-      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-
-    [data-theme="light"] {
-      --primary: #4f46e5;
-      --primary-dark: #4338ca;
-      --accent: #e11d48;
-      --bg: #f1f5f9;
-      --card: #ffffff;
-      --border: #e2e8f0;
-      --text: #0f172a;
-      --text-muted: #64748b;
-      --input-bg: #f8fafc;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none;
-    }
-
-    body {
-      font-family: var(--font-family);
-      background: #020617;
-      color: var(--text);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    /* Mobile Container Frame */
-    .app-viewport {
-      width: 100%;
-      max-width: 440px;
-      height: 100vh;
-      max-height: 900px;
-      background: var(--bg);
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      overflow: hidden;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-      border-radius: 28px;
-      border: 1px solid var(--border);
-    }
-
-    @media (max-width: 480px) {
-      .app-viewport {
-        max-width: 100%;
-        height: 100vh;
-        max-height: 100vh;
-        border-radius: 0;
-        border: none;
-      }
-    }
-
-    /* Top App Bar */
-    .app-header {
-      height: 60px;
-      background: var(--card);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 16px;
-      z-index: 10;
-    }
-
-    .brand-group {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .app-logo {
-      width: 32px;
-      height: 32px;
-      border-radius: 9px;
-      background: linear-gradient(135deg, #6366f1, #ec4899);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      color: #fff;
-      font-size: 18px;
-    }
-
-    .brand-title {
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: -0.3px;
-    }
-
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .btn-icon {
-      background: transparent;
-      border: none;
-      color: var(--text);
-      cursor: pointer;
-      font-size: 18px;
-      padding: 6px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.2s;
-    }
-    .btn-icon:hover {
-      background: var(--border);
-    }
-
-    .lang-pill {
-      font-size: 12px;
-      padding: 4px 8px;
-      border-radius: 12px;
-      background: var(--border);
-      color: var(--text);
-      cursor: pointer;
-      font-weight: 600;
-      border: none;
-    }
-
-    /* Scrollable Content View */
-    .app-content {
-      flex: 1;
-      overflow-y: auto;
-      overflow-x: hidden;
-      padding-bottom: 70px;
-      position: relative;
-    }
-
-    .screen-tab-panel {
-      display: none;
-      animation: fadeIn 0.25s ease-out;
-    }
-    .screen-tab-panel.active {
-      display: block;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Stories Row */
-    .stories-container {
-      display: flex;
-      gap: 12px;
-      padding: 14px 16px;
-      overflow-x: auto;
-      scrollbar-width: none;
-      border-bottom: 1px solid var(--border);
-      background: var(--card);
-    }
-    .stories-container::-webkit-scrollbar { display: none; }
-
-    .story-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      cursor: pointer;
-      gap: 6px;
-    }
-
-    .story-ring {
-      width: 58px;
-      height: 58px;
-      border-radius: 50%;
-      padding: 2.5px;
-      background: linear-gradient(45deg, #f59e0b, #ec4899, #8b5cf6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .story-ring.add-story {
-      background: var(--border);
-      position: relative;
-    }
-    .story-avatar {
-      width: 100%;
-      height: 100%;
-      border-radius: 50%;
-      background-size: cover;
-      background-position: center;
-      border: 2px solid var(--card);
-    }
-    .story-label {
-      font-size: 11px;
-      color: var(--text-muted);
-      width: 60px;
-      text-align: center;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* Feed Card */
-    .feed-card {
-      background: var(--card);
-      margin-bottom: 12px;
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-    }
-
-    .card-header {
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .author-info {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .author-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background-size: cover;
-      background-position: center;
-    }
-
-    .author-meta h4 {
-      font-size: 14px;
-      font-weight: 600;
-    }
-    .author-meta span {
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-
-    .badge-verified {
-      color: #38bdf8;
-      font-size: 13px;
-      margin-left: 4px;
-    }
-
-    .card-body {
-      padding: 4px 16px 12px;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-
-    .card-media {
-      width: 100%;
-      height: 250px;
-      background-size: cover;
-      background-position: center;
-      position: relative;
-    }
-
-    .card-actions {
-      display: flex;
-      justify-content: space-between;
-      padding: 10px 16px;
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .action-btn {
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 13px;
-      cursor: pointer;
-      font-weight: 500;
-    }
-    .action-btn.active {
-      color: var(--accent);
-    }
-
-    /* Live Stream View */
-    .live-container {
-      position: relative;
-      height: 100%;
-      min-height: 520px;
-      background: #000;
-      border-radius: 8px;
-      overflow: hidden;
-      margin: 12px;
-    }
-
-    .live-video-sim {
-      width: 100%;
-      height: 100%;
-      min-height: 520px;
-      background: linear-gradient(180deg, rgba(15,23,42,0.6) 0%, rgba(2,6,23,0.9) 100%),
-                  radial-gradient(circle at center, #312e81 0%, #000 100%);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 16px;
-      position: relative;
-    }
-
-    .live-header-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      z-index: 5;
-    }
-
-    .live-pill {
-      background: var(--live-red);
-      color: #fff;
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
-
-    .live-viewers {
-      background: rgba(0, 0, 0, 0.6);
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 12px;
-      color: #fff;
-    }
-
-    .live-chat-overlay {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      max-height: 220px;
-      overflow-y: hidden;
-      z-index: 5;
-      mask-image: linear-gradient(to top, rgba(0,0,0,1) 70%, rgba(0,0,0,0));
-    }
-
-    .chat-bubble {
-      background: rgba(15, 23, 42, 0.75);
-      backdrop-filter: blur(8px);
-      padding: 6px 12px;
-      border-radius: 12px;
-      font-size: 12px;
-      max-width: 85%;
-      align-self: flex-start;
-      border: 1px solid rgba(255,255,255,0.1);
-      animation: slideUp 0.3s ease-out;
-    }
-    @keyframes slideUp {
-      from { transform: translateY(15px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-
-    .chat-bubble b {
-      color: #a5b4fc;
-      margin-right: 6px;
-    }
-
-    .live-controls {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-top: 10px;
-      z-index: 5;
-    }
-
-    .live-input {
-      flex: 1;
-      height: 38px;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 20px;
-      padding: 0 14px;
-      color: #fff;
-      font-size: 13px;
-      outline: none;
-    }
-    .live-input::placeholder { color: #cbd5e1; }
-
-    .btn-heart {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: var(--accent);
-      border: none;
-      color: #fff;
-      font-size: 18px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 12px rgba(244, 63, 94, 0.5);
-    }
-
-    /* Floating Hearts Animation */
-    .floating-heart {
-      position: absolute;
-      bottom: 60px;
-      right: 25px;
-      font-size: 22px;
-      pointer-events: none;
-      animation: floatUp 1.8s ease-out forwards;
-      z-index: 20;
-    }
-    @keyframes floatUp {
-      0% { opacity: 1; transform: translate(0, 0) scale(0.8); }
-      50% { opacity: 0.8; transform: translate(-20px, -120px) scale(1.2) rotate(-15deg); }
-      100% { opacity: 0; transform: translate(15px, -240px) scale(1.5) rotate(20deg); }
-    }
-
-    /* Creator Studio Tab */
-    .studio-hero {
-      padding: 20px 16px;
-      background: linear-gradient(135deg, #312e81, #1e1b4b);
-      border-bottom: 1px solid var(--border);
-    }
-    .studio-hero h2 { font-size: 20px; margin-bottom: 4px; }
-    .studio-hero p { font-size: 12px; color: #a5b4fc; }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-      padding: 16px;
-    }
-
-    .stat-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 14px;
-    }
-    .stat-label { font-size: 12px; color: var(--text-muted); }
-    .stat-value { font-size: 22px; font-weight: 700; margin-top: 4px; }
-    .stat-growth { font-size: 11px; color: var(--success); margin-top: 2px; }
-
-    /* Messages Tab */
-    .chat-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      cursor: pointer;
-      background: var(--card);
-    }
-    .chat-item:hover { background: rgba(255, 255, 255, 0.03); }
-
-    .chat-avatar-wrap {
-      position: relative;
-    }
-    .online-indicator {
-      width: 11px;
-      height: 11px;
-      background: var(--success);
-      border-radius: 50%;
-      position: absolute;
-      bottom: 0;
-      right: 0;
-      border: 2px solid var(--card);
-    }
-
-    .chat-details { flex: 1; }
-    .chat-title-row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 4px;
-    }
-    .chat-user { font-size: 14px; font-weight: 600; }
-    .chat-time { font-size: 11px; color: var(--text-muted); }
-    .chat-preview {
-      font-size: 12px;
-      color: var(--text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 250px;
-    }
-
-    /* Bottom Navigation Bar */
-    .bottom-nav {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 64px;
-      background: var(--card);
-      border-top: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-around;
-      z-index: 100;
-    }
-
-    .nav-tab {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 3px;
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      cursor: pointer;
-      font-size: 10px;
-      font-weight: 600;
-      width: 50px;
-    }
-    .nav-tab .tab-icon {
-      font-size: 20px;
-      transition: transform 0.2s;
-    }
-    .nav-tab.active {
-      color: var(--primary);
-    }
-    .nav-tab.active .tab-icon {
-      transform: scale(1.15);
-    }
-
-    /* Modal / Story Viewer */
-    .story-modal {
-      position: absolute;
-      inset: 0;
-      background: #000;
-      z-index: 200;
-      display: none;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 16px;
-    }
-    .story-modal.open {
-      display: flex;
-    }
-    .story-progress-bar {
-      height: 3px;
-      background: rgba(255,255,255,0.3);
-      border-radius: 2px;
-      overflow: hidden;
-      margin-bottom: 12px;
-    }
-    .story-progress-fill {
-      width: 0%;
-      height: 100%;
-      background: #fff;
-      transition: width 4s linear;
-    }
-  </style>
+  <title>Meskot (መስኮት) - Social, Live, Bazaar & Ads</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪟</text></svg>">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/public/css/style.css">
 </head>
 <body data-theme="dark">
 
-  <div class="app-viewport">
-    <!-- Top Header -->
+  <!-- Desktop / Web Control Utility Bar -->
+  <div class="web-control-bar">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span class="status-badge">
+        <span class="status-dot"></span>
+        <span id="txt-cloud-sync">Cloud Connected • Chapa & Firebase Active</span>
+      </span>
+      <span>|</span>
+      <span>🇪🇹 Meskot Web Experience (መስኮት)</span>
+    </div>
+    <div class="web-actions">
+      <button class="web-btn" onclick="toggleViewportMode()" id="btn-toggle-viewport">
+        <span>📱/💻</span> <span id="txt-view-mode">Expand View</span>
+      </button>
+      <button class="web-btn" onclick="toggleTheme()">
+        <span id="theme-icon">🌓</span> <span id="txt-theme-label">Theme</span>
+      </button>
+      <button class="web-btn" onclick="toggleLanguage()">
+        <span>🌐</span> <span id="txt-lang-label">አማርኛ</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- App Main Viewport -->
+  <div class="app-viewport" id="app-viewport">
+
+    <!-- Top App Header -->
     <header class="app-header">
-      <div class="brand-group">
+      <div class="brand-group" onclick="switchTab('feed')">
         <div class="app-logo">M</div>
         <div>
           <span class="brand-title" id="txt-app-title">Meskot (መስኮት)</span>
+          <span class="brand-subtitle" id="txt-app-tagline">Ethiopian & Global Network</span>
         </div>
       </div>
       <div class="header-actions">
+        <button class="btn-icon" onclick="openCreatePostModal()" title="Create Post">➕</button>
         <button class="lang-pill" id="btn-lang-toggle" onclick="toggleLanguage()">አማርኛ</button>
-        <button class="btn-icon" onclick="toggleTheme()" title="Toggle Dark/Light">🌓</button>
-        <button class="btn-icon" onclick="alert('No new notifications!')">🔔</button>
+        <button class="btn-icon" onclick="showToast('🔔 All notifications caught up!')" title="Notifications">🔔</button>
       </div>
     </header>
 
-    <!-- App Content Panels -->
+    <!-- Sub-navigation Quick Category Bar -->
+    <div class="quick-subnav">
+      <button class="quick-pill active" id="subnav-feed" onclick="switchTab('feed')">📰 <span id="lbl-sub-feed">Feed</span></button>
+      <button class="quick-pill" id="subnav-live" onclick="switchTab('live')">🔴 <span id="lbl-sub-live">Live</span></button>
+      <button class="quick-pill" id="subnav-market" onclick="switchTab('market')">🛍️ <span id="lbl-sub-market">Bazaar</span></button>
+      <button class="quick-pill" id="subnav-ads" onclick="switchTab('ads')">📢 <span id="lbl-sub-ads">Ads Manager</span></button>
+      <button class="quick-pill" id="subnav-studio" onclick="switchTab('studio')">📊 <span id="lbl-sub-studio">Creator Studio</span></button>
+      <button class="quick-pill" id="subnav-chats" onclick="switchTab('chats')">💬 <span id="lbl-sub-chats">Messages</span></button>
+    </div>
+
+    <!-- App Content Scrollable Area -->
     <main class="app-content">
 
-      <!-- TAB 1: FEED SCREEN -->
+      <!-- ========================================== -->
+      <!-- TAB 1: SOCIAL FEED & STORIES               -->
+      <!-- ========================================== -->
       <section id="tab-feed" class="screen-tab-panel active">
         <!-- Stories Carousel -->
-        <div class="stories-container">
-          <div class="story-item" onclick="openStory('You', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500')">
-            <div class="story-ring add-story">
-              <div class="story-avatar" style="background-image: url('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200');"></div>
-            </div>
-            <span class="story-label" id="txt-your-story">Your Story</span>
-          </div>
+        <div class="stories-container" id="stories-container">
+          <!-- Populated dynamically via JS -->
+        </div>
 
-          <div class="story-item" onclick="openStory('Almaz K.', 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=500')">
-            <div class="story-ring">
-              <div class="story-avatar" style="background-image: url('https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200');"></div>
-            </div>
-            <span class="story-label">Almaz</span>
+        <!-- Create Post Prompt -->
+        <div class="create-post-card">
+          <div class="create-post-input-row">
+            <div class="author-avatar" id="user-post-avatar" style="width: 36px; height: 36px;"></div>
+            <input type="text" class="create-post-input" id="quick-post-prompt" placeholder="What's on your mind? / ምን አዲስ ነገር አለ?" onclick="openCreatePostModal()" readonly />
           </div>
-
-          <div class="story-item" onclick="openStory('Dawit T.', 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=500')">
-            <div class="story-ring">
-              <div class="story-avatar" style="background-image: url('https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200');"></div>
-            </div>
-            <span class="story-label">Dawit</span>
-          </div>
-
-          <div class="story-item" onclick="openStory('Selamawit', 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=500')">
-            <div class="story-ring">
-              <div class="story-avatar" style="background-image: url('https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200');"></div>
-            </div>
-            <span class="story-label">Selam</span>
+          <div class="create-post-actions">
+            <button class="create-post-action-btn" onclick="openCreatePostModal('photo')">🖼️ <span id="lbl-photo">Photo</span></button>
+            <button class="create-post-action-btn" onclick="switchTab('live')">🎥 <span id="lbl-live-btn">Live</span></button>
+            <button class="create-post-action-btn" onclick="switchTab('market'); openCreateListingModal();">🏷️ <span id="lbl-sell-btn">Sell</span></button>
           </div>
         </div>
 
-        <!-- Post 1 -->
-        <article class="feed-card">
-          <div class="card-header">
-            <div class="author-info">
-              <div class="author-avatar" style="background-image: url('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200');"></div>
-              <div class="author-meta">
-                <h4>Hanna Bekele <span class="badge-verified">✓</span></h4>
-                <span>Addis Ababa • 2h ago</span>
-              </div>
-            </div>
-            <button class="btn-icon">•••</button>
-          </div>
-          <div class="card-body">
-            እንኳን ወደ መስኮት በደህና መጡ! Wishing everyone a peaceful and blessed day from the heart of Addis Ababa 🇪🇹✨
-          </div>
-          <div class="card-media" style="background-image: url('https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=800');"></div>
-          <div class="card-actions">
-            <button class="action-btn" onclick="toggleLike(this)">❤️ <span>142</span></button>
-            <button class="action-btn" onclick="alert('Comments opening soon')">💬 <span>28</span></button>
-            <button class="action-btn" onclick="navigator.clipboard?.writeText(window.location.href); alert('Post link copied!')">🔗 Share</button>
-          </div>
-        </article>
-
-        <!-- Post 2 -->
-        <article class="feed-card">
-          <div class="card-header">
-            <div class="author-info">
-              <div class="author-avatar" style="background-image: url('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200');"></div>
-              <div class="author-meta">
-                <h4>Ephrem Girma</h4>
-                <span>Hawassa • 5h ago</span>
-              </div>
-            </div>
-            <button class="btn-icon">•••</button>
-          </div>
-          <div class="card-body">
-            Sunset over Lake Hawassa! The creative creator community on Meskot is thriving. Don't forget to catch the live stream tonight! 🌅🎙️
-          </div>
-          <div class="card-media" style="background-image: url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800');"></div>
-          <div class="card-actions">
-            <button class="action-btn" onclick="toggleLike(this)">❤️ <span>389</span></button>
-            <button class="action-btn" onclick="alert('Comments opening soon')">💬 <span>64</span></button>
-            <button class="action-btn" onclick="alert('Shared to your feed!')">🔁 Repost</button>
-          </div>
-        </article>
+        <!-- Feed Posts Container -->
+        <div id="posts-container">
+          <!-- Populated dynamically from Real State -->
+        </div>
       </section>
 
-      <!-- TAB 2: LIVE STREAM SCREEN -->
+      <!-- ========================================== -->
+      <!-- TAB 2: LIVE STREAMING                      -->
+      <!-- ========================================== -->
       <section id="tab-live" class="screen-tab-panel">
         <div class="live-container">
           <div class="live-video-sim">
@@ -683,34 +103,143 @@
               <div class="author-info">
                 <div class="author-avatar" style="background-image: url('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200'); width: 34px; height: 34px;"></div>
                 <div class="author-meta">
-                  <h4 style="color:#fff; font-size: 13px;">Hanna Live 🎙️</h4>
-                  <span style="color:#cbd5e1;">Acoustic Music Session</span>
+                  <h4 style="color:#fff; font-size: 13px;">Hanna Live 🎙️ <span class="badge-verified">✓</span></h4>
+                  <span style="color:#cbd5e1;" id="lbl-stream-topic">Acoustic Habesha Vibe & Chat</span>
                 </div>
               </div>
               <div style="display: flex; gap: 8px;">
                 <span class="live-pill">● LIVE</span>
-                <span class="live-viewers">👥 1,842</span>
+                <span class="live-viewers">👥 <span id="live-viewer-count">2,410</span></span>
               </div>
             </div>
 
             <!-- Live Chat Area -->
             <div>
               <div class="live-chat-overlay" id="live-chat-box">
-                <div class="chat-bubble"><b>Solomon</b> ሰላም ሃና! Amazing sound quality!</div>
+                <div class="chat-bubble"><b>Solomon</b> ሰላም ሃና! Amazing sound quality! 🎶</div>
                 <div class="chat-bubble"><b>Bethlehem</b> Greetings from Washington DC ❤️</div>
-                <div class="chat-bubble"><b>Tadesse</b> 🇪🇹🇪🇹 Keep shining!</div>
+                <div class="chat-bubble"><b>Tadesse</b> 🇪🇹 Proud Habesha talent! Keep shining!</div>
               </div>
 
               <div class="live-controls">
-                <input type="text" id="live-comment-input" class="live-input" placeholder="Say something..." onkeypress="handleLiveKey(event)" />
+                <input type="text" id="live-comment-input" class="live-input" placeholder="Say something... / አስተያየት ይስጡ..." onkeypress="handleLiveKey(event)" />
                 <button class="btn-heart" onclick="spawnHeart()">❤️</button>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- Live Streaming Features & Tips -->
+        <div style="padding: 0 16px 16px;">
+          <div style="background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <h4 style="font-size: 14px; font-weight: 700;">Support Streamer</h4>
+              <p style="font-size: 11px; color: var(--text-muted);">Send Birr gifts directly via Chapa or Telebirr</p>
+            </div>
+            <button class="btn-submit-modal" style="padding: 8px 14px; font-size: 12px;" onclick="sendStreamGift()">🎁 Send Gift</button>
+          </div>
+        </div>
       </section>
 
-      <!-- TAB 3: CREATOR STUDIO -->
+      <!-- ========================================== -->
+      <!-- TAB 3: BAZAAR (መስኮት ባዛር)                  -->
+      <!-- ========================================== -->
+      <section id="tab-market" class="screen-tab-panel">
+        <div class="market-header-section">
+          <div class="market-top-row">
+            <div>
+              <h2 class="market-title" id="txt-marketplace-title">Meskot Bazaar</h2>
+              <span style="font-size: 11px; color: var(--text-muted);" id="txt-marketplace-sub">Buy & Sell with trusted sellers in Ethiopia & Diaspora</span>
+            </div>
+            <button class="btn-sell-primary" onclick="openCreateListingModal()">
+              <span>➕</span> <span id="btn-post-listing">Sell Item</span>
+            </button>
+          </div>
+
+          <!-- Search & Filter -->
+          <input type="text" id="market-search-box" class="market-search-input" placeholder="Search bazaar (e.g. iPhone, Toyota, Traditional dress)..." oninput="filterMarketplace()" />
+
+          <div class="market-categories-row" id="market-categories">
+            <button class="market-cat-chip active" onclick="setCategoryFilter('all', this)">✨ All</button>
+            <button class="market-cat-chip" onclick="setCategoryFilter('electronics', this)">📱 Electronics</button>
+            <button class="market-cat-chip" onclick="setCategoryFilter('vehicles', this)">🚗 Vehicles</button>
+            <button class="market-cat-chip" onclick="setCategoryFilter('fashion', this)">👗 Fashion & Habesha</button>
+            <button class="market-cat-chip" onclick="setCategoryFilter('property', this)">🏠 Housing & Rent</button>
+            <button class="market-cat-chip" onclick="setCategoryFilter('services', this)">🛠️ Services</button>
+          </div>
+        </div>
+
+        <!-- Marketplace Items Grid -->
+        <div class="market-grid" id="market-grid-container">
+          <!-- Rendered dynamically -->
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 4: ADS MANAGER (የማስታወቂያ አስተዳዳሪ)     -->
+      <!-- ========================================== -->
+      <section id="tab-ads" class="screen-tab-panel">
+        <div class="ads-manager-container">
+          <!-- Hero Banner with CTA -->
+          <div class="ads-hero">
+            <div class="ads-hero-top">
+              <div>
+                <h2 id="txt-ads-title">Ads Manager</h2>
+                <p id="txt-ads-sub">Grow your business, reach Habesha diaspora & local customers.</p>
+              </div>
+              <button class="btn-create-ad" onclick="openCreateCampaignModal()">
+                <span>🚀</span> <span id="btn-create-campaign">Create Ad</span>
+              </button>
+            </div>
+
+            <!-- Timeframe Filter -->
+            <div class="timeframe-bar" id="ads-timeframe-bar">
+              <button class="timeframe-pill active" onclick="setTimeframeFilter('7d', this)">Last 7 Days</button>
+              <button class="timeframe-pill" onclick="setTimeframeFilter('28d', this)">Last 28 Days</button>
+              <button class="timeframe-pill" onclick="setTimeframeFilter('90d', this)">Last 90 Days</button>
+              <button class="timeframe-pill" onclick="setTimeframeFilter('lifetime', this)">Lifetime</button>
+            </div>
+          </div>
+
+          <!-- Metrics Summary Cards -->
+          <div class="ads-metrics-grid">
+            <div class="ads-metric-card">
+              <div class="ads-metric-label" id="lbl-metric-spend">Total Ad Spend</div>
+              <div class="ads-metric-value" id="val-total-spend">ETB 0</div>
+              <div class="ads-metric-sub" id="sub-spend-status">Chapa & CBE Verified</div>
+            </div>
+            <div class="ads-metric-card">
+              <div class="ads-metric-label" id="lbl-metric-impressions">Impressions</div>
+              <div class="ads-metric-value" id="val-total-impressions">0</div>
+              <div class="ads-metric-sub" id="sub-impressions-status">Targeted Feed Reach</div>
+            </div>
+            <div class="ads-metric-card">
+              <div class="ads-metric-label" id="lbl-metric-clicks">Ad Clicks</div>
+              <div class="ads-metric-value" id="val-total-clicks">0</div>
+              <div class="ads-metric-sub" id="sub-clicks-status">Link & Profile visits</div>
+            </div>
+            <div class="ads-metric-card">
+              <div class="ads-metric-label" id="lbl-metric-ctr">Avg. CTR</div>
+              <div class="ads-metric-value" id="val-avg-ctr">0.0%</div>
+              <div class="ads-metric-sub" id="sub-ctr-status">Engagement Rate</div>
+            </div>
+          </div>
+
+          <!-- Campaigns List -->
+          <div class="ads-section-title">
+            <span id="txt-campaigns-header">Your Active & Past Campaigns</span>
+            <span style="font-size: 11px; color: var(--text-muted); cursor: pointer;" onclick="openCreateCampaignModal()">+ New Campaign</span>
+          </div>
+
+          <div class="campaign-list" id="campaigns-container">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 5: CREATOR STUDIO                      -->
+      <!-- ========================================== -->
       <section id="tab-studio" class="screen-tab-panel">
         <div class="studio-hero">
           <h2 id="txt-studio-title">Creator Studio Dashboard</h2>
@@ -741,7 +270,7 @@
         </div>
 
         <div style="padding: 0 16px;">
-          <h3 style="font-size: 15px; margin-bottom: 10px;">Recent Live Performances</h3>
+          <h3 style="font-size: 14px; margin-bottom: 10px; font-weight: 700;">Recent Stream Earnings</h3>
           <div style="background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div>
               <div style="font-weight: 600; font-size: 13px;">Friday Night Live Vibe</div>
@@ -760,75 +289,48 @@
         </div>
       </section>
 
-      <!-- TAB 4: CHATS / MESSAGES -->
+      <!-- ========================================== -->
+      <!-- TAB 6: CHATS / MESSAGES                    -->
+      <!-- ========================================== -->
       <section id="tab-chats" class="screen-tab-panel">
         <div style="padding: 12px 16px; border-bottom: 1px solid var(--border);">
-          <input type="text" placeholder="Search chats..." style="width: 100%; height: 38px; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border); padding: 0 12px; color: var(--text);" />
+          <input type="text" id="chat-search-input" placeholder="Search chats / ውይይት ፈልግ..." style="width: 100%; height: 38px; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border); padding: 0 12px; color: var(--text);" oninput="filterChats()" />
         </div>
 
-        <div class="chat-item" onclick="openChat('Almaz Kebede')">
-          <div class="chat-avatar-wrap">
-            <div class="author-avatar" style="background-image: url('https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200');"></div>
-            <div class="online-indicator"></div>
-          </div>
-          <div class="chat-details">
-            <div class="chat-title-row">
-              <span class="chat-user">Almaz Kebede</span>
-              <span class="chat-time">12:45 PM</span>
-            </div>
-            <p class="chat-preview">Are you ready for the live stream tonight?</p>
-          </div>
-        </div>
-
-        <div class="chat-item" onclick="openChat('Dawit Tesfaye')">
-          <div class="chat-avatar-wrap">
-            <div class="author-avatar" style="background-image: url('https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200');"></div>
-          </div>
-          <div class="chat-details">
-            <div class="chat-title-row">
-              <span class="chat-user">Dawit Tesfaye</span>
-              <span class="chat-time">Yesterday</span>
-            </div>
-            <p class="chat-preview">Check out the new track recorded at studio!</p>
-          </div>
-        </div>
-
-        <div class="chat-item" onclick="openChat('Selamawit')">
-          <div class="chat-avatar-wrap">
-            <div class="author-avatar" style="background-image: url('https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200');"></div>
-          </div>
-          <div class="chat-details">
-            <div class="chat-title-row">
-              <span class="chat-user">Selamawit</span>
-              <span class="chat-time">Tuesday</span>
-            </div>
-            <p class="chat-preview">Thank you so much! Enjoy the coffee ☕</p>
-          </div>
+        <div id="chats-list-container">
+          <!-- Populated dynamically -->
         </div>
       </section>
 
-      <!-- TAB 5: PROFILE SCREEN -->
+      <!-- ========================================== -->
+      <!-- TAB 7: PROFILE                             -->
+      <!-- ========================================== -->
       <section id="tab-profile" class="screen-tab-panel">
-        <div style="padding: 20px 16px; text-align: center; border-bottom: 1px solid var(--border);">
-          <div class="author-avatar" style="width: 80px; height: 80px; margin: 0 auto 12px; background-image: url('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400'); border: 2px solid var(--primary);"></div>
-          <h3 style="font-size: 18px; font-weight: 700;">Hanna Bekele</h3>
-          <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">@hannabekele • Artist & Broadcaster 🇪🇹</p>
-          <p style="font-size: 13px; margin: 10px 0; max-width: 300px; margin-inline: auto;">Sharing songs, stories, and cultural moments on Meskot.</p>
+        <div class="profile-header">
+          <div class="profile-avatar-lg" id="profile-main-avatar"></div>
+          <h3 id="profile-display-name" style="font-size: 18px; font-weight: 700;">Hanna Bekele <span class="badge-verified">✓</span></h3>
+          <p id="profile-handle" style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">@hannabekele • Artist & Broadcaster 🇪🇹</p>
+          <p id="profile-bio" style="font-size: 13px; margin: 10px 0; max-width: 320px; margin-inline: auto;">Sharing songs, stories, and cultural moments on Meskot.</p>
           
-          <div style="display: flex; justify-content: center; gap: 24px; margin-top: 14px;">
-            <div><b>348</b> <div style="font-size: 11px; color: var(--text-muted);">Posts</div></div>
-            <div><b>14.2K</b> <div style="font-size: 11px; color: var(--text-muted);">Followers</div></div>
-            <div><b>512</b> <div style="font-size: 11px; color: var(--text-muted);">Following</div></div>
+          <button class="web-btn" style="margin: 4px auto 10px;" onclick="openEditProfileModal()">✏️ <span id="lbl-edit-profile">Edit Profile</span></button>
+
+          <div class="profile-stats-row">
+            <div class="profile-stat-box"><b id="profile-stat-posts">3</b><span id="lbl-stat-posts">Posts</span></div>
+            <div class="profile-stat-box"><b id="profile-stat-followers">14.2K</b><span id="lbl-stat-followers">Followers</span></div>
+            <div class="profile-stat-box"><b id="profile-stat-following">512</b><span id="lbl-stat-following">Following</span></div>
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; margin-top: 2px;">
-          <div style="height: 120px; background: url('https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=400') center/cover;"></div>
-          <div style="height: 120px; background: url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400') center/cover;"></div>
-          <div style="height: 120px; background: url('https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400') center/cover;"></div>
-          <div style="height: 120px; background: url('https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400') center/cover;"></div>
-          <div style="height: 120px; background: url('https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400') center/cover;"></div>
-          <div style="height: 120px; background: url('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400') center/cover;"></div>
+        <div class="profile-tabs-nav">
+          <button class="profile-tab-btn active" onclick="switchProfileSubTab('posts', this)"><span id="lbl-user-posts">Posts</span></button>
+          <button class="profile-tab-btn" onclick="switchProfileSubTab('listings', this)"><span id="lbl-user-listings">Listings</span></button>
+        </div>
+
+        <div class="profile-grid" id="profile-posts-grid">
+          <!-- Grid items -->
+        </div>
+        <div id="profile-listings-container" style="display: none; padding: 12px 16px;">
+          <!-- User listings -->
         </div>
       </section>
 
@@ -836,33 +338,269 @@
 
     <!-- Bottom Navigation Bar -->
     <nav class="bottom-nav">
-      <button class="nav-tab active" onclick="switchTab('feed', this)">
+      <button class="nav-tab active" id="btn-tab-feed" onclick="switchTab('feed')">
         <span class="tab-icon">🏠</span>
-        <span class="tab-label" id="lbl-home">Home</span>
+        <span class="tab-label" id="lbl-nav-home">Home</span>
       </button>
 
-      <button class="nav-tab" onclick="switchTab('live', this)">
+      <button class="nav-tab" id="btn-tab-live" onclick="switchTab('live')">
         <span class="tab-icon">🔴</span>
-        <span class="tab-label" id="lbl-live">Live</span>
+        <span class="tab-label" id="lbl-nav-live">Live</span>
       </button>
 
-      <button class="nav-tab" onclick="switchTab('studio', this)">
-        <span class="tab-icon">📊</span>
-        <span class="tab-label" id="lbl-studio">Studio</span>
+      <button class="nav-tab" id="btn-tab-market" onclick="switchTab('market')">
+        <span class="tab-icon">🛍️</span>
+        <span class="tab-label" id="lbl-nav-market">Market</span>
       </button>
 
-      <button class="nav-tab" onclick="switchTab('chats', this)">
+      <button class="nav-tab" id="btn-tab-ads" onclick="switchTab('ads')">
+        <span class="tab-icon">📢</span>
+        <span class="tab-label" id="lbl-nav-ads">Ads</span>
+      </button>
+
+      <button class="nav-tab" id="btn-tab-chats" onclick="switchTab('chats')">
         <span class="tab-icon">💬</span>
-        <span class="tab-label" id="lbl-chats">Chats</span>
+        <span class="tab-label" id="lbl-nav-chats">Chats</span>
       </button>
 
-      <button class="nav-tab" onclick="switchTab('profile', this)">
+      <button class="nav-tab" id="btn-tab-profile" onclick="switchTab('profile')">
         <span class="tab-icon">👤</span>
-        <span class="tab-label" id="lbl-profile">Profile</span>
+        <span class="tab-label" id="lbl-nav-profile">Profile</span>
       </button>
     </nav>
 
-    <!-- Story Fullscreen Preview Modal -->
+    <!-- ========================================== -->
+    <!-- MODAL 1: CREATE POST                       -->
+    <!-- ========================================== -->
+    <div id="modal-create-post" class="modal-overlay" onclick="closeModalOnBackdrop(event, this)">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <h3 id="txt-modal-create-post-title">Create Post / አዲስ ፖስት</h3>
+          <button class="btn-icon" onclick="closeModal('modal-create-post')">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Message / መልእክት</label>
+            <textarea id="post-input-text" class="form-textarea" placeholder="What's happening? / ምን አዲስ ነገር አለ?"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Image URL (Optional) / የፎቶ ሊንክ</label>
+            <input type="url" id="post-input-img" class="form-input" placeholder="https://example.com/photo.jpg" />
+          </div>
+          <button class="btn-submit-modal" onclick="submitCreatePost()">
+            <span>✨</span> <span id="btn-publish-post">Publish Post</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 2: CREATE MARKETPLACE LISTING        -->
+    <!-- ========================================== -->
+    <div id="modal-create-listing" class="modal-overlay" onclick="closeModalOnBackdrop(event, this)">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <h3 id="txt-modal-create-listing-title">Sell an Item / እቃ ይሽጡ</h3>
+          <button class="btn-icon" onclick="closeModal('modal-create-listing')">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Title / ርዕስ *</label>
+            <input type="text" id="listing-input-title" class="form-input" placeholder="e.g. iPhone 14 Pro Max 256GB" required />
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label">Price / ዋጋ (ETB) *</label>
+              <input type="number" id="listing-input-price" class="form-input" placeholder="45000" required />
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label">Category / ምድብ</label>
+              <select id="listing-input-cat" class="form-select">
+                <option value="electronics">Electronics / ኤሌክትሮኒክስ</option>
+                <option value="vehicles">Vehicles / መኪናዎች</option>
+                <option value="fashion">Fashion / ልብሶች</option>
+                <option value="property">Housing / ቤቶች</option>
+                <option value="services">Services / አገልግሎት</option>
+              </select>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label">Condition / ሁኔታ</label>
+              <select id="listing-input-cond" class="form-select">
+                <option value="Brand New">Brand New / አዲስ</option>
+                <option value="Like New">Like New / ልክ እንደ አዲስ</option>
+                <option value="Used - Good">Used / በጥሩ ሁኔታ ላይ</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label">Location / ቦታ</label>
+              <input type="text" id="listing-input-loc" class="form-input" placeholder="Addis Ababa, Bole" value="Addis Ababa, Bole" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Seller Phone / ስልክ ቁጥር</label>
+            <input type="tel" id="listing-input-phone" class="form-input" placeholder="+251 91 123 4567" value="+251 91 123 4567" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Image URL / የፎቶ ሊንክ</label>
+            <input type="url" id="listing-input-img" class="form-input" placeholder="https://images.unsplash.com/..." value="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description / መግለጫ</label>
+            <textarea id="listing-input-desc" class="form-textarea" placeholder="Describe your item, accessories included, and meetup preferences..."></textarea>
+          </div>
+          <button class="btn-submit-modal" onclick="submitCreateListing()">
+            <span>🛍️</span> <span id="btn-publish-listing">List Item on Bazaar</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 3: CREATE AD CAMPAIGN                -->
+    <!-- ========================================== -->
+    <div id="modal-create-campaign" class="modal-overlay" onclick="closeModalOnBackdrop(event, this)">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <h3 id="txt-modal-create-ad-title">Create Ad Campaign / ማስታወቂያ ያስጀምሩ</h3>
+          <button class="btn-icon" onclick="closeModal('modal-create-campaign')">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Campaign Name / የማስታወቂያ ስም *</label>
+            <input type="text" id="ad-input-name" class="form-input" placeholder="e.g. Habesha Coffee Brand Awareness" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Campaign Goal / ግብ</label>
+            <select id="ad-input-goal" class="form-select">
+              <option value="traffic">Get Website Visitors (ድር ጣቢያ ጉብኝት)</option>
+              <option value="messages">Get Chat Inquiries (የመልእክት ጥያቄዎች)</option>
+              <option value="brand">Promote Brand & Page (የገጽ ተከታዮችን ማሳደግ)</option>
+              <option value="calls">Get Direct Calls (ቀጥታ ስልክ ጥሪ)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Destination URL / ድር ጣቢያ ወይም ሊንክ</label>
+            <input type="url" id="ad-input-url" class="form-input" placeholder="https://mybusiness.et" value="https://meskot.app" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ad Creative Caption / የማስታወቂያ ጽሑፍ</label>
+            <textarea id="ad-input-caption" class="form-textarea" placeholder="Write your ad copy..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Creative Banner Image URL / የፎቶ ሊንክ</label>
+            <input type="url" id="ad-input-img" class="form-input" placeholder="https://images.unsplash.com/..." value="https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=800" />
+          </div>
+
+          <div style="display: flex; gap: 10px;">
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label">Daily Budget (ETB) / የቀን በጀት</label>
+              <input type="number" id="ad-input-budget" class="form-input" value="350" min="50" oninput="updateAdEstimates()" />
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label">Duration (Days) / ቀናት</label>
+              <input type="number" id="ad-input-days" class="form-input" value="7" min="1" oninput="updateAdEstimates()" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Target Audience Location / የታለመው ታዳሚ</label>
+            <select id="ad-input-audience" class="form-select">
+              <option value="Addis Ababa & Major Cities">Addis Ababa & Regional Capitals (Hawassa, Mekelle, Bahir Dar)</option>
+              <option value="Ethiopia Nationwide">Ethiopia Nationwide</option>
+              <option value="Habesha Diaspora (USA, Europe, Gulf)">Habesha Diaspora (USA, Europe, Gulf)</option>
+              <option value="Worldwide">Worldwide (አለም አቀፍ)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Payment Gateway / የክፍያ አማራጭ</label>
+            <select id="ad-input-payment" class="form-select">
+              <option value="Chapa Payment Gateway">Chapa (Telebirr, CBE Birr, Awash, Abyssinia)</option>
+              <option value="CBE Birr Direct">Commercial Bank of Ethiopia (CBE Birr)</option>
+              <option value="Telebirr Direct">Telebirr Wallet</option>
+              <option value="International Card (Visa/Mastercard)">International Visa / Mastercard</option>
+            </select>
+          </div>
+
+          <div style="background: var(--input-bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+              <span style="color: var(--text-muted);">Est. Reach / የታሰበ ተደራሽነት:</span>
+              <strong id="ad-est-reach" style="color: var(--primary);">4,500 - 12,000 People</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <span style="color: var(--text-muted);">Total Budget / አጠቃላይ ወጪ:</span>
+              <strong id="ad-est-total" style="color: var(--success);">ETB 2,450.00</strong>
+            </div>
+          </div>
+
+          <button class="btn-submit-modal" onclick="submitCreateCampaign()">
+            <span>💳</span> <span id="btn-launch-campaign">Confirm & Launch Campaign</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 4: INTERACTIVE CHAT DIALOGUE         -->
+    <!-- ========================================== -->
+    <div id="modal-chat-view" class="modal-overlay" onclick="closeModalOnBackdrop(event, this)">
+      <div class="modal-sheet" style="height: 80%;">
+        <div class="modal-header">
+          <div class="author-info">
+            <div id="active-chat-avatar" class="author-avatar" style="width: 34px; height: 34px;"></div>
+            <div>
+              <h4 id="active-chat-user" style="font-size: 14px; font-weight: 700;">User</h4>
+              <span style="font-size: 11px; color: var(--success);">● Active now</span>
+            </div>
+          </div>
+          <button class="btn-icon" onclick="closeModal('modal-chat-view')">✕</button>
+        </div>
+        <div class="modal-body" id="active-chat-messages" style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+          <!-- Messages will go here -->
+        </div>
+        <div style="padding: 10px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; background: var(--card);">
+          <input type="text" id="chat-reply-input" class="form-input" placeholder="Type a message... / መልእክት ይጻፉ..." onkeypress="handleChatReplyKey(event)" />
+          <button class="btn-submit-modal" style="padding: 0 16px;" onclick="sendChatReply()">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 5: EDIT PROFILE                      -->
+    <!-- ========================================== -->
+    <div id="modal-edit-profile" class="modal-overlay" onclick="closeModalOnBackdrop(event, this)">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <h3>Edit Profile / መገለጫ ማስተካከያ</h3>
+          <button class="btn-icon" onclick="closeModal('modal-edit-profile')">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Display Name / ስም</label>
+            <input type="text" id="edit-profile-name" class="form-input" value="Hanna Bekele" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Handle</label>
+            <input type="text" id="edit-profile-handle" class="form-input" value="@hannabekele" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Bio / ስለ እርስዎ</label>
+            <textarea id="edit-profile-bio" class="form-textarea">Sharing songs, stories, and cultural moments on Meskot.</textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Profile Photo URL</label>
+            <input type="url" id="edit-profile-avatar" class="form-input" value="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400" />
+          </div>
+          <button class="btn-submit-modal" onclick="submitEditProfile()">Save Profile</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- FULLSCREEN STORY MODAL                     -->
+    <!-- ========================================== -->
     <div id="story-modal" class="story-modal">
       <div>
         <div class="story-progress-bar">
@@ -877,138 +615,17 @@
         </div>
       </div>
       <div id="story-image-canvas" style="flex: 1; margin: 20px 0; background-size: contain; background-repeat: no-repeat; background-position: center;"></div>
-      <div style="text-align: center; color: #fff; font-size: 13px;">Tap to pause • Meskot Moments</div>
+      <div style="text-align: center; color: #fff; font-size: 12px;">Tap to pause • Meskot Moments</div>
     </div>
+
+    <!-- Toast Component -->
+    <div id="app-toast" class="toast">
+      <span id="toast-message">Notification</span>
+    </div>
+
   </div>
 
-  <script>
-    // Tab Switching
-    function switchTab(tabName, el) {
-      document.querySelectorAll('.screen-tab-panel').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
-      
-      const target = document.getElementById('tab-' + tabName);
-      if (target) target.classList.add('active');
-      if (el) el.classList.add('active');
-    }
-
-    // Like Action
-    function toggleLike(btn) {
-      btn.classList.toggle('active');
-      const span = btn.querySelector('span');
-      let count = parseInt(span.innerText);
-      span.innerText = btn.classList.contains('active') ? count + 1 : count - 1;
-    }
-
-    // Floating Hearts & Live Chat
-    function spawnHeart() {
-      const container = document.querySelector('.live-video-sim');
-      const heart = document.createElement('div');
-      heart.className = 'floating-heart';
-      const emojis = ['❤️', '🔥', '✨', '💖', '👏'];
-      heart.innerText = emojis[Math.floor(Math.random() * emojis.length)];
-      container.appendChild(heart);
-      setTimeout(() => heart.remove(), 1800);
-    }
-
-    function handleLiveKey(e) {
-      if (e.key === 'Enter') {
-        const input = document.getElementById('live-comment-input');
-        const text = input.value.trim();
-        if (!text) return;
-        
-        const box = document.getElementById('live-chat-box');
-        const bubble = document.createElement('div');
-        bubble.className = 'chat-bubble';
-        bubble.innerHTML = `<b>You</b> ${text}`;
-        box.appendChild(bubble);
-        box.scrollTop = box.scrollHeight;
-        input.value = '';
-        spawnHeart();
-      }
-    }
-
-    // Stories Modal
-    let storyTimer = null;
-    function openStory(name, imgUrl) {
-      const modal = document.getElementById('story-modal');
-      const canvas = document.getElementById('story-image-canvas');
-      const userSpan = document.getElementById('modal-story-user');
-      const avatar = document.getElementById('modal-story-avatar');
-      const fill = document.getElementById('story-fill');
-
-      userSpan.innerText = name;
-      avatar.style.backgroundImage = `url('${imgUrl}')`;
-      canvas.style.backgroundImage = `url('${imgUrl}')`;
-      modal.classList.add('open');
-
-      fill.style.width = '0%';
-      setTimeout(() => { fill.style.width = '100%'; }, 50);
-
-      clearTimeout(storyTimer);
-      storyTimer = setTimeout(() => { closeStory(); }, 4000);
-    }
-
-    function closeStory() {
-      const modal = document.getElementById('story-modal');
-      modal.classList.remove('open');
-      clearTimeout(storyTimer);
-    }
-
-    function openChat(name) {
-      alert(`Chat with ${name} clicked. Open conversational view.`);
-    }
-
-    // Theme Toggle
-    function toggleTheme() {
-      const body = document.body;
-      const current = body.getAttribute('data-theme');
-      body.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
-    }
-
-    // Bilingual Support (English / Amharic)
-    let isAmharic = false;
-    const strings = {
-      en: {
-        title: "Meskot (መስኮት)",
-        yourStory: "Your Story",
-        studioTitle: "Creator Studio Dashboard",
-        studioSub: "Track audience engagement, stream tips, and analytics.",
-        home: "Home",
-        live: "Live",
-        studio: "Studio",
-        chats: "Chats",
-        profile: "Profile",
-        langBtn: "አማርኛ"
-      },
-      am: {
-        title: "መስኮት (Meskot)",
-        yourStory: "ታሪክዎ",
-        studioTitle: "የፈጣሪዎች ስቱዲዮ ዳሽቦርድ",
-        studioSub: "የተመልካች ተሳትፎን፣ የቀጥታ ስርጭት ስጦታዎችንና ትንታኔዎችን ይከታተሉ።",
-        home: "መነሻ",
-        live: "ቀጥታ",
-        studio: "ስቱዲዮ",
-        chats: "መልእክቶች",
-        profile: "መገለጫ",
-        langBtn: "English"
-      }
-    };
-
-    function toggleLanguage() {
-      isAmharic = !isAmharic;
-      const s = isAmharic ? strings.am : strings.en;
-      document.getElementById('txt-app-title').innerText = s.title;
-      document.getElementById('txt-your-story').innerText = s.yourStory;
-      document.getElementById('txt-studio-title').innerText = s.studioTitle;
-      document.getElementById('txt-studio-sub').innerText = s.studioSub;
-      document.getElementById('lbl-home').innerText = s.home;
-      document.getElementById('lbl-live').innerText = s.live;
-      document.getElementById('lbl-studio').innerText = s.studio;
-      document.getElementById('lbl-chats').innerText = s.chats;
-      document.getElementById('lbl-profile').innerText = s.profile;
-      document.getElementById('btn-lang-toggle').innerText = s.langBtn;
-    }
-  </script>
+  <!-- Application Logic & State -->
+  <script src="/js/app.js"></script>
 </body>
 </html>

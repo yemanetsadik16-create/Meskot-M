@@ -48,11 +48,14 @@ object MeskotStrings {
         "logInLink" to "Log in",
         "noBioYet" to "No bio yet",
         "editProfile" to "Edit profile",
-        "navFeed" to "News Feed",
-        "navFriends" to "Friends",
-        "navMessages" to "Messages",
-        "navGroups" to "Groups",
-        "navPhotos" to "Photos",
+        "navFeed" to "Home",
+        "navFriends" to "Connections",
+        "navMessages" to "Chats",
+        "navReels" to "Clips",
+        "navMarket" to "Bazaar",
+        "navMenu" to "Hub",
+        "navGroups" to "Circles",
+        "navPhotos" to "Gallery",
         "composerPh" to "What's on your mind?",
         "addPhoto" to "Add photo",
         "post" to "Post",
@@ -124,8 +127,8 @@ object MeskotStrings {
         "addMedia" to "Add photos",
         "theirAlbums" to "Albums",
         "items" to "items",
-        "notifications" to "Notifications",
-        "navNotifs" to "Notifications",
+        "notifications" to "Activity",
+        "navNotifs" to "Activity",
         "markAllRead" to "Mark all as read",
         "noNotifs" to "No notifications yet.",
         "notifLikeSuffix" to "liked your post",
@@ -285,11 +288,14 @@ object MeskotStrings {
         "logInLink" to "ይግቡ",
         "noBioYet" to "እስካሁን የመግለጫ ጽሁፍ የለም",
         "editProfile" to "መገለጫ አርትዕ",
-        "navFeed" to "ዜና ምግብ",
-        "navFriends" to "ጓደኞች",
-        "navMessages" to "መልዕክቶች",
-        "navGroups" to "ቡድኖች",
-        "navPhotos" to "ፎቶዎች",
+        "navFeed" to "መነሻ",
+        "navFriends" to "ወዳጆች",
+        "navMessages" to "ውይይት",
+        "navReels" to "ክሊፖች",
+        "navMarket" to "ባዛር",
+        "navMenu" to "ማዕከል",
+        "navGroups" to "ማህበረሰቦች",
+        "navPhotos" to "ስብስቦች",
         "composerPh" to "ምን እያሰቡ ነው?",
         "addPhoto" to "ፎቶ ጨምር",
         "post" to "ለጥፍ",
@@ -361,8 +367,8 @@ object MeskotStrings {
         "addMedia" to "ፎቶ ጨምር",
         "theirAlbums" to "አልበሞች",
         "items" to "ንጥሎች",
-        "notifications" to "ማሳወቂያዎች",
-        "navNotifs" to "ማሳወቂያዎች",
+        "notifications" to "እንቅስቃሴ",
+        "navNotifs" to "እንቅስቃሴ",
         "markAllRead" to "ሁሉንም እንደተነበበ ምልክት አድርግ",
         "noNotifs" to "እስካሁን ምንም ማሳወቂያ የለም።",
         "notifLikeSuffix" to "ልጥፍዎን ወድዷል",
@@ -486,7 +492,10 @@ object MeskotStrings {
     )
 
     fun get(key: String, lang: AppLanguage): String {
-        return en[key] ?: key
+        return when (lang) {
+            AppLanguage.AM -> am[key] ?: en[key] ?: key
+            AppLanguage.EN -> en[key] ?: key
+        }
     }
 
     fun isOnline(lastSeenMs: Long, nowMs: Long = System.currentTimeMillis()): Boolean {

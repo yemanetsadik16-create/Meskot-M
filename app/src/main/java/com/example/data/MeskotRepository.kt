@@ -1046,6 +1046,7 @@ class MeskotRepository(
             if (post.uid == curr.uid) post.copy(isAuthorVerified = true) else post
         }
 
+        saveUserPersonalDetailsBackup(updated)
         userRepository.setCurrentUser(updated)
         repoScope.launch {
             userRepository.saveUser(updated)
@@ -1070,6 +1071,7 @@ class MeskotRepository(
             if (post.uid == curr.uid) post.copy(isAuthorVerified = false) else post
         }
 
+        saveUserPersonalDetailsBackup(updated)
         userRepository.setCurrentUser(updated)
         repoScope.launch {
             userRepository.saveUser(updated)
@@ -2126,7 +2128,7 @@ class MeskotRepository(
             entryType = LedgerEntryType.AD_REVENUE_CREDIT,
             amountEtb = dailyEarningsRollup,
             sourceTitle = "Daily Automated Ad Settlement (02:00 UTC Batch)",
-            metadata = "Reels & In-Stream Impressions: 14,800 · Net Split: 70%"
+            metadata = "Clips & In-Stream Impressions: 14,800 · Net Split: 70%"
         )
     }
 
@@ -3137,17 +3139,17 @@ class MeskotRepository(
                     else -> ProgramStatus.INVITE_ONLY
                 }
                 val note = when {
-                    status == ProgramStatus.ACTIVE -> "Active · Earning on public short-form Reels plays & sticker overlays."
+                    status == ProgramStatus.ACTIVE -> "Active · Earning on public short-form Clips plays & sticker overlays."
                     status == ProgramStatus.UNDER_REVIEW -> "⏳ In automated review."
-                    status == ProgramStatus.READY_TO_APPLY -> "Criteria Met! Set up your Reels Performance program."
+                    status == ProgramStatus.READY_TO_APPLY -> "Criteria Met! Set up your Clips Performance program."
                     registeredIds.contains(id) -> "Waitlist Joined · Meskot Creator Studio is evaluating your short-form content."
                     else -> "Invite Only: 1,000 followers, redeem creator invite code, or join the waiting queue."
                 }
                 MonetizationTool(
                     id = id,
                     code = "REELS_OVERLAY",
-                    name = "Reels Performance & Overlay Ads",
-                    description = "Earn based on the number of plays and high-engagement impressions on your public short-form Reels.",
+                    name = "Clips Performance & Overlay Ads",
+                    description = "Earn based on the number of plays and high-engagement impressions on your public short-form Clips.",
                     icon = "⚡",
                     status = status,
                     minFollowers = minFollowers,
@@ -3157,7 +3159,7 @@ class MeskotRepository(
                     eligibilityNote = note,
                     enrolledDate = if (status == ProgramStatus.ACTIVE) "Active (Invited)" else null,
                     isInviteOnly = true,
-                    payoutRateDescription = "70% creator share on short-form Reels views"
+                    payoutRateDescription = "70% creator share on short-form Clips views"
                 )
             },
 
@@ -3680,7 +3682,7 @@ class MeskotRepository(
         // Also mirror into direct Messages so buyer & seller can continue in real-time ChatScreen
         sendMessage(
             otherUid = item.sellerId,
-            text = "🛍️ [Marketplace: ${item.title} • ${item.formattedPrice}] $messageText",
+            text = "🛍️ [Bazaar: ${item.title} • ${item.formattedPrice}] $messageText",
             mediaUrl = item.primaryImageUrl,
             mediaType = "image"
         )

@@ -512,7 +512,7 @@ fun MetaVerifiedBottomSheetModal(
                         BenefitItem(
                             icon = Icons.Default.Star,
                             title = "Increased reach in comments & search",
-                            description = "Stand out with increased visibility in comments, search results, and recommended explore reels."
+                            description = "Stand out with increased visibility in comments, search results, and recommended explore clips."
                         )
 
                         Spacer(modifier = Modifier.height(20.dp))

@@ -13,6 +13,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -615,7 +616,7 @@ fun ChatScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(Color(0xFFF0F2F5))
             .testTag("chat_screen")
     ) {
         // TOP APP BAR: Matching user's screenshot exactly!
@@ -837,9 +838,10 @@ fun ChatScreen(
                     val msg = displayMessages[index]
                     val prevMsg = if (index > 0) displayMessages[index - 1] else null
                     val isMine = msg.fromUid == currentUser?.uid
+                    val isSeenByReceiver = msg.isSeen || (isMine && displayMessages.drop(index + 1).any { it.fromUid == recipient.uid || it.isSeen })
 
-                    // Centered timestamp chip between clusters (e.g. Aug 08 13:40)
-                    val showDateHeader = prevMsg == null || (msg.createdAt - prevMsg.createdAt > 15 * 60 * 1000L)
+                    // Show date header only between different calendar days
+                    val showDateHeader = prevMsg != null && (msg.createdAt - prevMsg.createdAt > 24 * 60 * 60 * 1000L)
                     if (showDateHeader) {
                         CenteredDateChip(timestamp = msg.createdAt)
                     }
@@ -866,6 +868,7 @@ fun ChatScreen(
                         EnhancedChatMessageRow(
                             msg = msg,
                             isMine = isMine,
+                            isSeenByReceiver = isSeenByReceiver,
                             themeColor = themeColor,
                             recipientPhotoUrl = recipient.photoUrl,
                             recipientName = recipient.displayName,
@@ -1379,6 +1382,7 @@ fun ChatScreen(
 fun EnhancedChatMessageRow(
     msg: ChatMessage,
     isMine: Boolean,
+    isSeenByReceiver: Boolean = false,
     themeColor: Color,
     recipientPhotoUrl: String?,
     recipientName: String,
@@ -1390,232 +1394,203 @@ fun EnhancedChatMessageRow(
 ) {
     var showActionMenu by remember { mutableStateOf(false) }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start,
-        verticalAlignment = Alignment.Bottom
+            .padding(horizontal = 6.dp, vertical = 3.dp),
+        horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
     ) {
-        // Partner circular avatar on bottom left
-        if (!isMine) {
-            UserAvatar(
-                photoUrl = recipientPhotoUrl,
-                name = recipientName,
-                size = 28,
-                modifier = Modifier.padding(end = 8.dp, bottom = 2.dp)
-            )
-        }
-
-        // Like / Thumbs Up Sticker (Rendered large with no bubble background)
-        if (msg.mediaType == "like" || msg.text == "👍") {
+        // Message Card / Bubble: White card with 22dp rounded corners & delicate warm border
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = Color.White,
+            border = BorderStroke(1.2.dp, Color(0xFFEADBCE)),
+            shadowElevation = 0.5.dp,
+            modifier = Modifier
+                .widthIn(max = 310.dp)
+                .clickable { showActionMenu = true }
+        ) {
             Column(
-                horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
-                modifier = Modifier
-                    .clickable { showActionMenu = true }
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp)
             ) {
-                if (msg.text == "👍") {
-                    Icon(
-                        imageVector = Icons.Default.ThumbUp,
-                        contentDescription = "Like",
-                        tint = themeColor,
-                        modifier = Modifier.size(42.dp)
+                // 1. Photo / Image message
+                if (msg.mediaType == "image" && !msg.mediaUrl.isNullOrBlank()) {
+                    var msgPhotoRatio by remember(msg.mediaUrl) { mutableStateOf(4f / 5f) }
+                    AsyncImage(
+                        model = msg.mediaUrl,
+                        contentDescription = "Chat photo",
+                        onSuccess = { state ->
+                            val d = state.result.drawable
+                            if (d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
+                                msgPhotoRatio = (d.intrinsicWidth.toFloat() / d.intrinsicHeight.toFloat()).coerceIn(0.75f, 1.91f)
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(msgPhotoRatio)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { onImageClick(msg.mediaUrl) },
+                        contentScale = ContentScale.Crop
                     )
-                } else {
-                    Text(text = msg.text, fontSize = 38.sp)
-                }
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = MeskotStrings.formatClockTime(msg.createdAt),
-                    fontSize = 10.sp,
-                    color = Color(0xFF8E8E93)
-                )
-            }
-        } else {
-            // Standard speech bubble
-            Surface(
-                shape = RoundedCornerShape(
-                    topStart = 18.dp,
-                    topEnd = 18.dp,
-                    bottomStart = if (isMine) 18.dp else 4.dp,
-                    bottomEnd = if (isMine) 4.dp else 18.dp
-                ),
-                color = if (isMine) themeColor else Color(0xFFF0F2F5),
-                shadowElevation = 0.dp,
-                modifier = Modifier
-                    .widthIn(max = 280.dp)
-                    .clickable { showActionMenu = true }
-            ) {
-                Column(modifier = Modifier.padding(10.dp)) {
-                    // 1. Photo / Image message (Facebook Messenger natural aspect ratio)
-                    if (msg.mediaType == "image" && !msg.mediaUrl.isNullOrBlank()) {
-                        var msgPhotoRatio by remember(msg.mediaUrl) { mutableStateOf(4f / 5f) }
-                        AsyncImage(
-                            model = msg.mediaUrl,
-                            contentDescription = "Chat photo",
-                            onSuccess = { state ->
-                                val d = state.result.drawable
-                                if (d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
-                                    msgPhotoRatio = (d.intrinsicWidth.toFloat() / d.intrinsicHeight.toFloat()).coerceIn(0.75f, 1.91f)
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(msgPhotoRatio)
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { onImageClick(msg.mediaUrl) },
-                            contentScale = ContentScale.Crop
-                        )
-                        if (msg.text.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = msg.text,
-                                color = if (isMine) Color.White else Color(0xFF050505),
-                                fontSize = 15.sp,
-                                lineHeight = 20.sp
-                            )
-                        }
-                    }
-                    // 2. File / Document message
-                    else if (msg.mediaType == "file") {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isMine) Color.White.copy(alpha = 0.18f) else Color.White)
-                                .padding(8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isMine) Color.White.copy(alpha = 0.25f) else themeColor.copy(alpha = 0.12f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Description,
-                                    contentDescription = "Document",
-                                    tint = if (isMine) Color.White else themeColor,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = msg.fileName ?: "Document",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isMine) Color.White else Color(0xFF050505),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = msg.fileSize ?: "File attachment",
-                                    fontSize = 11.sp,
-                                    color = if (isMine) Color.White.copy(alpha = 0.75f) else Color(0xFF65676B)
-                                )
-                            }
-                        }
-                        if (msg.text.isNotBlank() && msg.text != msg.fileName) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = msg.text,
-                                color = if (isMine) Color.White else Color(0xFF050505),
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                    // 3. Audio / Voice message
-                    else if (msg.mediaType == "audio") {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp)
-                        ) {
-                            IconButton(
-                                onClick = onToggleAudio,
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isMine) Color.White.copy(alpha = 0.25f) else themeColor.copy(alpha = 0.15f))
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlayingAudio) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = "Play voice note",
-                                    tint = if (isMine) Color.White else themeColor,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            // Simulated wave equalizer bars
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                horizontalArrangement = Arrangement.spacedBy(2.5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                val heights = listOf(8, 14, 20, 10, 16, 24, 18, 12, 22, 14, 8)
-                                heights.forEachIndexed { i, h ->
-                                    val active = isPlayingAudio && (i < 6)
-                                    Box(
-                                        modifier = Modifier
-                                            .width(3.dp)
-                                            .height(h.dp)
-                                            .clip(RoundedCornerShape(2.dp))
-                                            .background(
-                                                if (isMine) {
-                                                    if (active) Color.White else Color.White.copy(alpha = 0.45f)
-                                                } else {
-                                                    if (active) themeColor else Color(0xFFB0B3B8)
-                                                }
-                                            )
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = msg.fileSize ?: "0:14",
-                                fontSize = 11.sp,
-                                color = if (isMine) Color.White.copy(alpha = 0.85f) else Color(0xFF65676B)
-                            )
-                        }
-                    }
-                    // 4. Standard Text message
-                    else {
+                    if (msg.text.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = msg.text,
-                            color = if (isMine) Color.White else Color(0xFF050505),
+                            color = Color(0xFF1B2A22),
                             fontSize = 15.sp,
-                            lineHeight = 20.sp,
-                            fontWeight = if (!isMine && !msg.isSeen) FontWeight.Bold else FontWeight.Normal
+                            lineHeight = 21.sp,
+                            fontWeight = FontWeight.Normal
                         )
                     }
-
-                    // Message Timestamp & Delivery Indicator (Always visible on all messages)
-                    Spacer(modifier = Modifier.height(3.dp))
+                }
+                // 2. File / Document message
+                else if (msg.mediaType == "file") {
                     Row(
-                        modifier = Modifier.align(Alignment.End),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFFAF7F0))
+                            .padding(10.dp)
                     ) {
-                        Text(
-                            text = MeskotStrings.formatClockTime(msg.createdAt),
-                            fontSize = 10.sp,
-                            color = if (isMine) Color.White.copy(alpha = 0.75f) else Color(0xFF8E8E93)
-                        )
-                        if (isMine) {
-                            Spacer(modifier = Modifier.width(3.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFEEDBBA)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Description,
+                                contentDescription = "Document",
+                                tint = Color(0xFF855829),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = if (msg.isSeen) "✓✓" else "✓",
-                                fontSize = 10.sp,
+                                text = msg.fileName ?: "Document",
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (msg.isSeen) Color(0xFF0084FF) else Color.White.copy(alpha = 0.85f)
+                                color = Color(0xFF1B2A22),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = msg.fileSize ?: "File attachment",
+                                fontSize = 11.sp,
+                                color = Color(0xFF8C7D6B)
                             )
                         }
                     }
+                    if (msg.text.isNotBlank() && msg.text != msg.fileName) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = msg.text,
+                            color = Color(0xFF1B2A22),
+                            fontSize = 15.sp,
+                            lineHeight = 21.sp
+                        )
+                    }
+                }
+                // 3. Audio / Voice message
+                else if (msg.mediaType == "audio") {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp)
+                    ) {
+                        IconButton(
+                            onClick = onToggleAudio,
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFAF5ED))
+                                .border(1.dp, Color(0xFFE2D3BF), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = if (isPlayingAudio) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = "Play voice note",
+                                tint = Color(0xFF855829),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val heights = listOf(8, 14, 20, 10, 16, 24, 18, 12, 22, 14, 8)
+                            heights.forEachIndexed { i, h ->
+                                val active = isPlayingAudio && (i < 6)
+                                Box(
+                                    modifier = Modifier
+                                        .width(3.dp)
+                                        .height(h.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(if (active) Color(0xFF855829) else Color(0xFFD6C4AC))
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = msg.fileSize ?: "0:14",
+                            fontSize = 11.5.sp,
+                            color = Color(0xFF8C7D6B)
+                        )
+                    }
+                }
+                // 4. Standard Text message (exact style from reference image)
+                else {
+                    Text(
+                        text = msg.text,
+                        color = Color(0xFF1B2A22),
+                        fontSize = 15.sp,
+                        lineHeight = 21.sp,
+                        fontWeight = FontWeight.Normal
+                    )
                 }
             }
+        }
+
+        // Subtitle below the bubble: "$senderName • $time" and "Seen" for viewed sent messages
+        Spacer(modifier = Modifier.height(4.dp))
+        val senderLabel = if (isMine) "You" else recipientName.ifBlank { "Member" }
+        val timeLabel = MeskotStrings.formatClockTime(msg.createdAt)
+
+        if (isMine) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.padding(end = 12.dp, bottom = 6.dp)
+            ) {
+                Text(
+                    text = if (isSeenByReceiver) "You • $timeLabel • Seen" else "You • $timeLabel",
+                    fontSize = 12.sp,
+                    fontWeight = if (isSeenByReceiver) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (isSeenByReceiver) Color(0xFF374151) else Color(0xFF8E8373)
+                )
+                if (isSeenByReceiver) {
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Seen",
+                        tint = Color(0xFF2563EB),
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+            }
+        } else {
+            Text(
+                text = "$senderLabel • $timeLabel",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color(0xFF8E8373),
+                modifier = Modifier.padding(start = 12.dp, bottom = 6.dp)
+            )
         }
     }
 

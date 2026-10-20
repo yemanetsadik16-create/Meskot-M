@@ -200,7 +200,8 @@ data class User(
     val verificationPlan: String = "MONTHLY_STANDARD",
     val verificationPaymentMethod: String = "",
     val savedPostIds: List<String> = emptyList(),
-    val subscribedPostIds: List<String> = emptyList()
+    val subscribedPostIds: List<String> = emptyList(),
+    val isPersonalDetailsLocked: Boolean = false
 )
 
 enum class VerificationStatus {

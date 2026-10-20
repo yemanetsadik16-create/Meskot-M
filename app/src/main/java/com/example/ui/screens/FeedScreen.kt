@@ -74,6 +74,7 @@ import com.example.data.StoryItem
 import com.example.data.User
 import com.example.data.LiveStreamSession
 import com.example.ui.MeskotViewModel
+import com.example.ui.components.FacebookPostDivider
 import com.example.ui.components.FacebookStoriesRail
 import com.example.ui.components.PostCard
 import com.example.ui.components.UserAvatar
@@ -132,6 +133,7 @@ fun FeedScreen(
         onRefresh = { viewModel.refreshFeed() },
         modifier = Modifier
             .fillMaxSize()
+            .background(Color(0xFFF0F2F5))
             .testTag("feed_pull_to_refresh"),
         state = pullToRefreshState,
         indicator = {
@@ -148,6 +150,7 @@ fun FeedScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color(0xFFF0F2F5))
                 .testTag("feed_screen")
         ) {
             // Facebook-Style Stories Tray at Top of Feed
@@ -157,26 +160,27 @@ fun FeedScreen(
                     activeStories = activeStories,
                     onStoryClick = { story -> viewModel.viewStory(story) },
                     onCreateStoryClick = { viewModel.openCreateStory() },
-                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
             // Composer & Quick Story Trigger Cards
         if (currentUser != null) {
             item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
-                        .testTag("composer_trigger_card"),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardBg),
-                    border = androidx.compose.foundation.BorderStroke(1.2.dp, GoldBorder.copy(alpha = 0.7f))
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("composer_trigger_card"),
+                        shape = androidx.compose.ui.graphics.RectangleShape,
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = null,
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(12.dp),
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         // Main post text prompt
@@ -198,13 +202,12 @@ fun FeedScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(22.dp))
-                                    .background(GoldSurface)
-                                    .border(1.dp, GoldBorder.copy(alpha = 0.5f), RoundedCornerShape(22.dp))
+                                    .background(Color(0xFFF0F2F5))
                                     .padding(horizontal = 16.dp, vertical = 10.dp)
                             ) {
                                 Text(
                                     text = MeskotStrings.get("composerPh", currentLanguage),
-                                    color = GoldDeep,
+                                    color = MutedText,
                                     fontSize = 14.sp
                                 )
                             }
@@ -291,13 +294,13 @@ fun FeedScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.VideoCameraBack,
-                                        contentDescription = "Create Reel",
+                                        contentDescription = "Create Clip",
                                         tint = Color.White,
                                         modifier = Modifier.size(15.dp)
                                     )
                                     Spacer(modifier = Modifier.width(3.dp))
                                     Text(
-                                        text = "Reel",
+                                        text = if (currentLanguage == AppLanguage.AM) "ክሊፕ" else "Clip",
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -336,8 +339,10 @@ fun FeedScreen(
                         }
                     }
                 }
+                FacebookPostDivider(testTag = "composer_separator")
             }
         }
+    }
 
         // Posts List & Active Sponsored Ads Delivery (Facebook Ad Server Engine)
         if (feedPosts.isEmpty() && activeAdCampaigns.isEmpty()) {
@@ -501,15 +506,16 @@ fun SponsoredFeedAdCard(
         }
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 6.dp)
-            .testTag("sponsored_feed_ad_${campaign.id}"),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        border = BorderStroke(1.2.dp, GoldBorder)
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("sponsored_feed_ad_${campaign.id}"),
+            shape = androidx.compose.ui.graphics.RectangleShape,
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = null,
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Top luminous Meskot Gold accent strip
             Box(
@@ -724,4 +730,6 @@ fun SponsoredFeedAdCard(
             }
         }
     }
+    FacebookPostDivider(testTag = "sponsored_ad_separator_${campaign.id}")
+}
 }

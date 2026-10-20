@@ -691,7 +691,7 @@ fun CreatorDashboardScreen(
                                 HorizontalDivider(color = LineBorder, thickness = 0.5.dp)
                                 StreamRow(
                                     icon = "📢",
-                                    title = "Ad Revenue Sharing (Reels & In-Stream)",
+                                    title = "Ad Revenue Sharing (Clips & In-Stream)",
                                     subtitle = "Monetized plays, mid-rolls, and overlay banners",
                                     amountEtb = if (grossEarnings > 0) grossEarnings * 0.06 else 0.0,
                                     pct = if (grossEarnings > 0) "6%" else "0%"

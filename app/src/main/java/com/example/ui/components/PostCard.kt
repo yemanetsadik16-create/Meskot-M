@@ -94,6 +94,36 @@ import com.example.ui.theme.MutedText
 import com.example.ui.theme.Paper2
 import com.example.ui.theme.PostGradientList
 
+/**
+ * Facebook-style separator divider between each post.
+ * Features an 8dp container bar bounded by crisp top and bottom hairline borders,
+ * creating the distinct Facebook / Facebook Lite separation between posts.
+ */
+@Composable
+fun FacebookPostDivider(
+    modifier: Modifier = Modifier,
+    testTag: String = "facebook_post_divider"
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(8.dp)
+            .background(Color(0xFFE4E6EB))
+            .testTag(testTag)
+    ) {
+        HorizontalDivider(
+            modifier = Modifier.align(Alignment.TopCenter),
+            thickness = 0.8.dp,
+            color = Color(0xFFCED0D4)
+        )
+        HorizontalDivider(
+            modifier = Modifier.align(Alignment.BottomCenter),
+            thickness = 0.8.dp,
+            color = Color(0xFFCED0D4)
+        )
+    }
+}
+
 @Composable
 fun PostCard(
     post: Post,
@@ -129,25 +159,17 @@ fun PostCard(
     val isAuthor = post.uid == currentUserId
     val isGated = minTier != MembershipTier.FREE && !isAuthor && currentUserTier.ordinal < minTier.ordinal
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 8.dp)
-            .testTag("post_card_${post.id}"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("post_card_${post.id}"),
+            shape = androidx.compose.ui.graphics.RectangleShape,
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = null,
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Meskot decorative arch accent line
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.5.dp)
-                    .background(com.example.ui.theme.MeskotLogoHorizontalBrush)
-            )
-
             // Post Header
             Row(
                 modifier = Modifier
@@ -336,41 +358,50 @@ fun PostCard(
                 if (post.text.isNotBlank()) {
                     val bgBrush = PostGradientList.getOrNull(post.bgColorIndex)
                     if (bgBrush != null) {
-                        // Colored gradient card style
+                        // Colored gradient card style (edge-to-edge full width like Facebook)
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 4.dp)
-                                .clip(RoundedCornerShape(12.dp))
                                 .background(bgBrush)
-                                .padding(24.dp),
+                                .padding(horizontal = 20.dp, vertical = 32.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            SelectionContainer {
-                                Text(
-                                    text = post.text,
-                                    color = Color.White,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontFamily = FontFamily.Serif,
-                                    lineHeight = 28.sp
-                                )
-                            }
+                            InteractiveSocialText(
+                                text = post.text,
+                                color = Color.White,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = FontFamily.Serif,
+                                lineHeight = 28.sp,
+                                linkColor = Color.White,
+                                mentionColor = Color(0xFFFFD700),
+                                hashtagColor = Color(0xFFFFD700),
+                                onHashtagClick = { tag ->
+                                    android.widget.Toast.makeText(context, "Exploring #$tag on Meskot", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                onMentionClick = { mention -> onAuthorClick(mention) }
+                            )
                         }
                     } else {
                         // Standard text with "See more" if long
                         val isLong = post.text.length > 180
                         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-                            SelectionContainer {
-                                Text(
-                                    text = post.text,
-                                    fontSize = 15.sp,
-                                    color = Ink,
-                                    lineHeight = 22.sp,
-                                    maxLines = if (isExpandedText || !isLong) Int.MAX_VALUE else 3,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                            InteractiveSocialText(
+                                text = post.text,
+                                fontSize = 15.sp,
+                                color = Ink,
+                                lineHeight = 22.sp,
+                                maxLines = if (isExpandedText || !isLong) Int.MAX_VALUE else 3,
+                                overflow = TextOverflow.Ellipsis,
+                                linkColor = GoldDeep,
+                                mentionColor = Color(0xFF1877F2),
+                                hashtagColor = GoldDeep,
+                                onHashtagClick = { tag ->
+                                    android.widget.Toast.makeText(context, "Exploring #$tag on Meskot", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                onMentionClick = { mention -> onAuthorClick(mention) },
+                                onNonEntityClick = { if (isLong) isExpandedText = !isExpandedText }
+                            )
                             if (isLong) {
                                 Text(
                                     text = if (isExpandedText) MeskotStrings.get("seeLess", currentLanguage) else MeskotStrings.get("seeMore", currentLanguage),
@@ -733,6 +764,10 @@ fun PostCard(
             }
         }
     }
+
+    // Facebook separator line between each post
+    FacebookPostDivider(testTag = "post_separator_${post.id}")
+}
 }
 
 @Composable
@@ -1228,11 +1263,11 @@ fun ReelMediaPreviewCard(
         if (!mediaUrl.isNullOrBlank()) {
             AsyncImage(
                 model = mediaUrl,
-                contentDescription = "Reel Content",
+                contentDescription = "Clip Content",
                 onSuccess = { state ->
                     val d = state.result.drawable
                     if (d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
-                        // Facebook Feed Videos & Reels: clamp between 4:5 (0.8f vertical) and 16:9 (1.77f landscape)
+                        // Facebook Feed Videos & Clips: clamp between 4:5 (0.8f vertical) and 16:9 (1.77f landscape)
                         val raw = d.intrinsicWidth.toFloat() / d.intrinsicHeight.toFloat()
                         videoAspectRatio = if (post.postType == "REEL") 0.8f else raw.coerceIn(0.8f, 1.78f)
                     }
@@ -1247,7 +1282,7 @@ fun ReelMediaPreviewCard(
                     .background(Color(0xFF221A12)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("🎥 Meskot Reel", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("🎥 Meskot Clip", color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -1264,7 +1299,7 @@ fun ReelMediaPreviewCard(
                 )
         )
 
-        // Top Left: "🎥 REEL" Pill
+        // Top Left: "🎥 CLIP" Pill
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -1283,7 +1318,7 @@ fun ReelMediaPreviewCard(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "REEL",
+                    text = "CLIP",
                     color = Color.White,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
@@ -1303,7 +1338,7 @@ fun ReelMediaPreviewCard(
         ) {
             Icon(
                 imageVector = Icons.Default.PlayArrow,
-                contentDescription = "Watch Reel",
+                contentDescription = "Watch Clip",
                 tint = Color.White,
                 modifier = Modifier.size(32.dp)
             )
