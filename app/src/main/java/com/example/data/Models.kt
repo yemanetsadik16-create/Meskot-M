@@ -518,7 +518,17 @@ data class AdCampaign(
     val paymentMethod: String = "Chapa Checkout (USD/ETB)",
     val paymentRef: String = "",
     val totalPaidEtb: Double = 0.0,
+    val carouselCards: List<CarouselAdCard> = emptyList(),
     val createdAt: Long = System.currentTimeMillis()
+)
+
+data class CarouselAdCard(
+    val id: String = "",
+    val mediaUrl: String,
+    val headline: String,
+    val description: String = "",
+    val ctaText: String = "Shop Now",
+    val destinationUrl: String = ""
 )
 
 data class CreatorPayoutRecord(

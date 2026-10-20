@@ -1,108 +1,128 @@
-# Meskot (መስኮት) - Ethiopian & Habesha Community Network
+# Meskot (መስኮት) - Ethiopian & Habesha Social Network
 
-Meskot is a modern, feature-rich social networking application crafted specifically for the Ethiopian and Habesha diaspora and local community. Built with modern Android development standards using Kotlin, Jetpack Compose, Material 3, and Firebase.
+[![Android](https://img.shields.io/badge/Platform-Android-3DDC84.svg?style=flat&logo=android)](https://www.android.com/)
+[![Kotlin](https://img.shields.io/badge/Language-Kotlin%202.x-7F52FF.svg?style=flat&logo=kotlin)](https://kotlinlang.org/)
+[![Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20M3-4285F4.svg?style=flat&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
+[![Firebase](https://img.shields.io/badge/Backend-Firebase%20Firestore-FFCA28.svg?style=flat&logo=firebase)](https://firebase.google.com/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
----
-
-## Features
-
-- **Bilingual Interface**: Seamless switching between English and Amharic (አማርኛ).
-- **Instant Messaging**: Real-time 1-on-1 chat and group messaging with presence indicators and typing indicators.
-- **Audio & Video Calling**: Built-in call interface with microphone mute, speaker toggle, and camera controls.
-- **Community Feed & Stories**: Rich media sharing with 24-hour stories, photo carousels, likes, comments, and shares.
-- **Community Groups**: Public and private interest groups (e.g., tech, music, cultural heritage).
-- **Photo Albums & Gallery**: High-resolution image albums and media viewing.
-- **Tipping / Appreciation**: In-app tipping to support community creators.
-- **Offline & Cloud Sync**: Firebase Authentication, Firestore, and Realtime Database integration with offline persistence.
+**Meskot (መስኮት)** is a modern, high-performance social networking and creator monetization platform engineered specifically for the Ethiopian and Habesha community, both domestically and across the global diaspora. Built with modern Android development standards using **Kotlin**, **Jetpack Compose (Material 3)**, and **Firebase Firestore / Authentication**.
 
 ---
 
-## How to Get the APK
+## Key Features
 
-### Option 1: Built APK in this repository
-The debug APK is generated at:
+- **Meskot Cinema & Clips Lounge**: Short-form video clips with a dedicated Ethiopian gold ambient cinema aesthetic, dual browsing layouts (**Immersive Cinema Stream** vs. **2-Column Mosaic Gallery**), horizontal action dock, and cultural channel categories (*Trending, Buna & Heritage, Ethio Beats, Gursha & Skits, Diaspora*).
+- **Meskot Bazaar**: Modern community marketplace for listing, buying, and selling authentic goods, electronics, fashion, and services with localized category filters and direct buyer-to-seller chat inquiries.
+- **Personal Details Privacy Lock**: Toggle individual personal details (birthday, profession, location, work, education) between **"Only me" (🔒 Private)** and **"Public" (🌐 Open)** with instant cloud persistence.
+- **Interactive Social Text Parser**: Auto-links all 5 major interactive entities (*URLs, Emails, Phone numbers, Hashtags with Ge'ez support, and @Mentions*) with automated trailing punctuation stripping.
+- **Facebook-style Horizontal Carousel Ads**: Smooth `HorizontalPager` ad cards with item snapping, adjacent card peek (`contentPadding = 48.dp`), individual card CTA buttons (*Shop Now, Learn More*), and animated dot indicators.
+- **Bilingual Interface**: One-tap toggle between **English** and **Amharic (አማርኛ)** across navigation, settings, cards, and modal dialogs.
+- **Real-Time Feed & Stories**: Full-featured community feed with 24-hour stories, photo carousels, nested comments, replies, and reactions (*Like, Love, Haha, Wow, Sad, Angry*).
+- **Creator Studio & Monetization**: Star tipping, VIP memberships, monetization dashboards with revenue settlements, and Chapa payment integration.
+- **Real-Time Messaging & Calling**: 1-on-1 private messaging, group chat rooms, and voice/video call interfaces.
+
+---
+
+## Getting the APK
+
+### Option 1: Automated GitHub Actions Build (Recommended)
+Every time this repository is pushed to GitHub, the `.github/workflows/android-build.yml` workflow automatically compiles the project using JDK 21 and publishes both Debug and Release APKs as downloadable build artifacts under the **Actions** tab:
+- `meskot-debug-apk`
+- `meskot-release-apk`
+
+### Option 2: Build Locally with Gradle
+To compile the APKs locally on your machine:
+
+```bash
+# Debug APK
+./gradlew assembleDebug
+
+# Release APK
+./gradlew assembleRelease
 ```
-app/build/outputs/apk/debug/app-debug.apk
-```
 
-### Option 2: Automated GitHub Builds
-When this repository is pushed to GitHub, GitHub Actions will automatically compile the project and make the APK available under the **Actions** tab as an artifact (`meskot-debug-apk`).
-
----
-
-## Building from Source
-
-### Prerequisites
-- **Android Studio** (Hedgehog / Iguana / Ladybug or newer recommended)
-- **JDK 17** or higher
-- **Android SDK Platform 34+** (minSdk 24, compileSdk 36)
-
-### Build Steps
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/<your-username>/meskot.git
-   cd meskot
-   ```
-
-2. **Firebase Setup:**
-   - Create a project on the [Firebase Console](https://console.firebase.google.com/).
-   - Add an Android app with package name `com.aistudio.meskot.zqkv` (or your chosen package name).
-   - Download `google-services.json` and place it in the `app/` folder.
-
-3. **Build the Debug APK:**
-   - On Linux / macOS:
-     ```bash
-     ./gradlew assembleDebug
-     ```
-   - On Windows:
-     ```cmd
-     gradlew.bat assembleDebug
-     ```
-
-4. The resulting APK will be located at:
-   ```
-   app/build/outputs/apk/debug/app-debug.apk
-   ```
+The compiled APKs will be located at:
+- `app/build/outputs/apk/debug/app-debug.apk`
+- `app/build/outputs/apk/release/app-release.apk`
 
 ---
 
 ## Publishing to GitHub
 
-To push this repository to GitHub:
+Follow these steps to initialize and push this codebase to your own GitHub repository:
 
 ```bash
-# 1. Initialize git (if not already done)
+# 1. Initialize git repository
 git init
 
-# 2. Stage all files (respecting .gitignore)
+# 2. Stage all project files (respecting .gitignore)
 git add .
 
-# 3. Commit
-git commit -m "Initial commit: Meskot social app"
+# 3. Create initial commit
+git commit -m "Initial commit: Meskot social network v1.0.0"
 
-# 4. Set main branch and connect your remote
+# 4. Set default branch to main
 git branch -M main
+
+# 5. Link to your GitHub remote repository
 git remote add origin https://github.com/<your-username>/<your-repo-name>.git
 
-# 5. Push to GitHub
+# 6. Push to GitHub
 git push -u origin main
 ```
 
-To create a GitHub Release with the APK:
-1. Go to your GitHub repository.
-2. Click **Releases** > **Draft a new release**.
-3. Create a new tag (e.g. `v1.0.0`).
-4. Drag and drop `app/build/outputs/apk/debug/app-debug.apk` into the release binaries section.
-5. Click **Publish release**.
+### Creating a GitHub Release with the APK
+
+1. On GitHub, navigate to your repository's main page.
+2. In the right sidebar, click **Releases** > **Draft a new release**.
+3. In the **Choose a tag** dropdown, enter a release tag (e.g. `v1.0.0`) and select **Create new tag**.
+4. Set the release title (e.g., `Meskot v1.0.0 - Production Release`).
+5. Under the description field, drag and drop `app-release.apk` (or `app-debug.apk`) into the **Attach binaries by dropping them here or selecting them** box.
+6. Click **Publish release**.
 
 ---
 
 ## Architecture & Tech Stack
 
-- **Language:** Kotlin 2.x
-- **UI Toolkit:** Jetpack Compose with Material Design 3 (M3)
-- **State Management:** Android ViewModel, Kotlin Coroutines, StateFlow
-- **Backend & Database:** Firebase Authentication, Cloud Firestore, Realtime Database
-- **Media & Camera:** AndroidX CameraX, Coil for Compose
-- **Build System:** Gradle Kotlin DSL (`build.gradle.kts`) with Version Catalog (`libs.versions.toml`)
+```
+com.example/
+├── data/
+│   ├── Models.kt              # App data entities (User, Post, Comment, AdCampaign, CarouselAdCard)
+│   ├── Strings.kt             # English and Amharic localized strings dictionary
+│   ├── FirebaseManager.kt     # Firestore, Auth, and Storage SDK operations
+│   └── MeskotRepository.kt    # Single source of truth repository with StateFlow
+├── recommendation/
+│   ├── UserInterestModels.kt  # User interaction tracking
+│   └── UserInterestTracker.kt # Personalized feed ranking algorithm
+└── ui/
+    ├── MainActivity.kt        # Entry-point Activity with Scaffold, navigation tabs, and top bar
+    ├── MeskotViewModel.kt     # ViewModel managing UI states, actions, and dialogs
+    ├── components/
+    │   ├── CarouselAdCard.kt  # Snap-scrolling Horizontal Carousel Ads with peek & CTAs
+    │   ├── InteractiveText.kt # Auto-linking parser for URLs, emails, phones, tags, mentions
+    │   ├── NavigationBars.kt  # Bottom luxury icon navigation bar & top bar
+    │   ├── PostCard.kt        # Feed post renderer with reactions, comments, media grids
+    │   ├── ReelComponents.kt  # Short clip creator, viewer, comments, and rail
+    │   └── StoryComponents.kt # 24-hour stories rail and viewer
+    ├── screens/
+    │   ├── FeedScreen.kt      # Main social feed with stories, posts, and ad slots
+    │   ├── MarketplaceScreen.kt # Meskot Bazaar with search, filters, and seller chat
+    │   ├── ReelsScreen.kt     # Meskot Cinema Clips Lounge (Cinema Stream & Mosaic)
+    │   ├── ProfileAndMenuScreens.kt # User profiles with Personal Details privacy lock
+    │   └── AdsManagerScreen.kt# Advertiser campaign creator and analytics
+    └── theme/
+        ├── Color.kt           # Meskot Gold, Obsidian, Paper, and Cross Red palette
+        └── Theme.kt           # Material 3 dynamic color scheme and typography
+```
+
+- **Build System:** Gradle Kotlin DSL with Version Catalog (`gradle/libs.versions.toml`)
+- **Minimum SDK:** API 24 (Android 7.0)
+- **Target SDK / Compile SDK:** API 36 (Android 15+)
+- **Java Compatibility:** Java 21
+
+---
+
+## License
+
+This project is licensed under the Apache License 2.0.

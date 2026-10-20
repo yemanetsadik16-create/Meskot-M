@@ -77,6 +77,7 @@ import com.example.ui.MeskotViewModel
 import com.example.ui.components.FacebookPostDivider
 import com.example.ui.components.FacebookStoriesRail
 import com.example.ui.components.PostCard
+import com.example.ui.components.SponsoredCarouselAdCard
 import com.example.ui.components.UserAvatar
 import com.example.ui.theme.*
 
@@ -368,16 +369,24 @@ fun FeedScreen(
             // If there are active campaigns and very few posts, ensure the latest active campaign is shown near top
             if (activeAdCampaigns.isNotEmpty() && feedPosts.size < 2) {
                 items(activeAdCampaigns, key = { "sponsored_top_${it.id}" }) { campaign ->
-                    SponsoredFeedAdCard(
-                        campaign = campaign,
-                        onImpression = { viewModel.recordAdImpression(campaign.id) },
-                        onClickAd = { recordConversion ->
-                            viewModel.recordAdClick(campaign.id, recordConversion)
-                        },
-                        onEngagementClick = {
-                            viewModel.recordAdClick(campaign.id, recordConversion = true)
-                        }
-                    )
+                    if (campaign.carouselCards.isNotEmpty()) {
+                        SponsoredCarouselAdCard(
+                            campaign = campaign,
+                            onImpression = { viewModel.recordAdImpression(campaign.id) },
+                            onClickAd = { _, isCta -> viewModel.recordAdClick(campaign.id, isCta) }
+                        )
+                    } else {
+                        SponsoredFeedAdCard(
+                            campaign = campaign,
+                            onImpression = { viewModel.recordAdImpression(campaign.id) },
+                            onClickAd = { recordConversion ->
+                                viewModel.recordAdClick(campaign.id, recordConversion)
+                            },
+                            onEngagementClick = {
+                                viewModel.recordAdClick(campaign.id, recordConversion = true)
+                            }
+                        )
+                    }
                 }
             }
 
@@ -411,16 +420,24 @@ fun FeedScreen(
                     val adIndex = (index / 2) % activeAdCampaigns.size
                     val campaign = activeAdCampaigns[adIndex]
                     item(key = "sponsored_feed_${campaign.id}_slot_$index") {
-                        SponsoredFeedAdCard(
-                            campaign = campaign,
-                            onImpression = { viewModel.recordAdImpression(campaign.id) },
-                            onClickAd = { recordConversion ->
-                                viewModel.recordAdClick(campaign.id, recordConversion)
-                            },
-                            onEngagementClick = {
-                                viewModel.recordAdClick(campaign.id, recordConversion = true)
-                            }
-                        )
+                        if (campaign.carouselCards.isNotEmpty()) {
+                            SponsoredCarouselAdCard(
+                                campaign = campaign,
+                                onImpression = { viewModel.recordAdImpression(campaign.id) },
+                                onClickAd = { _, isCta -> viewModel.recordAdClick(campaign.id, isCta) }
+                            )
+                        } else {
+                            SponsoredFeedAdCard(
+                                campaign = campaign,
+                                onImpression = { viewModel.recordAdImpression(campaign.id) },
+                                onClickAd = { recordConversion ->
+                                    viewModel.recordAdClick(campaign.id, recordConversion)
+                                },
+                                onEngagementClick = {
+                                    viewModel.recordAdClick(campaign.id, recordConversion = true)
+                                }
+                            )
+                        }
                     }
                 }
             }
