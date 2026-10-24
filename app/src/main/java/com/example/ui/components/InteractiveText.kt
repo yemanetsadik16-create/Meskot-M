@@ -4,18 +4,14 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -33,7 +29,7 @@ import com.example.ui.theme.GoldDeep
  * 2. Email -> mailto:
  * 3. Phone -> tel: dialer
  * 4. Hashtag -> Feed filter
- * 5. Mention -> Profile navigation
+ * 5. Mention -> Profile or group navigation
  */
 enum class EntityType {
     URL,
@@ -54,8 +50,10 @@ data class ParsedEntity(
 object InteractiveTextParser {
 
     // Regex definitions
+    // Matches http://, https://, www., and common domain suffixes (e.g. google.com, meskot.et, github.com)
     private val URL_REGEX = Regex(
-        "(?:https?://|www\\.)[-a-zA-Z0-9@:%._+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=]*)",
+        "(?:https?://|www\\.|(?:[a-zA-Z0-9-]+\\.)+(?:com|org|net|et|edu|gov|io|me|app|ai|co|info|biz|tv|ly|online|xyz|store|dev|tech|page))" +
+        "[-a-zA-Z0-9@:%._+~#=]{0,256}(?:/[a-zA-Z0-9()@:%_+.~#?&/=]*)?",
         RegexOption.IGNORE_CASE
     )
 
@@ -64,9 +62,9 @@ object InteractiveTextParser {
         RegexOption.IGNORE_CASE
     )
 
-    // Supports domestic (e.g. 0911234567, 0712345678) and international (+251..., +1...) formats
+    // Supports domestic (e.g. 0911234567, 0712345678, 0911-23-45-67) and international (+251..., +1-800-555-0199) formats
     private val PHONE_REGEX = Regex(
-        "(?:\\+?\\d{1,3}[-.\\s]?)?\\(?\\d{2,4}\\)?[-.\\s]?\\d{3,4}[-.\\s]?\\d{3,9}"
+        "(?:\\+?\\d{1,4}[-.\\s]?)?(?:\\(\\d{2,4}\\)[-.\\s]?|\\d{2,4}[-.\\s]?)\\d{2,4}[-.\\s]?\\d{2,9}"
     )
 
     private val HASHTAG_REGEX = Regex(
@@ -74,11 +72,11 @@ object InteractiveTextParser {
     )
 
     private val MENTION_REGEX = Regex(
-        "@[a-zA-Z0-9_.]+"
+        "@[a-zA-Z0-9_\\u1200-\\u137F.]+"
     )
 
     // Trailing punctuation characters to strip from matches if attached to the end
-    private val TRAILING_PUNCTUATION = setOf('.', ',', '!', '?', ';', ':', ')', ']', '}', '\'', '"', '>')
+    private val TRAILING_PUNCTUATION = setOf('.', ',', '!', '?', ';', ':', ')', ']', '}', '\'', '"', '>', '-')
 
     /**
      * Parses the given text and returns a sorted list of non-overlapping entities.
@@ -111,10 +109,13 @@ object InteractiveTextParser {
         // 5. Phone numbers
         for (match in PHONE_REGEX.findAll(text)) {
             val trimmed = match.value.trim()
-            // Ensure minimum 7 digits to prevent false positives on numbers
             val digitCount = trimmed.count { it.isDigit() }
             if (digitCount in 7..15) {
-                cleanAndAdd(trimmed, match.range.first, EntityType.PHONE, rawMatches)
+                // Ignore date formats such as 2026-10-20 or 20/10/2026
+                val isDate = trimmed.matches(Regex("\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{4}"))
+                if (!isDate) {
+                    cleanAndAdd(trimmed, match.range.first, EntityType.PHONE, rawMatches)
+                }
             }
         }
 
@@ -180,7 +181,6 @@ object InteractiveTextParser {
                     append(text.substring(currentPos, entity.startIndex))
                 }
 
-                val tagId = "${entity.type.name}_${entity.startIndex}"
                 pushStringAnnotation(tag = entity.type.name, annotation = entity.value)
 
                 val (styleColor, weight, decoration) = when (entity.type) {
@@ -224,7 +224,7 @@ object InteractiveTextParser {
         try {
             when (entityType) {
                 EntityType.URL -> {
-                    val fullUrl = if (!value.startsWith("http://") && !value.startsWith("https://")) {
+                    val fullUrl = if (!value.startsWith("http://", ignoreCase = true) && !value.startsWith("https://", ignoreCase = true)) {
                         "https://$value"
                     } else {
                         value
@@ -232,28 +232,40 @@ object InteractiveTextParser {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(fullUrl)).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
-                    context.startActivity(intent)
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Opening link: $fullUrl", Toast.LENGTH_SHORT).show()
+                    }
                 }
                 EntityType.EMAIL -> {
                     val intent = Intent(Intent.ACTION_SENDTO).apply {
                         data = Uri.parse("mailto:$value")
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
-                    context.startActivity(intent)
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Email: $value", Toast.LENGTH_SHORT).show()
+                    }
                 }
                 EntityType.PHONE -> {
                     val cleanNumber = value.filter { it.isDigit() || it == '+' }
                     val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$cleanNumber")).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
-                    context.startActivity(intent)
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Dialing: $cleanNumber", Toast.LENGTH_SHORT).show()
+                    }
                 }
                 EntityType.HASHTAG -> {
                     val tag = value.removePrefix("#")
                     if (onHashtagClick != null) {
                         onHashtagClick(tag)
                     } else {
-                        Toast.makeText(context, "Explore #$tag", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Exploring #$tag on Meskot", Toast.LENGTH_SHORT).show()
                     }
                 }
                 EntityType.MENTION -> {
@@ -261,18 +273,19 @@ object InteractiveTextParser {
                     if (onMentionClick != null) {
                         onMentionClick(username)
                     } else {
-                        Toast.makeText(context, "Viewing @$username's profile", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Viewing @$username", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
         } catch (e: Exception) {
-            Toast.makeText(context, "Could not open action: ${e.localizedMessage ?: "Unknown"}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Action: ${e.localizedMessage ?: "App not found"}", Toast.LENGTH_SHORT).show()
         }
     }
 }
 
 /**
  * Reusable Jetpack Compose Interactive Text Component
+ * Backed by ClickableText with exact character range matching for reliable tap detection.
  */
 @Composable
 fun InteractiveSocialText(
@@ -307,65 +320,9 @@ fun InteractiveSocialText(
         )
     }
 
-    var textLayoutResult: TextLayoutResult? = null
-
-    BasicText(
+    ClickableText(
         text = annotatedString,
-        modifier = modifier.pointerInput(annotatedString) {
-            detectTapGestures { offset ->
-                val layout = textLayoutResult ?: return@detectTapGestures
-                val characterPosition = layout.getOffsetForPosition(offset)
-
-                // Check all entity types
-                var clickedEntity = false
-                for (type in EntityType.values()) {
-                    val annotations = annotatedString.getStringAnnotations(
-                        tag = type.name,
-                        start = characterPosition,
-                        end = characterPosition
-                    )
-                    val annotation = annotations.firstOrNull()
-                    if (annotation != null) {
-                        clickedEntity = true
-                        when (type) {
-                            EntityType.URL -> {
-                                if (onUrlClick != null) onUrlClick(annotation.item)
-                                else InteractiveTextParser.handleDefaultEntityClick(context, type, annotation.item)
-                            }
-                            EntityType.EMAIL -> {
-                                if (onEmailClick != null) onEmailClick(annotation.item)
-                                else InteractiveTextParser.handleDefaultEntityClick(context, type, annotation.item)
-                            }
-                            EntityType.PHONE -> {
-                                if (onPhoneClick != null) onPhoneClick(annotation.item)
-                                else InteractiveTextParser.handleDefaultEntityClick(context, type, annotation.item)
-                            }
-                            EntityType.HASHTAG -> {
-                                InteractiveTextParser.handleDefaultEntityClick(
-                                    context = context,
-                                    entityType = type,
-                                    value = annotation.item,
-                                    onHashtagClick = onHashtagClick
-                                )
-                            }
-                            EntityType.MENTION -> {
-                                InteractiveTextParser.handleDefaultEntityClick(
-                                    context = context,
-                                    entityType = type,
-                                    value = annotation.item,
-                                    onMentionClick = onMentionClick
-                                )
-                            }
-                        }
-                        break
-                    }
-                }
-
-                if (!clickedEntity && onNonEntityClick != null) {
-                    onNonEntityClick()
-                }
-            }
-        },
+        modifier = modifier,
         style = TextStyle(
             color = color,
             fontSize = fontSize,
@@ -375,6 +332,55 @@ fun InteractiveSocialText(
         ),
         maxLines = maxLines,
         overflow = overflow,
-        onTextLayout = { textLayoutResult = it }
+        onClick = { characterPosition ->
+            var clickedEntity = false
+
+            val allAnnotations = annotatedString.getStringAnnotations(
+                start = 0,
+                end = annotatedString.length
+            )
+            val matched = allAnnotations.firstOrNull { characterPosition in it.start until it.end }
+
+            if (matched != null) {
+                clickedEntity = true
+                val type = runCatching { EntityType.valueOf(matched.tag) }.getOrNull()
+                if (type != null) {
+                    when (type) {
+                        EntityType.URL -> {
+                            if (onUrlClick != null) onUrlClick(matched.item)
+                            else InteractiveTextParser.handleDefaultEntityClick(context, type, matched.item)
+                        }
+                        EntityType.EMAIL -> {
+                            if (onEmailClick != null) onEmailClick(matched.item)
+                            else InteractiveTextParser.handleDefaultEntityClick(context, type, matched.item)
+                        }
+                        EntityType.PHONE -> {
+                            if (onPhoneClick != null) onPhoneClick(matched.item)
+                            else InteractiveTextParser.handleDefaultEntityClick(context, type, matched.item)
+                        }
+                        EntityType.HASHTAG -> {
+                            if (onHashtagClick != null) onHashtagClick(matched.item)
+                            else InteractiveTextParser.handleDefaultEntityClick(
+                                context = context,
+                                entityType = type,
+                                value = matched.item
+                            )
+                        }
+                        EntityType.MENTION -> {
+                            if (onMentionClick != null) onMentionClick(matched.item)
+                            else InteractiveTextParser.handleDefaultEntityClick(
+                                context = context,
+                                entityType = type,
+                                value = matched.item
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (!clickedEntity && onNonEntityClick != null) {
+                onNonEntityClick()
+            }
+        }
     )
 }

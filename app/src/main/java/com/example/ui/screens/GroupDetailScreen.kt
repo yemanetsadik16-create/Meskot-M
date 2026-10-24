@@ -134,6 +134,7 @@ fun GroupDetailScreen(
     val allUsers by viewModel.users.collectAsState()
     val groupPostsMap by viewModel.groupPostsMap.collectAsState()
     val roleOverrides by viewModel.groupRoleOverrides.collectAsState()
+    val savedPostIds by viewModel.savedPostIds.collectAsState()
 
     val liveGroup = allGroups.find { it.id == group.id } ?: group
     val rawPosts = groupPostsMap[liveGroup.id] ?: viewModel.getGroupPosts(liveGroup.id)
@@ -345,10 +346,13 @@ fun GroupDetailScreen(
                 val comments = viewModel.getComments(post.id)
                 PostCard(
                     post = post,
+                    isSaved = savedPostIds.contains(post.id),
                     currentUserId = currentUser?.uid,
                     comments = comments,
                     currentLanguage = currentLanguage,
                     onAuthorClick = { viewModel.openProfileByUid(it) },
+                    onHashtagClick = { tag -> viewModel.filterByHashtag(tag) },
+                    onMentionClick = { mention -> viewModel.openProfileByMention(mention) },
                     onToggleReaction = { pid, type -> viewModel.toggleReaction(pid, type) },
                     onShare = { viewModel.sharePost(it) },
                     onToggleSave = { viewModel.toggleSavePost(it) },

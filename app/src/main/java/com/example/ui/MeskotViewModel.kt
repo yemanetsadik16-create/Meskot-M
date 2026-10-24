@@ -288,6 +288,22 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _isLiveStreamOpen.value = false
     }
 
+    private val _incomingLiveAlert = MutableStateFlow<LiveStreamSession?>(null)
+    val incomingLiveAlert: StateFlow<LiveStreamSession?> = _incomingLiveAlert.asStateFlow()
+
+    fun dismissLiveAlert() {
+        _incomingLiveAlert.value = null
+    }
+
+    fun setIncomingLiveAlert(session: LiveStreamSession?) {
+        _incomingLiveAlert.value = session
+    }
+
+    fun joinLiveStreamById(streamId: String) {
+        val session = activeLiveStreams.value.find { it.id == streamId }
+        openLiveStream(session)
+    }
+
     fun sendLiveComment(text: String) {
         repository.sendLiveComment(text)
     }
@@ -546,14 +562,50 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _isInterestModalOpen.value = false
     }
 
-    // Filtered Feed posts with Algorithmic Boost Weighting & AI Interest Scoring
+    private val _activeHashtagFilter = MutableStateFlow<String?>(null)
+    val activeHashtagFilter: StateFlow<String?> = _activeHashtagFilter.asStateFlow()
+
+    fun filterByHashtag(tag: String) {
+        val clean = tag.removePrefix("#").trim()
+        if (_activeHashtagFilter.value.equals(clean, ignoreCase = true)) {
+            _activeHashtagFilter.value = null
+            showMessage("Cleared #$clean filter")
+        } else {
+            _activeHashtagFilter.value = clean
+            navigateTo(ScreenTab.FEED)
+            showMessage("Filtering feed by #$clean")
+        }
+    }
+
+    fun clearHashtagFilter() {
+        _activeHashtagFilter.value = null
+    }
+
+    fun openProfileByMention(mention: String) {
+        val clean = mention.removePrefix("@").trim()
+        val allUsers = repository.users.value
+        val match = allUsers.find { u ->
+            u.uid.equals(clean, ignoreCase = true) ||
+            u.displayName.replace(" ", "").equals(clean, ignoreCase = true) ||
+            u.displayName.contains(clean, ignoreCase = true) ||
+            u.email.substringBefore("@").equals(clean, ignoreCase = true)
+        }
+        if (match != null) {
+            openProfile(match)
+        } else {
+            showMessage("User @$clean was not found")
+        }
+    }
+
+    // Filtered Feed posts with Algorithmic Boost Weighting & AI Interest Scoring & Hashtag Filter
     val feedPosts: StateFlow<List<Post>> = combine(
         combine(
             repository.posts,
             repository.hiddenPostIds,
             repository.currentUser,
-            repository.friends
-        ) { posts, hidden, user, friendsSet ->
+            repository.friends,
+            repository.savedPostIds
+        ) { posts, hidden, user, friendsSet, savedIds ->
             posts.filter { post ->
                 if (hidden.contains(post.id)) return@filter false
                 when (post.visibility) {
@@ -562,12 +614,26 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
                     "onlyme" -> post.uid == user?.uid
                     else -> true
                 }
+            }.map { post ->
+                post.copy(isSaved = savedIds.contains(post.id))
             }
         },
         UserInterestTracker.activeProfile,
-        UserInterestTracker.personalizationEnabled
-    ) { basePosts: List<Post>, _, personalizationOn: Boolean ->
-        basePosts.sortedWith(
+        UserInterestTracker.personalizationEnabled,
+        _activeHashtagFilter
+    ) { basePosts: List<Post>, _, personalizationOn: Boolean, activeTag: String? ->
+        val filtered = if (!activeTag.isNullOrBlank()) {
+            val tagLower = activeTag.lowercase()
+            basePosts.filter { post ->
+                post.text.lowercase().contains("#$tagLower") ||
+                post.tags.any { it.lowercase() == tagLower } ||
+                post.text.lowercase().contains(tagLower)
+            }
+        } else {
+            basePosts
+        }
+
+        filtered.sortedWith(
             compareByDescending<Post> { if (it.isBoosted) 1 else 0 }
                 .thenByDescending { post ->
                     val interestWeight = if (personalizationOn) UserInterestTracker.computePostRelevanceWeight(post) else 1.0
@@ -805,7 +871,12 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
     fun toggleSavePost(postId: String) {
         val wasSaved = repository.savedPostIds.value.contains(postId)
         repository.toggleSavePost(postId)
-        showMessage(if (wasSaved) "Removed from Saved" else "Saved to your bookmarks")
+        val msg = if (wasSaved) {
+            if (currentLanguage.value == AppLanguage.AM) "ከዕልባት ተወግዷል" else "Removed from bookmarks"
+        } else {
+            if (currentLanguage.value == AppLanguage.AM) "ዕልባት ተደርጓል ✨" else "Saved to your bookmarks ✨"
+        }
+        showMessage(msg)
         val post = repository.posts.value.find { it.id == postId }
         if (post != null) {
             UserInterestTracker.recordEvent(
@@ -1609,6 +1680,36 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         _isEditProfileOpen.value = false
     }
 
+    fun setPersonalDetailsPrivacy(privacy: String) {
+        repository.setPersonalDetailsPrivacy(privacy)
+        val msg = when (privacy) {
+            "only_me", "onlyme" -> if (currentLanguage.value == AppLanguage.AM) "የግል መረጃዎች ለኔ ብቻ (Only me) ተደርገዋል 🔒" else "Personal details set to Only me 🔒"
+            "friends" -> if (currentLanguage.value == AppLanguage.AM) "የግል መረጃዎች ለወዳጆች ብቻ ተደርገዋል 👥" else "Personal details visible to Connections 👥"
+            else -> if (currentLanguage.value == AppLanguage.AM) "የግል መረጃዎች ለሁሉም (Public) ተደርገዋል 🌐" else "Personal details set to Public 🌐"
+        }
+        showMessage(msg)
+    }
+
+    fun setIndividualFieldPrivacy(field: String, privacy: String) {
+        repository.setIndividualFieldPrivacy(field, privacy)
+        val fieldLabel = when (field.lowercase()) {
+            "work", "workplace" -> "Workplace"
+            "education", "school" -> "Education"
+            "location", "city" -> "Current city"
+            "hometown" -> "Hometown"
+            "birthday", "birthdate" -> "Birthday"
+            "gender" -> "Gender"
+            "profession", "category" -> "Category"
+            else -> "Personal details"
+        }
+        val privacyLabel = when (privacy) {
+            "only_me", "onlyme" -> "Only me 🔒"
+            "friends" -> "Connections 👥"
+            else -> "Public 🌐"
+        }
+        showMessage("$fieldLabel audience set to $privacyLabel")
+    }
+
     fun saveProfile(
         name: String,
         bio: String,
@@ -1623,6 +1724,14 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
         workRole: String = "",
         education: String = "",
         educationClass: String = "",
+        personalDetailsPrivacy: String? = null,
+        professionPrivacy: String? = null,
+        locationPrivacy: String? = null,
+        hometownPrivacy: String? = null,
+        workPrivacy: String? = null,
+        educationPrivacy: String? = null,
+        birthdayPrivacy: String? = null,
+        genderPrivacy: String? = null,
         onSaved: ((Boolean) -> Unit)? = null
     ) {
         repository.updateProfile(
@@ -1638,7 +1747,15 @@ class MeskotViewModel(private val repository: MeskotRepository) : ViewModel() {
             workplace = workplace,
             workRole = workRole,
             education = education,
-            educationClass = educationClass
+            educationClass = educationClass,
+            personalDetailsPrivacy = personalDetailsPrivacy,
+            professionPrivacy = professionPrivacy,
+            locationPrivacy = locationPrivacy,
+            hometownPrivacy = hometownPrivacy,
+            workPrivacy = workPrivacy,
+            educationPrivacy = educationPrivacy,
+            birthdayPrivacy = birthdayPrivacy,
+            genderPrivacy = genderPrivacy
         ) { success, err ->
             if (success) {
                 showMessage("Personal details saved to server")

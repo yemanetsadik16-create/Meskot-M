@@ -194,6 +194,17 @@ object CallAudioManager {
         }
     }
 
+    // Play crisp live stream alert chime when followed creator enters live (TikTok-style)
+    fun playLiveStreamAlertSound(context: Context) {
+        try {
+            val alertUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val ringtone = RingtoneManager.getRingtone(context.applicationContext, alertUri)
+            ringtone?.play()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to play live alert chime: ${e.message}")
+        }
+    }
+
     // Play crisp confirmation tone when user sends a message
     fun playMessageSentSound() {
         try {

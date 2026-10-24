@@ -49,6 +49,7 @@ import com.example.ui.components.ChapaDepositModal
 import com.example.ui.components.ChapaPaymentModal
 import com.example.ui.components.MeskotLiveStreamModal
 import com.example.ui.components.MeskotSplashScreen
+import com.example.ui.components.TikTokLiveAlertBanner
 import com.example.ui.components.TopNavBar
 import com.example.util.CallAudioManager
 import com.example.ui.screens.AdminDashboardScreen
@@ -119,6 +120,13 @@ class MainActivity : ComponentActivity() {
                         }
                         "friends", "friend_request" -> viewModel.navigateTo(ScreenTab.FRIENDS)
                         "notifications" -> viewModel.navigateTo(ScreenTab.NOTIFICATIONS)
+                        "live", "live_stream" -> {
+                            if (targetId.isNotBlank()) {
+                                viewModel.joinLiveStreamById(targetId)
+                            } else {
+                                viewModel.openLiveStream()
+                            }
+                        }
                         else -> viewModel.navigateTo(ScreenTab.FEED)
                     }
                     pendingNotificationTarget = null
@@ -204,6 +212,7 @@ fun MeskotApp(viewModel: MeskotViewModel) {
     val currentLiveSession by viewModel.currentLiveSession.collectAsState()
     val currentLiveMessages by viewModel.currentLiveMessages.collectAsState()
     val isInterestModalOpen by viewModel.isInterestModalOpen.collectAsState()
+    val incomingLiveAlert by viewModel.incomingLiveAlert.collectAsState()
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as? android.app.Activity
@@ -861,7 +870,7 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         currentUser = currentUser!!,
                         currentLanguage = currentLanguage,
                         onDismiss = { viewModel.closeEditProfile() },
-                        onSave = { name, bio, photoUrl, gender, birthDate, coverPhotoUrl, profession, location, hometown, workplace, workRole, education, educationClass ->
+                        onSave = { name, bio, photoUrl, gender, birthDate, coverPhotoUrl, profession, location, hometown, workplace, workRole, education, educationClass, privacy, profPriv, locPriv, homePriv, workPriv, eduPriv, bdayPriv, genderPriv ->
                             viewModel.saveProfile(
                                 name = name,
                                 bio = bio,
@@ -875,7 +884,15 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                                 workplace = workplace,
                                 workRole = workRole,
                                 education = education,
-                                educationClass = educationClass
+                                educationClass = educationClass,
+                                personalDetailsPrivacy = privacy,
+                                professionPrivacy = profPriv,
+                                locationPrivacy = locPriv,
+                                hometownPrivacy = homePriv,
+                                workPrivacy = workPriv,
+                                educationPrivacy = eduPriv,
+                                birthdayPrivacy = bdayPriv,
+                                genderPrivacy = genderPriv
                             )
                         }
                     )
@@ -944,6 +961,17 @@ fun MeskotApp(viewModel: MeskotViewModel) {
                         onEndLive = { viewModel.closeLiveStream() }
                     )
                 }
+
+                // TikTok-style Live Broadcast Alert Banner (Slide down from top)
+                TikTokLiveAlertBanner(
+                    session = incomingLiveAlert,
+                    currentLanguage = currentLanguage,
+                    onWatch = { session ->
+                        viewModel.dismissLiveAlert()
+                        viewModel.openLiveStream(session)
+                    },
+                    onDismiss = { viewModel.dismissLiveAlert() }
+                )
             }
         }
     }

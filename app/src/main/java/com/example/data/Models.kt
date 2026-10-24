@@ -201,8 +201,56 @@ data class User(
     val verificationPaymentMethod: String = "",
     val savedPostIds: List<String> = emptyList(),
     val subscribedPostIds: List<String> = emptyList(),
-    val isPersonalDetailsLocked: Boolean = false
-)
+    val isPersonalDetailsLocked: Boolean = false,
+    val personalDetailsPrivacy: String = "public", // "public", "friends", "only_me"
+    val professionPrivacy: String = "public",
+    val locationPrivacy: String = "public",
+    val hometownPrivacy: String = "public",
+    val workPrivacy: String = "public",
+    val educationPrivacy: String = "public",
+    val birthdayPrivacy: String = "public",
+    val genderPrivacy: String = "public"
+) {
+    fun canViewDetail(privacy: String, viewerUid: String?, isFriend: Boolean = false): Boolean {
+        if (viewerUid == uid) return true
+        return when (privacy.lowercase()) {
+            "only_me", "onlyme", "private" -> false
+            "friends" -> isFriend
+            else -> !isPersonalDetailsLocked
+        }
+    }
+
+    fun canViewProfession(viewerUid: String?, isFriend: Boolean = false): Boolean =
+        canViewDetail(professionPrivacy, viewerUid, isFriend)
+
+    fun canViewLocation(viewerUid: String?, isFriend: Boolean = false): Boolean =
+        canViewDetail(locationPrivacy, viewerUid, isFriend)
+
+    fun canViewHometown(viewerUid: String?, isFriend: Boolean = false): Boolean =
+        canViewDetail(hometownPrivacy, viewerUid, isFriend)
+
+    fun canViewWork(viewerUid: String?, isFriend: Boolean = false): Boolean =
+        canViewDetail(workPrivacy, viewerUid, isFriend)
+
+    fun canViewEducation(viewerUid: String?, isFriend: Boolean = false): Boolean =
+        canViewDetail(educationPrivacy, viewerUid, isFriend)
+
+    fun canViewBirthday(viewerUid: String?, isFriend: Boolean = false): Boolean =
+        canViewDetail(birthdayPrivacy, viewerUid, isFriend)
+
+    fun canViewGender(viewerUid: String?, isFriend: Boolean = false): Boolean =
+        canViewDetail(genderPrivacy, viewerUid, isFriend)
+
+    fun canViewPersonalDetails(viewerUid: String?, isFriend: Boolean = false): Boolean {
+        if (viewerUid == uid) return true
+        if (isPersonalDetailsLocked) return false
+        return when (personalDetailsPrivacy.lowercase()) {
+            "only_me", "onlyme", "private" -> false
+            "friends" -> isFriend
+            else -> true
+        }
+    }
+}
 
 enum class VerificationStatus {
     NONE,
@@ -340,7 +388,8 @@ data class Comment(
     val likes: Map<String, Boolean> = emptyMap(),
     val createdAt: Long = System.currentTimeMillis(),
     val editedAt: Long? = null,
-    val isAuthorVerified: Boolean = false
+    val isAuthorVerified: Boolean = false,
+    val imageUrl: String? = null
 )
 
 enum class UserGroupRole {

@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,8 +10,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,7 +42,12 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.ui.platform.LocalContext
-import com.example.util.LocationHelper
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.draw.scale
+import androidx.compose.material.icons.filled.Bookmark
+import com.example.ui.theme.LuxuryGoldAccent
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -86,6 +94,7 @@ import com.example.data.SharedPostPreview
 import com.example.ui.theme.CardBg
 import com.example.ui.theme.CrossRed
 import com.example.ui.theme.Gold
+import com.example.ui.theme.GoldBorder
 import com.example.ui.theme.GoldDeep
 import com.example.ui.theme.GoldSurface
 import com.example.ui.theme.Ink
@@ -143,9 +152,13 @@ fun PostCard(
     onBoostClick: (Post) -> Unit = {},
     onUnlockVip: (String) -> Unit = {},
     onReelClick: (Post) -> Unit = {},
+    onHashtagClick: (String) -> Unit = {},
+    onMentionClick: (String) -> Unit = {},
+    isSaved: Boolean = post.isSaved,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isPostSaved = isSaved || post.isSaved
     var isCommentsOpen by remember { mutableStateOf(false) }
     var isReactionPickerOpen by remember { mutableStateOf(false) }
     var isExpandedText by remember { mutableStateOf(false) }
@@ -376,10 +389,8 @@ fun PostCard(
                                 linkColor = Color.White,
                                 mentionColor = Color(0xFFFFD700),
                                 hashtagColor = Color(0xFFFFD700),
-                                onHashtagClick = { tag ->
-                                    android.widget.Toast.makeText(context, "Exploring #$tag on Meskot", android.widget.Toast.LENGTH_SHORT).show()
-                                },
-                                onMentionClick = { mention -> onAuthorClick(mention) }
+                                onHashtagClick = { tag -> onHashtagClick(tag) },
+                                onMentionClick = { mention -> onMentionClick(mention) }
                             )
                         }
                     } else {
@@ -396,10 +407,8 @@ fun PostCard(
                                 linkColor = GoldDeep,
                                 mentionColor = Color(0xFF1877F2),
                                 hashtagColor = GoldDeep,
-                                onHashtagClick = { tag ->
-                                    android.widget.Toast.makeText(context, "Exploring #$tag on Meskot", android.widget.Toast.LENGTH_SHORT).show()
-                                },
-                                onMentionClick = { mention -> onAuthorClick(mention) },
+                                onHashtagClick = { tag -> onHashtagClick(tag) },
+                                onMentionClick = { mention -> onMentionClick(mention) },
                                 onNonEntityClick = { if (isLong) isExpandedText = !isExpandedText }
                             )
                             if (isLong) {
@@ -432,8 +441,80 @@ fun PostCard(
                     SharedPostBox(
                         shared = post.sharedPost,
                         currentLanguage = currentLanguage,
-                        onAuthorClick = onAuthorClick
+                        onAuthorClick = onAuthorClick,
+                        onHashtagClick = onHashtagClick,
+                        onMentionClick = onMentionClick
                     )
+                }
+            }
+
+            // Facebook-Style Dedicated Creator Boost Bar (Only visible to post owner)
+            if (post.uid == currentUserId) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (post.isBoosted) Color(0xFFF0FDF4) else Color(0xFFFFFBEB),
+                    border = BorderStroke(1.dp, if (post.isBoosted) Color(0xFF86EFAC) else Color(0xFFFDE68A))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(text = "🚀", fontSize = 16.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = if (post.isBoosted) MeskotStrings.get("boostedBadge", currentLanguage) + " · Active" else MeskotStrings.get("boostPost", currentLanguage),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (post.isBoosted) Color(0xFF15803D) else Color(0xFFB45309),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                                Text(
+                                    text = if (post.isBoosted) {
+                                        if (currentLanguage == AppLanguage.AM) "ይዘቱ በልዩ እይታ ላይ ነው (${post.boostMultiplier}x ተደራሽነት)"
+                                        else "Share is in Spotlight (${post.boostMultiplier}x reach)"
+                                    } else {
+                                        if (currentLanguage == AppLanguage.AM) "እይታዎን ወደ 10x ተጨማሪ ሰዎች ለማድረስ አድምቁ"
+                                        else "Spotlight this share to reach up to 10x more people"
+                                    },
+                                    fontSize = 11.5.sp,
+                                    color = MutedText,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = { onBoostClick(post) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (post.isBoosted) Color(0xFF059669) else GoldDeep,
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text(
+                                text = if (post.isBoosted) (if (currentLanguage == AppLanguage.AM) "አስተዳድር" else "Manage") else MeskotStrings.get("boostPost", currentLanguage),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
                 }
             }
 
@@ -544,7 +625,7 @@ fun PostCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 6.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Like / React Button
@@ -557,6 +638,7 @@ fun PostCard(
                             onToggleReaction(post.id, "like")
                         }
                     },
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
                     modifier = Modifier.testTag("btn_react_${post.id}")
                 ) {
                     Row(
@@ -570,9 +652,11 @@ fun PostCard(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = if (reactionObj != null) MeskotStrings.get(reactionObj.labelKey, currentLanguage) else MeskotStrings.get("like", currentLanguage),
-                            fontSize = 13.sp,
+                            fontSize = 12.5.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (reactionObj != null) (if (reactionObj == ReactionType.LOVE) CrossRed else GoldDeep) else MutedText
+                            color = if (reactionObj != null) (if (reactionObj == ReactionType.LOVE) CrossRed else GoldDeep) else MutedText,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -580,25 +664,33 @@ fun PostCard(
                 // Comment Button
                 TextButton(
                     onClick = { isCommentsOpen = !isCommentsOpen },
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
                     modifier = Modifier.testTag("btn_comment_${post.id}")
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.ChatBubbleOutline,
-                        contentDescription = "Comment",
-                        tint = MutedText,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = MeskotStrings.get("comment", currentLanguage) + if (post.commentCount > 0) " (${post.commentCount})" else "",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MutedText
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Outlined.ChatBubbleOutline,
+                            contentDescription = "Comment",
+                            tint = MutedText,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = MeskotStrings.get("comment", currentLanguage) + if (post.commentCount > 0) " (${post.commentCount})" else "",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MutedText,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
                 }
 
                 // Share Button
-                IconButton(onClick = { onShare(post.id) }) {
+                IconButton(
+                    onClick = { onShare(post.id) },
+                    modifier = Modifier.size(36.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.Share,
                         contentDescription = "Share",
@@ -607,39 +699,57 @@ fun PostCard(
                     )
                 }
 
-                // Save Bookmark Button
-                IconButton(onClick = { onToggleSave(post.id) }) {
-                    Icon(
-                        imageVector = if (post.isSaved) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
-                        contentDescription = "Save",
-                        tint = if (post.isSaved) GoldDeep else MutedText,
-                        modifier = Modifier.size(18.dp)
-                    )
+                // Tip Creator Button (Support with Chapa or Virtual Stars) - only for other users
+                if (post.uid != currentUserId) {
+                    Surface(
+                        onClick = { onTipClick(post) },
+                        shape = RoundedCornerShape(16.dp),
+                        color = GoldSurface.copy(alpha = 0.65f),
+                        border = BorderStroke(1.dp, GoldBorder.copy(alpha = 0.8f))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(text = "⭐", fontSize = 13.sp)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = MeskotStrings.get("support", currentLanguage),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = GoldDeep,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
                 }
 
-                // Tip Creator Button (Support with Chapa or Virtual Stars)
-                if (post.uid != currentUserId) {
-                    TextButton(onClick = { onTipClick(post) }) {
-                        Text(text = "⭐", fontSize = 14.sp)
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Text(
-                            text = MeskotStrings.get("support", currentLanguage),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = GoldDeep
-                        )
-                    }
-                } else {
-                    TextButton(onClick = { onBoostClick(post) }) {
-                        Text(text = "🚀", fontSize = 13.sp)
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Text(
-                            text = if (post.isBoosted) "Boosted" else MeskotStrings.get("boostPost", currentLanguage),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (post.isBoosted) Color(0xFF059669) else GoldDeep
-                        )
-                    }
+                // Save Bookmark Button
+                val bookmarkColor by animateColorAsState(
+                    targetValue = if (isPostSaved) LuxuryGoldAccent else MutedText,
+                    label = "bookmark_tint"
+                )
+                val bookmarkScale by animateFloatAsState(
+                    targetValue = if (isPostSaved) 1.15f else 1.0f,
+                    animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
+                    label = "bookmark_scale"
+                )
+
+                IconButton(
+                    onClick = { onToggleSave(post.id) },
+                    modifier = Modifier
+                        .size(36.dp)
+                        .testTag("btn_save_post_${post.id}")
+                ) {
+                    Icon(
+                        imageVector = if (isPostSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                        contentDescription = if (isPostSaved) "Remove bookmark" else "Save bookmark",
+                        tint = bookmarkColor,
+                        modifier = Modifier
+                            .size(19.dp)
+                            .scale(bookmarkScale)
+                    )
                 }
             }
 
@@ -667,6 +777,8 @@ fun PostCard(
                                 currentUserId = currentUserId,
                                 currentLanguage = currentLanguage,
                                 onAuthorClick = onAuthorClick,
+                                onHashtagClick = onHashtagClick,
+                                onMentionClick = onMentionClick,
                                 onLike = { onToggleCommentLike(post.id, c.id) },
                                 onReply = { replyingToCommentId = c.id },
                                 onDelete = { onDeleteComment(post.id, c.id) }
@@ -681,6 +793,8 @@ fun PostCard(
                                     currentLanguage = currentLanguage,
                                     isReply = true,
                                     onAuthorClick = onAuthorClick,
+                                    onHashtagClick = onHashtagClick,
+                                    onMentionClick = onMentionClick,
                                     onLike = { onToggleCommentLike(post.id, r.id) },
                                     onReply = { replyingToCommentId = c.id },
                                     onDelete = { onDeleteComment(post.id, r.id) }
@@ -777,6 +891,8 @@ fun CommentItemRow(
     currentLanguage: AppLanguage,
     isReply: Boolean = false,
     onAuthorClick: (String) -> Unit,
+    onHashtagClick: (String) -> Unit = {},
+    onMentionClick: (String) -> Unit = {},
     onLike: () -> Unit,
     onReply: () -> Unit,
     onDelete: () -> Unit
@@ -833,15 +949,15 @@ fun CommentItemRow(
                         }
                     }
 
-                    SelectionContainer {
-                        Text(
-                            text = comment.text,
-                            fontSize = 13.sp,
-                            color = Ink,
-                            lineHeight = 18.sp,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                    }
+                    InteractiveSocialText(
+                        text = comment.text,
+                        fontSize = 13.5.sp,
+                        color = Ink,
+                        lineHeight = 18.sp,
+                        modifier = Modifier.padding(top = 2.dp),
+                        onHashtagClick = { tag -> onHashtagClick(tag) },
+                        onMentionClick = { mention -> onMentionClick(mention) }
+                    )
                 }
             }
 
@@ -1181,6 +1297,37 @@ fun MediaGrid(urls: List<String>) {
                             modifier = Modifier.size(28.dp)
                         )
                     }
+
+                    // Bottom Thumbnail Strip for quickly jumping between up to 10 photos like Facebook
+                    LazyRow(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.7f))
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(urls.size) { thumbIdx ->
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(
+                                        width = if (thumbIdx == currentIdx) 2.5.dp else 1.dp,
+                                        color = if (thumbIdx == currentIdx) Gold else Color.White.copy(alpha = 0.35f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable { selectedImageIndex = thumbIdx }
+                            ) {
+                                AsyncImage(
+                                    model = urls[thumbIdx],
+                                    contentDescription = "Thumbnail ${thumbIdx + 1}",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1191,7 +1338,9 @@ fun MediaGrid(urls: List<String>) {
 fun SharedPostBox(
     shared: SharedPostPreview,
     currentLanguage: AppLanguage,
-    onAuthorClick: (String) -> Unit
+    onAuthorClick: (String) -> Unit,
+    onHashtagClick: (String) -> Unit = {},
+    onMentionClick: (String) -> Unit = {}
 ) {
     Surface(
         modifier = Modifier
@@ -1212,11 +1361,14 @@ fun SharedPostBox(
             }
 
             if (shared.text.isNotBlank()) {
-                Text(
+                InteractiveSocialText(
                     text = shared.text,
                     fontSize = 13.sp,
                     color = Ink,
-                    modifier = Modifier.padding(top = 6.dp)
+                    lineHeight = 18.sp,
+                    modifier = Modifier.padding(top = 6.dp),
+                    onHashtagClick = onHashtagClick,
+                    onMentionClick = onMentionClick
                 )
             }
 

@@ -955,7 +955,8 @@ object FirebaseManager {
         "parentId" to c.parentId,
         "likes" to c.likes,
         "createdAt" to c.createdAt,
-        "editedAt" to c.editedAt
+        "editedAt" to c.editedAt,
+        "imageUrl" to c.imageUrl
     )
 
     private fun parseComment(id: String, d: Map<String, Any?>): Comment = Comment(
@@ -970,7 +971,9 @@ object FirebaseManager {
             if (k is String && v is Boolean) k to v else null
         }?.toMap() ?: emptyMap(),
         createdAt = (d["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-        editedAt = (d["editedAt"] as? Number)?.toLong()
+        editedAt = (d["editedAt"] as? Number)?.toLong(),
+        isAuthorVerified = d["isAuthorVerified"] as? Boolean ?: false,
+        imageUrl = d["imageUrl"] as? String
     )
 
     fun userToMap(u: User): Map<String, Any?> = mapOf(
@@ -1529,6 +1532,25 @@ object FirebaseManager {
             Log.e(TAG, "Failed to listen to live stream: ${e.message}")
             null
         }
+    }
+
+    fun getLiveStream(streamId: String, onResult: (LiveStreamSession?) -> Unit) {
+        val db = firestore ?: run {
+            onResult(null)
+            return
+        }
+        db.collection(COL_LIVE_STREAMS).document(streamId).get()
+            .addOnSuccessListener { doc ->
+                if (doc != null && doc.exists()) {
+                    val session = doc.data?.let { parseLiveStream(doc.id, it) }
+                    onResult(session)
+                } else {
+                    onResult(null)
+                }
+            }
+            .addOnFailureListener {
+                onResult(null)
+            }
     }
 
     fun joinLiveStream(streamId: String, user: User) {

@@ -34,8 +34,11 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.VideoCameraBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.VideoCameraBack
 import com.example.util.LocationHelper
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.Delete
@@ -126,12 +129,12 @@ fun ComposerDialog(
     var selectedLongitude by remember(editingPost?.id) { mutableStateOf(editingPost?.longitude) }
     var showLocationPicker by remember { mutableStateOf(false) }
 
-    // Multi-photo picker from device gallery
+    // Multi-photo picker from device gallery (up to 10 photos like Facebook)
     val pickMultipleMediaLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
-            selectedMediaUrls = selectedMediaUrls + uris.map { it.toString() }
+            selectedMediaUrls = (selectedMediaUrls + uris.map { it.toString() }).distinct().take(10)
             selectedBgIndex = 0
         }
     }
@@ -143,7 +146,7 @@ fun ComposerDialog(
         if (bitmap != null) {
             try {
                 val cachedPath = saveStoryBitmapToCache(context, bitmap)
-                selectedMediaUrls = selectedMediaUrls + cachedPath
+                selectedMediaUrls = (selectedMediaUrls + cachedPath).take(10)
                 selectedBgIndex = 0
             } catch (e: Exception) {
                 Toast.makeText(context, "Failed to capture photo: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -151,8 +154,19 @@ fun ComposerDialog(
         }
     }
 
-    // Visuals list
-    val samplePhotos: List<String> = emptyList()
+    // Curated high quality visual samples (up to 10 photos like Facebook)
+    val samplePhotos: List<String> = listOf(
+        "https://picsum.photos/seed/meskot1/800/800",
+        "https://picsum.photos/seed/meskot2/800/800",
+        "https://picsum.photos/seed/meskot3/800/800",
+        "https://picsum.photos/seed/meskot4/800/800",
+        "https://picsum.photos/seed/meskot5/800/800",
+        "https://picsum.photos/seed/meskot6/800/800",
+        "https://picsum.photos/seed/meskot7/800/800",
+        "https://picsum.photos/seed/meskot8/800/800",
+        "https://picsum.photos/seed/meskot9/800/800",
+        "https://picsum.photos/seed/meskot10/800/800"
+    )
 
     val canSubmit = text.isNotBlank() ||
             selectedMediaUrls.isNotEmpty() ||
@@ -370,8 +384,31 @@ fun ComposerDialog(
                     )
                 }
 
-                // Attached Photos Preview
+                // Attached Photos Preview (up to 10 photos like Facebook)
                 if (selectedMediaUrls.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "📸 ${selectedMediaUrls.size}/10 Photos Attached",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = GoldDeep
+                        )
+                        if (selectedMediaUrls.size >= 10) {
+                            Text(
+                                text = "Max limit reached (10)",
+                                fontSize = 11.sp,
+                                color = MutedText,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
                     LazyRow(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -401,6 +438,34 @@ fun ComposerDialog(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(text = "✕", color = Color.White, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                        if (selectedMediaUrls.size < 10) {
+                            item {
+                                Surface(
+                                    onClick = {
+                                        pickMultipleMediaLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Paper2,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder),
+                                    modifier = Modifier.size(72.dp)
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Add,
+                                            contentDescription = "Add More",
+                                            tint = Ink,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(text = "+Add", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Ink)
+                                    }
                                 }
                             }
                         }
@@ -618,8 +683,12 @@ fun ComposerDialog(
                                         if (selectedMediaUrls.contains(url)) {
                                             selectedMediaUrls = selectedMediaUrls - url
                                         } else {
-                                            selectedMediaUrls = selectedMediaUrls + url
-                                            selectedBgIndex = 0
+                                            if (selectedMediaUrls.size < 10) {
+                                                selectedMediaUrls = selectedMediaUrls + url
+                                                selectedBgIndex = 0
+                                            } else {
+                                                Toast.makeText(context, "Maximum 10 photos allowed", Toast.LENGTH_SHORT).show()
+                                            }
                                         }
                                     }
                             )
@@ -1280,7 +1349,7 @@ fun BoostPostModal(
                             color = Ink
                         )
                         Text(
-                            text = "Promote into high-priority algorithmic feed (USD / ETB)",
+                            text = "Spotlight into high-priority algorithmic stream (USD / ETB)",
                             fontSize = 11.sp,
                             color = MutedText
                         )
@@ -1497,7 +1566,7 @@ fun BoostPostModal(
                         ) {
                             Text(
                                 text = if (hasEnoughBalance)
-                                    "Boost Post Now (${selectedCurrency.formatFromEtb(totalBudget)}) 🚀"
+                                    "Spotlight Share Now (${selectedCurrency.formatFromEtb(totalBudget)}) 🚀"
                                 else
                                     "Insufficient Balance (${selectedCurrency.formatFromEtb(userBalance)})",
                                 fontWeight = FontWeight.Bold,
@@ -1837,6 +1906,116 @@ fun CreatorPayoutModal(
 }
 
 @Composable
+fun DetailPrivacyBadge(
+    currentPrivacy: String,
+    onPrivacyChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val norm = when (currentPrivacy.lowercase()) {
+        "only_me", "onlyme", "private" -> "only_me"
+        "friends" -> "friends"
+        else -> "public"
+    }
+    val icon = when (norm) {
+        "only_me" -> Icons.Default.Lock
+        "friends" -> Icons.Default.People
+        else -> Icons.Default.Public
+    }
+    val label = when (norm) {
+        "only_me" -> "Only me"
+        "friends" -> "Connections"
+        else -> "Public"
+    }
+
+    Box(modifier = modifier) {
+        Surface(
+            onClick = { expanded = true },
+            shape = RoundedCornerShape(8.dp),
+            color = GoldSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = GoldDeep,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = label,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = GoldDeep
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = GoldDeep,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Public,
+                        contentDescription = null,
+                        tint = GoldDeep,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                text = { Text("Public", fontSize = 13.sp, fontWeight = FontWeight.Medium) },
+                onClick = {
+                    onPrivacyChange("public")
+                    expanded = false
+                }
+            )
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = GoldDeep,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                text = { Text("Only me", fontSize = 13.sp, fontWeight = FontWeight.Medium) },
+                onClick = {
+                    onPrivacyChange("only_me")
+                    expanded = false
+                }
+            )
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.People,
+                        contentDescription = null,
+                        tint = GoldDeep,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                text = { Text("Connections", fontSize = 13.sp, fontWeight = FontWeight.Medium) },
+                onClick = {
+                    onPrivacyChange("friends")
+                    expanded = false
+                }
+            )
+        }
+    }
+}
+
+@Composable
 fun EditProfileDialog(
     currentUser: User,
     currentLanguage: AppLanguage,
@@ -1854,7 +2033,15 @@ fun EditProfileDialog(
         workplace: String,
         workRole: String,
         education: String,
-        educationClass: String
+        educationClass: String,
+        personalDetailsPrivacy: String,
+        professionPrivacy: String,
+        locationPrivacy: String,
+        hometownPrivacy: String,
+        workPrivacy: String,
+        educationPrivacy: String,
+        birthdayPrivacy: String,
+        genderPrivacy: String
     ) -> Unit
 ) {
     val context = LocalContext.current
@@ -1871,6 +2058,14 @@ fun EditProfileDialog(
     var workRole by remember { mutableStateOf(currentUser.workRole) }
     var education by remember { mutableStateOf(currentUser.education) }
     var educationClass by remember { mutableStateOf(currentUser.educationClass) }
+    var personalDetailsPrivacy by remember { mutableStateOf(currentUser.personalDetailsPrivacy) }
+    var professionPrivacy by remember { mutableStateOf(currentUser.professionPrivacy) }
+    var locationPrivacy by remember { mutableStateOf(currentUser.locationPrivacy) }
+    var hometownPrivacy by remember { mutableStateOf(currentUser.hometownPrivacy) }
+    var workPrivacy by remember { mutableStateOf(currentUser.workPrivacy) }
+    var educationPrivacy by remember { mutableStateOf(currentUser.educationPrivacy) }
+    var birthdayPrivacy by remember { mutableStateOf(currentUser.birthdayPrivacy) }
+    var genderPrivacy by remember { mutableStateOf(currentUser.genderPrivacy) }
 
     val avatarPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -2068,10 +2263,26 @@ fun EditProfileDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Category / Profession",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Ink
+                    )
+                    DetailPrivacyBadge(
+                        currentPrivacy = professionPrivacy,
+                        onPrivacyChange = { professionPrivacy = it }
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 OutlinedTextField(
                     value = profession,
                     onValueChange = { profession = it },
-                    label = { Text("Profession / Category") },
                     placeholder = { Text("e.g. Software Engineer, Artist, Public figure") },
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp),
                     colors = com.example.ui.theme.meskotTextFieldColors(),
@@ -2085,6 +2296,23 @@ fun EditProfileDialog(
                 var showProfileHometownPicker by remember { mutableStateOf(false) }
 
                 // Current City / Location selector matching Sell on Meskot (`📍 ${loc}` + Change location sheet)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Current City (Lives in)",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Ink
+                    )
+                    DetailPrivacyBadge(
+                        currentPrivacy = locationPrivacy,
+                        onPrivacyChange = { locationPrivacy = it }
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 MeskotLocationSelectorButton(
                     locationName = location,
                     placeholder = "Mekelle",
@@ -2107,6 +2335,23 @@ fun EditProfileDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Hometown selector matching Sell on Meskot (`📍 ${loc}` + Change location sheet)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Hometown (From)",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Ink
+                    )
+                    DetailPrivacyBadge(
+                        currentPrivacy = hometownPrivacy,
+                        onPrivacyChange = { hometownPrivacy = it }
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 MeskotLocationSelectorButton(
                     locationName = hometown,
                     placeholder = "Mekelle",
@@ -2128,6 +2373,23 @@ fun EditProfileDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Workplace & Position",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Ink
+                    )
+                    DetailPrivacyBadge(
+                        currentPrivacy = workPrivacy,
+                        onPrivacyChange = { workPrivacy = it }
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 OutlinedTextField(
                     value = workplace,
                     onValueChange = { workplace = it },
@@ -2139,7 +2401,7 @@ fun EditProfileDialog(
                     shape = RoundedCornerShape(10.dp)
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 OutlinedTextField(
                     value = workRole,
@@ -2154,6 +2416,23 @@ fun EditProfileDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Education & Class",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Ink
+                    )
+                    DetailPrivacyBadge(
+                        currentPrivacy = educationPrivacy,
+                        onPrivacyChange = { educationPrivacy = it }
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 OutlinedTextField(
                     value = education,
                     onValueChange = { education = it },
@@ -2165,7 +2444,7 @@ fun EditProfileDialog(
                     shape = RoundedCornerShape(10.dp)
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 OutlinedTextField(
                     value = educationClass,
@@ -2205,12 +2484,22 @@ fun EditProfileDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Gender Selection
-                Text(
-                    text = MeskotStrings.get("gender", currentLanguage),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Ink
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = MeskotStrings.get("gender", currentLanguage),
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Ink
+                    )
+                    DetailPrivacyBadge(
+                        currentPrivacy = genderPrivacy,
+                        onPrivacyChange = { genderPrivacy = it }
+                    )
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -2278,19 +2567,29 @@ fun EditProfileDialog(
                 var selectedYear by remember { mutableStateOf(initialParts.third) }
                 var isYearMenuExpanded by remember { mutableStateOf(false) }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = MeskotStrings.get("birthday", currentLanguage),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Ink
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        tint = MutedText,
-                        modifier = Modifier.size(14.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = MeskotStrings.get("birthday", currentLanguage),
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Ink
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MutedText,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                    DetailPrivacyBadge(
+                        currentPrivacy = birthdayPrivacy,
+                        onPrivacyChange = { birthdayPrivacy = it }
                     )
                 }
                 Text(
@@ -2415,6 +2714,126 @@ fun EditProfileDialog(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Quick Batch Privacy Option Bar
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = GoldSurface.copy(alpha = 0.5f)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Public,
+                                contentDescription = null,
+                                tint = GoldDeep,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Quick Set All Details Audience",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Ink
+                            )
+                        }
+                        Text(
+                            text = "Each detail above has its own audience setting. You can also quickly set all details at once:",
+                            fontSize = 11.5.sp,
+                            color = MutedText,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Surface(
+                                onClick = {
+                                    professionPrivacy = "public"
+                                    locationPrivacy = "public"
+                                    hometownPrivacy = "public"
+                                    workPrivacy = "public"
+                                    educationPrivacy = "public"
+                                    birthdayPrivacy = "public"
+                                    genderPrivacy = "public"
+                                    personalDetailsPrivacy = "public"
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = CardBg,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 7.dp, horizontal = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(Icons.Default.Public, contentDescription = null, tint = GoldDeep, modifier = Modifier.size(12.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("All Public", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Ink)
+                                }
+                            }
+
+                            Surface(
+                                onClick = {
+                                    professionPrivacy = "only_me"
+                                    locationPrivacy = "only_me"
+                                    hometownPrivacy = "only_me"
+                                    workPrivacy = "only_me"
+                                    educationPrivacy = "only_me"
+                                    birthdayPrivacy = "only_me"
+                                    genderPrivacy = "only_me"
+                                    personalDetailsPrivacy = "only_me"
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = CardBg,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 7.dp, horizontal = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(Icons.Default.Lock, contentDescription = null, tint = GoldDeep, modifier = Modifier.size(12.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("All Only me", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Ink)
+                                }
+                            }
+
+                            Surface(
+                                onClick = {
+                                    professionPrivacy = "friends"
+                                    locationPrivacy = "friends"
+                                    hometownPrivacy = "friends"
+                                    workPrivacy = "friends"
+                                    educationPrivacy = "friends"
+                                    birthdayPrivacy = "friends"
+                                    genderPrivacy = "friends"
+                                    personalDetailsPrivacy = "friends"
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = CardBg,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, LineBorder),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 7.dp, horizontal = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(Icons.Default.People, contentDescription = null, tint = GoldDeep, modifier = Modifier.size(12.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("Connections", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Ink)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(18.dp))
 
                 Row(
@@ -2431,7 +2850,15 @@ fun EditProfileDialog(
                             onSave(
                                 name, bio, photoUrl, gender, finalBirthDate,
                                 coverPhotoUrl, profession, location, hometown,
-                                workplace, workRole, education, educationClass
+                                workplace, workRole, education, educationClass,
+                                personalDetailsPrivacy,
+                                professionPrivacy,
+                                locationPrivacy,
+                                hometownPrivacy,
+                                workPrivacy,
+                                educationPrivacy,
+                                birthdayPrivacy,
+                                genderPrivacy
                             )
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.White),

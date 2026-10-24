@@ -1613,13 +1613,28 @@ fun ReelCommentItemCard(
                         }
                     }
 
-                    Text(
-                        text = comment.text,
-                        color = Color.White.copy(alpha = 0.95f),
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
+                    if (comment.text.isNotBlank()) {
+                        Text(
+                            text = comment.text,
+                            color = Color.White.copy(alpha = 0.95f),
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+
+                    if (!comment.imageUrl.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        AsyncImage(
+                            model = comment.imageUrl,
+                            contentDescription = "Comment attachment",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 180.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
                 }
             }
 

@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import com.example.ui.components.InteractiveSocialText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -1434,12 +1435,13 @@ fun EnhancedChatMessageRow(
                     )
                     if (msg.text.isNotBlank()) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
+                        InteractiveSocialText(
                             text = msg.text,
                             color = Color(0xFF1B2A22),
                             fontSize = 15.sp,
                             lineHeight = 21.sp,
-                            fontWeight = FontWeight.Normal
+                            fontWeight = FontWeight.Normal,
+                            onNonEntityClick = { showActionMenu = true }
                         )
                     }
                 }
@@ -1545,12 +1547,13 @@ fun EnhancedChatMessageRow(
                 }
                 // 4. Standard Text message (exact style from reference image)
                 else {
-                    Text(
+                    InteractiveSocialText(
                         text = msg.text,
                         color = Color(0xFF1B2A22),
                         fontSize = 15.sp,
                         lineHeight = 21.sp,
-                        fontWeight = FontWeight.Normal
+                        fontWeight = FontWeight.Normal,
+                        onNonEntityClick = { showActionMenu = true }
                     )
                 }
             }

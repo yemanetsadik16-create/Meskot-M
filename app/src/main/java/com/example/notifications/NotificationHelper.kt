@@ -27,20 +27,23 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.IconCompat
 import com.example.MainActivity
 import com.example.R
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Production-ready helper for Facebook-style rich push notifications on Android 12+ and Android 13+.
+ * Production-ready helper for Facebook-style rich push notifications and TikTok-style Live alerts on Android 12+ and Android 13+.
  *
  * Features:
- * 1. High-importance Notification Channel (API 26+) with sound & vibration enabled.
+ * 1. High-importance Notification Channels (API 26+) for Social & TikTok-style Live alerts with sound & vibration.
  * 2. NotificationCompat.MessagingStyle with bold sender name, message body, and timestamp.
- * 3. Small app icon on the left + circular sender profile picture thumbnail on the right (`setLargeIcon`).
- * 4. Deep-link `Intent` & `PendingIntent` (`FLAG_IMMUTABLE | FLAG_UPDATE_CURRENT`) to open a chat or post screen.
- * 5. Android 13+ (`TIRAMISU`) `POST_NOTIFICATIONS` permission check and request helper.
+ * 3. TikTok-style instant Live Broadcast alert with pulsing Red action button and direct room deep-linking.
+ * 4. Small app icon on the left + circular sender profile picture thumbnail on the right (`setLargeIcon`).
+ * 5. Deep-link `Intent` & `PendingIntent` (`FLAG_IMMUTABLE | FLAG_UPDATE_CURRENT`) to open a chat, post, or live stream screen.
+ * 6. Android 13+ (`TIRAMISU`) `POST_NOTIFICATIONS` permission check and request helper.
  */
 object NotificationHelper {
 
@@ -48,14 +51,18 @@ object NotificationHelper {
     private const val CHANNEL_NAME_SOCIAL = "Messages & Social Alerts"
     private const val CHANNEL_DESC_SOCIAL = "Real-time notifications for messages, comments, likes, and friend requests"
 
-    const val EXTRA_TARGET_TYPE = "extra_notification_target_type" // e.g., "chat", "post", "friends", "notifications"
-    const val EXTRA_TARGET_ID = "extra_notification_target_id"     // e.g., senderUid or postId
+    const val CHANNEL_ID_LIVE = "meskot_live_stream_channel"
+    private const val CHANNEL_NAME_LIVE = "Live Broadcasts (TikTok Style)"
+    private const val CHANNEL_DESC_LIVE = "Instant notifications when creators and friends you follow start a live stream"
+
+    const val EXTRA_TARGET_TYPE = "extra_notification_target_type" // e.g., "chat", "post", "friends", "notifications", "live"
+    const val EXTRA_TARGET_ID = "extra_notification_target_id"     // e.g., senderUid, postId, or streamId
     const val EXTRA_SENDER_NAME = "extra_notification_sender_name"
 
     const val REQUEST_CODE_POST_NOTIFICATIONS = 1002
 
     /**
-     * Step 1A: Creates a High-Importance Notification Channel with sound and vibration enabled (Android 8.0+ / API 26+).
+     * Step 1A: Creates High-Importance Notification Channels with sound and vibration enabled (Android 8.0+ / API 26+).
      * Safe to call multiple times; the system no-ops if the channel already exists.
      */
     fun createNotificationChannel(context: Context) {
@@ -66,7 +73,7 @@ object NotificationHelper {
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                 .build()
 
-            val channel = NotificationChannel(
+            val socialChannel = NotificationChannel(
                 CHANNEL_ID_SOCIAL,
                 CHANNEL_NAME_SOCIAL,
                 NotificationManager.IMPORTANCE_HIGH
@@ -80,8 +87,23 @@ object NotificationHelper {
                 setShowBadge(true)
             }
 
+            val liveChannel = NotificationChannel(
+                CHANNEL_ID_LIVE,
+                CHANNEL_NAME_LIVE,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = CHANNEL_DESC_LIVE
+                enableLights(true)
+                lightColor = Color.parseColor("#E0245E") // Pulsing Live Red
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0L, 200L, 100L, 200L, 100L, 300L)
+                setSound(soundUri, audioAttributes)
+                setShowBadge(true)
+            }
+
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
+            manager.createNotificationChannel(socialChannel)
+            manager.createNotificationChannel(liveChannel)
         }
     }
 
@@ -227,6 +249,74 @@ object NotificationHelper {
             .build()
 
         NotificationManagerCompat.from(context).notify(notificationId, notification)
+    }
+
+    /**
+     * TikTok-Style Live Stream Push Notification:
+     * High priority heads-up notification with sound, vibration, host avatar, "🔴 [Host] is LIVE!" title,
+     * and a direct "Watch Live" action button deep linking into the live stream.
+     */
+    fun showLiveStreamPushNotification(
+        context: Context,
+        hostName: String,
+        streamTitle: String,
+        hostAvatarUrl: String? = null,
+        streamId: String = ""
+    ) {
+        createNotificationChannel(context)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val avatarBitmap = loadCircularBitmapFromUrl(hostAvatarUrl, hostName)
+            val notifId = ("live_" + streamId).hashCode()
+
+            val tapIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(EXTRA_TARGET_TYPE, "live")
+                putExtra(EXTRA_TARGET_ID, streamId)
+                putExtra(EXTRA_SENDER_NAME, hostName)
+            }
+
+            val pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            val contentPendingIntent = PendingIntent.getActivity(
+                context,
+                notifId,
+                tapIntent,
+                pendingIntentFlags
+            )
+
+            val displayTitle = "🔴 $hostName is LIVE now!"
+            val displayBody = if (streamTitle.isNotBlank()) streamTitle else "Tap to join the live stream & chat"
+
+            val notification = NotificationCompat.Builder(context, CHANNEL_ID_LIVE)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setContentTitle(displayTitle)
+                .setContentText(displayBody)
+                .setLargeIcon(avatarBitmap)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setColor(Color.parseColor("#E0245E"))
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setAutoCancel(true)
+                .setContentIntent(contentPendingIntent)
+                .addAction(
+                    R.drawable.ic_launcher_foreground,
+                    "Watch Live",
+                    contentPendingIntent
+                )
+                .build()
+
+            NotificationManagerCompat.from(context).notify(notifId, notification)
+        }
     }
 
     /**

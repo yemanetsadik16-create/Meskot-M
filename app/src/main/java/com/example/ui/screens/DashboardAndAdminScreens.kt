@@ -187,13 +187,13 @@ fun DashboardScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             StatCard(
-                                title = "Posts",
+                                title = "Shares",
                                 value = myPosts.size.toString(),
-                                emoji = "📝",
+                                emoji = "🪟",
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
-                                title = "Friends",
+                                title = "Connections",
                                 value = friendsCount.toString(),
                                 emoji = "👥",
                                 modifier = Modifier.weight(1f)
@@ -207,7 +207,7 @@ fun DashboardScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             StatCard(
-                                title = "Total Likes",
+                                title = "Admires",
                                 value = totalLikes.toString(),
                                 emoji = "❤️",
                                 modifier = Modifier.weight(1f)

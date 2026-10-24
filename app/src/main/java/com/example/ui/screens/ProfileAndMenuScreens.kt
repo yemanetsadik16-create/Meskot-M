@@ -86,6 +86,8 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -345,6 +347,7 @@ fun ProfileScreen(
     val isFriend = friendUids.contains(user.uid)
     val followingUids by viewModel.followingUids.collectAsState()
     val isFollowing = followingUids.contains(user.uid)
+    val savedPostIds by viewModel.savedPostIds.collectAsState()
     val nowMs by viewModel.tickerTimeMs.collectAsState()
     val isTargetUserOnline = remember(user.lastSeen, nowMs, isMe) {
         isMe || MeskotStrings.isOnline(user.lastSeen, nowMs)
@@ -367,7 +370,9 @@ fun ProfileScreen(
     var showMetaVerifiedModal by remember { mutableStateOf(false) }
     var viewAsOtherMode by remember { mutableStateOf(false) }
     var showPhotoSourceSheet by remember { mutableStateOf<String?>(null) } // "AVATAR" or "COVER"
+    var isPrivacyMenuOpen by remember { mutableStateOf(false) }
     val effectiveIsMe = isMe && !viewAsOtherMode
+    val canViewDetails = effectiveIsMe || user.canViewPersonalDetails(currentUser?.uid, isFriend)
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
@@ -879,14 +884,14 @@ fun ProfileScreen(
                             )
                         }
                     } else {
-                        // Screenshot 1: "X friends"
+                        // Screenshot 1: "X connections"
                         val friendTotal = realFollowers.coerceAtLeast(displayFriends.size)
                         Text(
                             text = buildAnnotatedString {
                                 withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = fbDark)) {
                                     append("$friendTotal")
                                 }
-                                append(" friends")
+                                append(" ${if (currentLanguage == AppLanguage.AM) "ግንኙነቶች" else "connections"}")
                             },
                             fontSize = 14.sp,
                             color = fbTextGray,
@@ -970,13 +975,13 @@ fun ProfileScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Add,
-                                    contentDescription = "Add to story",
+                                    contentDescription = "Share Moment",
                                     modifier = Modifier.size(18.dp),
                                     tint = GoldDeep
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Add to story",
+                                    text = if (currentLanguage == AppLanguage.AM) "ቅጽበት ያጋሩ" else "Share Moment",
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = GoldDeep
@@ -1054,13 +1059,13 @@ fun ProfileScreen(
                         ) {
                             Icon(
                                 imageVector = if (isFriend) Icons.Default.Person else Icons.Default.PersonAdd,
-                                contentDescription = if (isFriend) "Friends" else "Add friend",
+                                contentDescription = if (isFriend) MeskotStrings.get("friendsLabel", currentLanguage) else MeskotStrings.get("addFriend", currentLanguage),
                                 modifier = Modifier.size(17.dp),
                                 tint = if (isFriend) fbDark else Color.White
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isFriend) "Friends" else "Add friend",
+                                text = if (isFriend) MeskotStrings.get("friendsLabel", currentLanguage) else MeskotStrings.get("addFriend", currentLanguage),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -1404,6 +1409,117 @@ fun ProfileScreen(
                         )
                         Spacer(modifier = Modifier.weight(1f))
                         if (effectiveIsMe) {
+                            Box {
+                                Surface(
+                                    onClick = { isPrivacyMenuOpen = true },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = GoldSurface,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                                    modifier = Modifier.padding(end = 6.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        val privacyIcon = when (user.personalDetailsPrivacy) {
+                                            "only_me", "private" -> Icons.Default.Lock
+                                            "friends" -> Icons.Default.People
+                                            else -> Icons.Default.Public
+                                        }
+                                        val privacyLabel = when (user.personalDetailsPrivacy) {
+                                            "only_me", "private" -> "Only me"
+                                            "friends" -> "Connections"
+                                            else -> "Public"
+                                        }
+                                        Icon(
+                                            imageVector = privacyIcon,
+                                            contentDescription = "Privacy: $privacyLabel",
+                                            tint = GoldDeep,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = privacyLabel,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = GoldDeep
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = "Change privacy",
+                                            tint = GoldDeep,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+
+                                DropdownMenu(
+                                    expanded = isPrivacyMenuOpen,
+                                    onDismissRequest = { isPrivacyMenuOpen = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Public,
+                                                contentDescription = null,
+                                                tint = GoldDeep,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        },
+                                        text = {
+                                            Column {
+                                                Text("Public", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                                Text("Anyone on or off Meskot can see", fontSize = 11.sp, color = MutedText)
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.setPersonalDetailsPrivacy("public")
+                                            isPrivacyMenuOpen = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Lock,
+                                                contentDescription = null,
+                                                tint = GoldDeep,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        },
+                                        text = {
+                                            Column {
+                                                Text("Only me", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                                Text("Locked & hidden from other profiles", fontSize = 11.sp, color = MutedText)
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.setPersonalDetailsPrivacy("only_me")
+                                            isPrivacyMenuOpen = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.People,
+                                                contentDescription = null,
+                                                tint = GoldDeep,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        },
+                                        text = {
+                                            Column {
+                                                Text("Connections", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                                Text("Visible only to mutual connections", fontSize = 11.sp, color = MutedText)
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.setPersonalDetailsPrivacy("friends")
+                                            isPrivacyMenuOpen = false
+                                        }
+                                    )
+                                }
+                            }
+
                             Surface(
                                 onClick = { viewModel.openEditProfile() },
                                 shape = CircleShape,
@@ -1420,12 +1536,99 @@ fun ProfileScreen(
                                     )
                                 }
                             }
+                        } else {
+                            val visitorPrivacyIcon = when (user.personalDetailsPrivacy) {
+                                "only_me", "private" -> Icons.Default.Lock
+                                "friends" -> Icons.Default.People
+                                else -> Icons.Default.Public
+                            }
+                            val visitorPrivacyLabel = when (user.personalDetailsPrivacy) {
+                                "only_me", "private" -> "Only me"
+                                "friends" -> "Connections"
+                                else -> "Public"
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Paper2,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder.copy(alpha = 0.5f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = visitorPrivacyIcon,
+                                        contentDescription = visitorPrivacyLabel,
+                                        tint = MutedText,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = visitorPrivacyLabel,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MutedText
+                                    )
+                                }
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    val cleanProfession = user.profession.trim()
+                    if (!canViewDetails) {
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Paper2),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder.copy(alpha = 0.5f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = GoldSurface,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                                    modifier = Modifier.size(46.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = "Personal details locked",
+                                            tint = GoldDeep,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    text = if (user.personalDetailsPrivacy == "friends") "Personal details visible to connections only" else "Personal details are set to Only me",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = Ink,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = if (user.personalDetailsPrivacy == "friends") {
+                                        "${user.displayName} chose to share their personal details with mutual connections only."
+                                    } else {
+                                        "${user.displayName} locked their personal details so they're private and hidden from other profiles."
+                                    },
+                                    fontSize = 13.sp,
+                                    color = MutedText,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                        }
+                    } else {
+                        val cleanProfession = user.profession.trim()
                     val cleanLocation = user.location.trim()
                     val cleanHometown = user.hometown.trim()
                     val cleanBirthDate = user.birthDate.trim()
@@ -1899,6 +2102,7 @@ fun ProfileScreen(
                             .clickable { isSeeMoreDetailsOpen = true }
                             .padding(vertical = 4.dp)
                     )
+                    }
                 }
                 }
             }
@@ -2194,7 +2398,7 @@ fun ProfileScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
                                 Text(
-                                    text = "Friends",
+                                    text = MeskotStrings.get("friendsLabel", currentLanguage),
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Serif,
@@ -2203,7 +2407,7 @@ fun ProfileScreen(
                                 if (!effectiveIsMe) {
                                     val totalFriendsCount = user.followersCount.takeIf { it > 0 && it != 8500 } ?: displayFriends.size.coerceAtLeast(1)
                                     Text(
-                                        text = "$totalFriendsCount friends",
+                                        text = "$totalFriendsCount ${if (currentLanguage == AppLanguage.AM) "ግንኙነቶች" else "connections"}",
                                         fontSize = 13.sp,
                                         color = MutedText
                                     )
@@ -2212,7 +2416,7 @@ fun ProfileScreen(
                             Spacer(modifier = Modifier.weight(1f))
                             TextButton(onClick = { viewModel.navigateTo(ScreenTab.FRIENDS) }) {
                                 Text(
-                                    text = if (effectiveIsMe) "See all" else "Find Friends",
+                                    text = if (effectiveIsMe) (if (currentLanguage == AppLanguage.AM) "ሁሉንም አሳይ" else "See all") else (if (currentLanguage == AppLanguage.AM) "ግንኙነቶችን ያግኙ" else "Find Connections"),
                                     color = GoldDeep,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp
@@ -2440,7 +2644,7 @@ fun ProfileScreen(
                                     contentAlignment = Alignment.CenterStart
                                 ) {
                                     Text(
-                                        text = "What's on your mind?",
+                                        text = MeskotStrings.get("composerPh", currentLanguage),
                                         color = MutedText,
                                         fontSize = 14.sp
                                     )
@@ -2581,6 +2785,7 @@ fun ProfileScreen(
                         val userTier = viewModel.getUserMembershipTier(post.uid)
                         PostCard(
                             post = post,
+                            isSaved = savedPostIds.contains(post.id),
                             currentUserId = currentUser?.uid,
                             comments = comments,
                             currentLanguage = currentLanguage,
@@ -2588,6 +2793,8 @@ fun ProfileScreen(
                             onBoostClick = { viewModel.openBoostModal(it) },
                             onUnlockVip = { viewModel.openSubscriptionModal(it) },
                             onAuthorClick = { viewModel.openProfileByUid(it) },
+                            onHashtagClick = { tag -> viewModel.filterByHashtag(tag) },
+                            onMentionClick = { mention -> viewModel.openProfileByMention(mention) },
                             onToggleReaction = { pid, type -> viewModel.toggleReaction(pid, type) },
                             onShare = { viewModel.sharePost(it) },
                             onToggleSave = { viewModel.toggleSavePost(it) },
@@ -3303,44 +3510,95 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    Text("Overview", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = fbTextGray)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    val catText = user.profession.trim()
-                    if (catText.isNotBlank()) {
-                        Text("• Category: $catText", fontSize = 14.sp, color = fbDark)
-                    }
-                    val cityText = user.location.trim()
-                    if (cityText.isNotBlank()) {
-                        Text("• Lives in $cityText", fontSize = 14.sp, color = fbDark)
-                    }
-                    val homeText = user.hometown.trim()
-                    if (homeText.isNotBlank()) {
-                        Text("• From $homeText", fontSize = 14.sp, color = fbDark)
-                    }
-                    val bdayText = user.birthDate.trim()
-                    if (bdayText.isNotBlank()) {
-                        Text("• Birthday: $bdayText", fontSize = 14.sp, color = fbDark)
-                    }
-                    if (user.gender.isNotBlank()) {
-                        Text("• Gender: ${user.gender}", fontSize = 14.sp, color = fbDark)
-                    }
-                    if (catText.isBlank() && cityText.isBlank() && homeText.isBlank() && bdayText.isBlank() && user.gender.isBlank()) {
-                        Text("• No overview details provided yet", fontSize = 14.sp, color = fbTextGray)
-                    }
-
-                    val workP = user.workplace.trim()
-                    val workR = user.workRole.trim()
-                    val eduU = user.education.trim()
-                    val eduC = user.educationClass.trim()
-
-                    if (workP.isNotBlank() || workR.isNotBlank() || eduU.isNotBlank() || eduC.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Text("Work & Education", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = fbTextGray)
+                    if (!canViewDetails) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Paper2,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder.copy(alpha = 0.5f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = GoldSurface,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, GoldBorder),
+                                    modifier = Modifier.size(42.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = null,
+                                            tint = GoldDeep,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    text = if (user.personalDetailsPrivacy == "friends") "Personal details visible to connections only" else "Personal details are private (Only me)",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = Ink,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = if (user.personalDetailsPrivacy == "friends") {
+                                        "${user.displayName} chose to share their personal details with mutual connections only."
+                                    } else {
+                                        "${user.displayName} locked their personal details so they are not visible to other profiles."
+                                    },
+                                    fontSize = 13.sp,
+                                    color = MutedText,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                        }
+                    } else {
+                        Text("Overview", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = fbTextGray)
                         Spacer(modifier = Modifier.height(6.dp))
-                        if (workP.isNotBlank()) Text("• Works at: $workP", fontSize = 14.sp, color = fbDark)
-                        if (workR.isNotBlank()) Text("• Role: $workR", fontSize = 14.sp, color = fbDark)
-                        if (eduU.isNotBlank()) Text("• Studied at: $eduU", fontSize = 14.sp, color = fbDark)
-                        if (eduC.isNotBlank()) Text("• Graduation: $eduC", fontSize = 14.sp, color = fbDark)
+                        val catText = user.profession.trim()
+                        if (catText.isNotBlank()) {
+                            Text("• Category: $catText", fontSize = 14.sp, color = fbDark)
+                        }
+                        val cityText = user.location.trim()
+                        if (cityText.isNotBlank()) {
+                            Text("• Lives in $cityText", fontSize = 14.sp, color = fbDark)
+                        }
+                        val homeText = user.hometown.trim()
+                        if (homeText.isNotBlank()) {
+                            Text("• From $homeText", fontSize = 14.sp, color = fbDark)
+                        }
+                        val bdayText = user.birthDate.trim()
+                        if (bdayText.isNotBlank()) {
+                            Text("• Birthday: $bdayText", fontSize = 14.sp, color = fbDark)
+                        }
+                        if (user.gender.isNotBlank()) {
+                            Text("• Gender: ${user.gender}", fontSize = 14.sp, color = fbDark)
+                        }
+                        if (catText.isBlank() && cityText.isBlank() && homeText.isBlank() && bdayText.isBlank() && user.gender.isBlank()) {
+                            Text("• No overview details provided yet", fontSize = 14.sp, color = fbTextGray)
+                        }
+
+                        val workP = user.workplace.trim()
+                        val workR = user.workRole.trim()
+                        val eduU = user.education.trim()
+                        val eduC = user.educationClass.trim()
+
+                        if (workP.isNotBlank() || workR.isNotBlank() || eduU.isNotBlank() || eduC.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text("Work & Education", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = fbTextGray)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            if (workP.isNotBlank()) Text("• Works at: $workP", fontSize = 14.sp, color = fbDark)
+                            if (workR.isNotBlank()) Text("• Role: $workR", fontSize = 14.sp, color = fbDark)
+                            if (eduU.isNotBlank()) Text("• Studied at: $eduU", fontSize = 14.sp, color = fbDark)
+                            if (eduC.isNotBlank()) Text("• Graduation: $eduC", fontSize = 14.sp, color = fbDark)
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -3659,7 +3917,7 @@ fun MenuScreen(
                                 ) {
                                     LuxuryPassportMetricPill(
                                         label = "CIRCLE",
-                                        value = "${friends.size} Friends",
+                                        value = "${friends.size} ${if (currentLanguage == AppLanguage.AM) "ግንኙነቶች" else "Connections"}",
                                         onClick = { viewModel.navigateTo(ScreenTab.FRIENDS) }
                                     )
                                     Box(

@@ -56,6 +56,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.OpenInNew
@@ -95,6 +96,8 @@ fun FeedScreen(
     val isRefreshing by viewModel.isFeedRefreshing.collectAsState()
     val activeLiveStreams by viewModel.activeLiveStreams.collectAsState()
     val adCampaigns by viewModel.adCampaigns.collectAsState()
+    val activeHashtag by viewModel.activeHashtagFilter.collectAsState()
+    val savedPostIds by viewModel.savedPostIds.collectAsState()
 
     val activeAdCampaigns = remember(adCampaigns) {
         adCampaigns.filter { it.status == "ACTIVE" }
@@ -252,7 +255,7 @@ fun FeedScreen(
                                 }
                             }
 
-                            // Quick "Create Story" Action
+                            // Quick "Share Moment" Action
                             Surface(
                                 onClick = { viewModel.openCreateStory() },
                                 shape = RoundedCornerShape(12.dp),
@@ -267,13 +270,13 @@ fun FeedScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.PhotoCamera,
-                                        contentDescription = "Create Story",
+                                        contentDescription = "Share Moment",
                                         tint = GoldDeep,
                                         modifier = Modifier.size(15.dp)
                                     )
                                     Spacer(modifier = Modifier.width(3.dp))
                                     Text(
-                                        text = "Story",
+                                        text = if (currentLanguage == AppLanguage.AM) "ቅጽበት" else "Moment",
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = GoldDeep
@@ -345,6 +348,57 @@ fun FeedScreen(
         }
     }
 
+        // Hashtag Filter Active Banner
+        if (!activeHashtag.isNullOrBlank()) {
+            item(key = "active_hashtag_banner") {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = GoldSurface,
+                    border = BorderStroke(1.dp, GoldBorder)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Filtered by ",
+                                fontSize = 13.5.sp,
+                                color = Ink
+                            )
+                            Text(
+                                text = "#$activeHashtag",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = GoldDeep
+                            )
+                        }
+                        Surface(
+                            onClick = { viewModel.clearHashtagFilter() },
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.85f),
+                            border = BorderStroke(0.8.dp, GoldBorder)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear Filter",
+                                tint = Ink,
+                                modifier = Modifier
+                                    .padding(5.dp)
+                                    .size(14.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Posts List & Active Sponsored Ads Delivery (Facebook Ad Server Engine)
         if (feedPosts.isEmpty() && activeAdCampaigns.isEmpty()) {
             item {
@@ -357,7 +411,7 @@ fun FeedScreen(
                     Text(text = "🪟", fontSize = 48.sp)
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = MeskotStrings.get("emptyFeed", currentLanguage),
+                        text = if (!activeHashtag.isNullOrBlank()) "No posts found tagged with #$activeHashtag" else MeskotStrings.get("emptyFeed", currentLanguage),
                         color = MutedText,
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center,
@@ -396,6 +450,7 @@ fun FeedScreen(
                     val userTier = viewModel.getUserMembershipTier(post.uid)
                     PostCard(
                         post = post,
+                        isSaved = savedPostIds.contains(post.id),
                         currentUserId = currentUser?.uid,
                         comments = comments,
                         currentLanguage = currentLanguage,
@@ -403,6 +458,8 @@ fun FeedScreen(
                         onBoostClick = { viewModel.openBoostModal(it) },
                         onUnlockVip = { viewModel.openSubscriptionModal(it) },
                         onAuthorClick = { viewModel.openProfileByUid(it) },
+                        onHashtagClick = { tag -> viewModel.filterByHashtag(tag) },
+                        onMentionClick = { mention -> viewModel.openProfileByMention(mention) },
                         onToggleReaction = { pid, type -> viewModel.toggleReaction(pid, type) },
                         onShare = { viewModel.sharePost(it) },
                         onToggleSave = { viewModel.toggleSavePost(it) },

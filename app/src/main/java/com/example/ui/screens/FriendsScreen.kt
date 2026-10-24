@@ -118,7 +118,7 @@ fun FriendsScreen(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Circle & Friends",
+                    text = if (currentLanguage == AppLanguage.AM) "ክበብ እና ግንኙነቶች" else "Circle & Connections",
                     fontSize = 23.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF1B2A22),
@@ -156,7 +156,7 @@ fun FriendsScreen(
             onValueChange = { searchQuery = it },
             placeholder = {
                 Text(
-                    text = "Search friends, developers, cultural creators...",
+                    text = if (currentLanguage == AppLanguage.AM) "ግንኙነቶችን፣ ፈጣሪዎችን ይፈልጉ..." else "Search connections, creators, innovators...",
                     fontSize = 13.5.sp,
                     color = Color(0xFF9E9282)
                 )
@@ -479,13 +479,13 @@ private fun CircleFriendCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.PersonAdd,
-                                contentDescription = "Add friend",
+                                contentDescription = "Connect",
                                 tint = Color(0xFF855829),
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Add",
+                                text = "Connect",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF855829)

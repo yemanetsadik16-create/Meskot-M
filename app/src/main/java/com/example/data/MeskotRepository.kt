@@ -57,7 +57,8 @@ class MeskotRepository(
                 val postsDeferred = CompletableDeferred<Unit>()
                 FirebaseManager.fetchPostsOnce { livePosts ->
                     if (livePosts.isNotEmpty()) {
-                        _posts.value = livePosts
+                        val saved = _savedPostIds.value
+                        _posts.value = livePosts.map { it.copy(isSaved = saved.contains(it.id)) }
                     }
                     postsDeferred.complete(Unit)
                 }
@@ -236,6 +237,15 @@ class MeskotRepository(
                 editor.putString("${k}_workRole", user.workRole)
                 editor.putString("${k}_education", user.education)
                 editor.putString("${k}_educationClass", user.educationClass)
+                editor.putString("${k}_personalDetailsPrivacy", user.personalDetailsPrivacy)
+                editor.putString("${k}_professionPrivacy", user.professionPrivacy)
+                editor.putString("${k}_locationPrivacy", user.locationPrivacy)
+                editor.putString("${k}_hometownPrivacy", user.hometownPrivacy)
+                editor.putString("${k}_workPrivacy", user.workPrivacy)
+                editor.putString("${k}_educationPrivacy", user.educationPrivacy)
+                editor.putString("${k}_birthdayPrivacy", user.birthdayPrivacy)
+                editor.putString("${k}_genderPrivacy", user.genderPrivacy)
+                editor.putBoolean("${k}_isPersonalDetailsLocked", user.personalDetailsPrivacy == "only_me" || user.personalDetailsPrivacy == "onlyme" || user.isPersonalDetailsLocked)
                 editor.putBoolean("${k}_hasBackup", true)
             }
             editor.apply()
@@ -254,6 +264,8 @@ class MeskotRepository(
                 user.email.isNotBlank() && prefs.getBoolean("${emailKey}_hasBackup", false) -> emailKey
                 else -> return user
             }
+            val restoredPrivacy = prefs.getString("${activeKey}_personalDetailsPrivacy", null) ?: user.personalDetailsPrivacy
+            val restoredLocked = prefs.getBoolean("${activeKey}_isPersonalDetailsLocked", restoredPrivacy == "only_me" || restoredPrivacy == "onlyme")
             user.copy(
                 displayName = prefs.getString("${activeKey}_displayName", null)?.takeIf { it.isNotBlank() } ?: user.displayName,
                 bio = prefs.getString("${activeKey}_bio", null) ?: user.bio,
@@ -267,7 +279,16 @@ class MeskotRepository(
                 workplace = prefs.getString("${activeKey}_workplace", null) ?: user.workplace,
                 workRole = prefs.getString("${activeKey}_workRole", null) ?: user.workRole,
                 education = prefs.getString("${activeKey}_education", null) ?: user.education,
-                educationClass = prefs.getString("${activeKey}_educationClass", null) ?: user.educationClass
+                educationClass = prefs.getString("${activeKey}_educationClass", null) ?: user.educationClass,
+                personalDetailsPrivacy = restoredPrivacy,
+                professionPrivacy = prefs.getString("${activeKey}_professionPrivacy", null) ?: user.professionPrivacy,
+                locationPrivacy = prefs.getString("${activeKey}_locationPrivacy", null) ?: user.locationPrivacy,
+                hometownPrivacy = prefs.getString("${activeKey}_hometownPrivacy", null) ?: user.hometownPrivacy,
+                workPrivacy = prefs.getString("${activeKey}_workPrivacy", null) ?: user.workPrivacy,
+                educationPrivacy = prefs.getString("${activeKey}_educationPrivacy", null) ?: user.educationPrivacy,
+                birthdayPrivacy = prefs.getString("${activeKey}_birthdayPrivacy", null) ?: user.birthdayPrivacy,
+                genderPrivacy = prefs.getString("${activeKey}_genderPrivacy", null) ?: user.genderPrivacy,
+                isPersonalDetailsLocked = restoredLocked
             )
         } catch (e: Exception) {
             user
@@ -527,8 +548,12 @@ class MeskotRepository(
         repoScope.launch {
             _currentUser.collect { user ->
                 if (user != null) {
-                    _savedPostIds.value = user.savedPostIds.toSet()
+                    val savedSet = user.savedPostIds.toSet()
+                    _savedPostIds.value = savedSet
                     _subscribedPostIds.value = user.subscribedPostIds.toSet()
+                    _posts.value = _posts.value.map {
+                        it.copy(isSaved = savedSet.contains(it.id))
+                    }
                 }
             }
         }
@@ -679,7 +704,8 @@ class MeskotRepository(
     private fun setupFirebaseListeners() {
         try {
             FirebaseManager.listenToPosts { livePosts ->
-                _posts.value = livePosts
+                val saved = _savedPostIds.value
+                _posts.value = livePosts.map { it.copy(isSaved = saved.contains(it.id)) }
                 _currentUser.value?.uid?.let { curUid ->
                     loadAndSyncAnalytics(curUid)
                 }
@@ -932,6 +958,63 @@ class MeskotRepository(
         _currentUser.value = null
     }
 
+    fun setPersonalDetailsPrivacy(privacy: String) {
+        val curr = _currentUser.value ?: return
+        val normalized = when (privacy.lowercase()) {
+            "only_me", "onlyme", "only me", "private" -> "only_me"
+            "friends" -> "friends"
+            else -> "public"
+        }
+        val isLocked = normalized == "only_me"
+        val updated = curr.copy(
+            personalDetailsPrivacy = normalized,
+            isPersonalDetailsLocked = isLocked
+        )
+        saveUserPersonalDetailsBackup(updated)
+        _currentUser.value = updated
+        _users.value = _users.value.map { if (it.uid == curr.uid) updated else it }
+        userRepository.setCurrentUser(updated)
+        repoScope.launch {
+            try {
+                userRepository.saveUser(updated)
+            } catch (e: Exception) {
+                Log.e("MeskotRepo", "Error updating personal details privacy: ${e.message}")
+            }
+        }
+        FirebaseManager.saveUser(updated)
+    }
+
+    fun setIndividualFieldPrivacy(field: String, privacy: String) {
+        val curr = _currentUser.value ?: return
+        val normalized = when (privacy.lowercase()) {
+            "only_me", "onlyme", "only me", "private" -> "only_me"
+            "friends" -> "friends"
+            else -> "public"
+        }
+        val updated = when (field.lowercase()) {
+            "profession", "category" -> curr.copy(professionPrivacy = normalized)
+            "location", "city" -> curr.copy(locationPrivacy = normalized)
+            "hometown" -> curr.copy(hometownPrivacy = normalized)
+            "work", "workplace" -> curr.copy(workPrivacy = normalized)
+            "education", "school" -> curr.copy(educationPrivacy = normalized)
+            "birthday", "birthdate" -> curr.copy(birthdayPrivacy = normalized)
+            "gender" -> curr.copy(genderPrivacy = normalized)
+            else -> curr.copy(personalDetailsPrivacy = normalized)
+        }
+        saveUserPersonalDetailsBackup(updated)
+        _currentUser.value = updated
+        _users.value = _users.value.map { if (it.uid == curr.uid) updated else it }
+        userRepository.setCurrentUser(updated)
+        repoScope.launch {
+            try {
+                userRepository.saveUser(updated)
+            } catch (e: Exception) {
+                Log.e("MeskotRepo", "Error updating field privacy: ${e.message}")
+            }
+        }
+        FirebaseManager.saveUser(updated)
+    }
+
     fun updateProfile(
         name: String,
         bio: String,
@@ -946,12 +1029,22 @@ class MeskotRepository(
         workRole: String = "",
         education: String = "",
         educationClass: String = "",
+        personalDetailsPrivacy: String? = null,
+        professionPrivacy: String? = null,
+        locationPrivacy: String? = null,
+        hometownPrivacy: String? = null,
+        workPrivacy: String? = null,
+        educationPrivacy: String? = null,
+        birthdayPrivacy: String? = null,
+        genderPrivacy: String? = null,
         onComplete: ((Boolean, String?) -> Unit)? = null
     ) {
         val curr = _currentUser.value ?: run {
             onComplete?.invoke(false, "No active user logged in")
             return
         }
+        val effPrivacy = personalDetailsPrivacy ?: curr.personalDetailsPrivacy
+        val isLocked = effPrivacy == "only_me" || effPrivacy == "onlyme" || (personalDetailsPrivacy == null && curr.isPersonalDetailsLocked)
         val updated = curr.copy(
             displayName = name.trim().ifBlank { curr.displayName },
             bio = bio.trim(),
@@ -965,7 +1058,16 @@ class MeskotRepository(
             workplace = workplace.trim(),
             workRole = workRole.trim(),
             education = education.trim(),
-            educationClass = educationClass.trim()
+            educationClass = educationClass.trim(),
+            personalDetailsPrivacy = effPrivacy,
+            professionPrivacy = professionPrivacy ?: curr.professionPrivacy,
+            locationPrivacy = locationPrivacy ?: curr.locationPrivacy,
+            hometownPrivacy = hometownPrivacy ?: curr.hometownPrivacy,
+            workPrivacy = workPrivacy ?: curr.workPrivacy,
+            educationPrivacy = educationPrivacy ?: curr.educationPrivacy,
+            birthdayPrivacy = birthdayPrivacy ?: curr.birthdayPrivacy,
+            genderPrivacy = genderPrivacy ?: curr.genderPrivacy,
+            isPersonalDetailsLocked = isLocked
         )
         saveUserPersonalDetailsBackup(updated)
         _currentUser.value = updated
@@ -1447,6 +1549,9 @@ class MeskotRepository(
             true
         }
         _savedPostIds.value = currentSaved
+        _posts.value = _posts.value.map {
+            if (it.id == postId) it.copy(isSaved = isNowSaved) else it
+        }
         val user = _currentUser.value
         if (user != null) {
             val updatedUser = user.copy(savedPostIds = currentSaved.toList())
@@ -1744,8 +1849,8 @@ class MeskotRepository(
             entryType = LedgerEntryType.BOOST_POST_DEBIT,
             amountEtb = -totalBudget,
             balanceAfterEtb = newBalance,
-            sourceTitle = "Boost Post Promotion ($durationDays days @ ${dailyBudgetEtb.toInt()} ETB/day)",
-            metadata = "Deducted from Account Balance · High-Priority Feed Algorithm Reach"
+            sourceTitle = "Spotlight Promotion ($durationDays days @ ${dailyBudgetEtb.toInt()} ETB/day)",
+            metadata = "Deducted from Account Balance · High-Priority Stream Algorithm Reach"
         )
         _earningsLedger.value = listOf(newEntry) + _earningsLedger.value
 

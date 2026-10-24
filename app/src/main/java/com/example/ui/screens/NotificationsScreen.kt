@@ -18,12 +18,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -138,6 +145,14 @@ fun NotificationsScreen(
                                         viewModel.navigateTo(ScreenTab.MESSAGES)
                                     }
                                 }
+                                "live", "live_stream" -> {
+                                    val streamId = notif.targetId
+                                    if (!streamId.isNullOrBlank()) {
+                                        viewModel.joinLiveStreamById(streamId)
+                                    } else {
+                                        viewModel.openLiveStream()
+                                    }
+                                }
                                 else -> viewModel.navigateTo(ScreenTab.FEED)
                             }
                         }
@@ -159,18 +174,29 @@ fun NotificationRow(
     nowMs: Long = System.currentTimeMillis(),
     onClick: () -> Unit
 ) {
+    val isLiveNotif = notif.type == "live" || notif.type == "live_stream"
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .clickable { onClick() },
+            .clickable { onClick() }
+            .testTag("notification_row_${notif.id}"),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (notif.isRead) CardBg else Color(0xFFEBF5FF)
+            containerColor = when {
+                isLiveNotif && !notif.isRead -> Color(0xFFFFF0F3) // Subtle live rose tint
+                notif.isRead -> CardBg
+                else -> Color(0xFFEBF5FF)
+            }
         ),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (notif.isRead) LineBorder else Color(0xFFC7E0FF)
+            when {
+                isLiveNotif && !notif.isRead -> Color(0xFFFF8599)
+                notif.isRead -> LineBorder
+                else -> Color(0xFFC7E0FF)
+            }
         )
     ) {
         Row(
@@ -181,9 +207,15 @@ fun NotificationRow(
         ) {
             // Sender Avatar with notification type badge
             Box {
-                UserAvatar(photoUrl = notif.fromPhoto, name = notif.fromName, size = 46)
+                UserAvatar(
+                    photoUrl = notif.fromPhoto,
+                    name = notif.fromName,
+                    size = 46,
+                    modifier = if (isLiveNotif) Modifier.border(1.5.dp, Color(0xFFFF1744), CircleShape) else Modifier
+                )
 
                 val badgeEmoji = when (notif.type) {
+                    "live", "live_stream" -> "🔴"
                     "like" -> "❤️"
                     "comment" -> "💬"
                     "friend_req", "friend_request", "friend_accept" -> "👥"
@@ -197,12 +229,12 @@ fun NotificationRow(
                     modifier = Modifier
                         .size(20.dp)
                         .clip(CircleShape)
-                        .background(Color.White)
-                        .border(1.dp, LineBorder, CircleShape)
+                        .background(if (isLiveNotif) Color(0xFFFF1744) else Color.White)
+                        .border(1.dp, if (isLiveNotif) Color.White else LineBorder, CircleShape)
                         .align(Alignment.BottomEnd),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(text = badgeEmoji, fontSize = 10.sp)
+                    Text(text = if (isLiveNotif) "🔴" else badgeEmoji, fontSize = 10.sp)
                 }
             }
 
@@ -219,13 +251,43 @@ fun NotificationRow(
                 Text(
                     text = MeskotStrings.formatNotificationTime(notif.createdAt, currentLanguage, nowMs),
                     fontSize = 11.sp,
-                    color = if (notif.isRead) MutedText else Color(0xFF1877F2),
+                    color = when {
+                        isLiveNotif -> Color(0xFFFF1744)
+                        notif.isRead -> MutedText
+                        else -> Color(0xFF1877F2)
+                    },
                     fontWeight = if (notif.isRead) FontWeight.Normal else FontWeight.Bold,
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
 
-            if (!notif.isRead) {
+            if (isLiveNotif) {
+                // TikTok-style "Watch" action button
+                Button(
+                    onClick = onClick,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFF1744),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier
+                        .padding(start = 6.dp)
+                        .testTag("notification_watch_live_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(
+                        text = MeskotStrings.get("watchLive", currentLanguage),
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else if (!notif.isRead) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Box(
                     modifier = Modifier
@@ -245,6 +307,8 @@ fun SavedScreen(
     savedPosts: List<Post>,
     currentLanguage: AppLanguage
 ) {
+    val savedPostIds by viewModel.savedPostIds.collectAsState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -269,10 +333,13 @@ fun SavedScreen(
                     val comments = viewModel.getComments(post.id)
                     PostCard(
                         post = post,
+                        isSaved = savedPostIds.contains(post.id),
                         currentUserId = currentUser?.uid,
                         comments = comments,
                         currentLanguage = currentLanguage,
                         onAuthorClick = { viewModel.openProfileByUid(it) },
+                        onHashtagClick = { tag -> viewModel.filterByHashtag(tag) },
+                        onMentionClick = { mention -> viewModel.openProfileByMention(mention) },
                         onToggleReaction = { pid, type -> viewModel.toggleReaction(pid, type) },
                         onShare = { viewModel.sharePost(it) },
                         onToggleSave = { viewModel.toggleSavePost(it) },

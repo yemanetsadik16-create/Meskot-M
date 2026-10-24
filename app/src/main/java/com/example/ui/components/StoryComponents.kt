@@ -57,6 +57,7 @@ import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.example.data.AppLanguage
 import com.example.data.Comment
+import com.example.data.LiveStreamSession
 import com.example.data.MeskotStrings
 import com.example.data.StoryItem
 import com.example.data.User
@@ -750,7 +751,7 @@ fun CreateStoryDialog(
                                         strokeWidth = 2.dp
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
-                                    Text("Publishing to Meskot Stories…", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text("Publishing to Meskot Moments…", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                 } else {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.Send,
@@ -760,7 +761,7 @@ fun CreateStoryDialog(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Publish Meskot Story (${selectedExpirationHours}h) ✨",
+                                        text = "Share Meskot Moment (${selectedExpirationHours}h) ✨",
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -1956,7 +1957,7 @@ fun StoryAvatarRingItem(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = "Create Story",
+                        contentDescription = "Share Moment",
                         tint = Color.White,
                         modifier = Modifier.size(14.dp)
                     )
@@ -2018,7 +2019,9 @@ val PresetCommunityStories: List<StoryItem> = emptyList()
 fun FacebookStoriesRail(
     currentUser: User?,
     activeStories: List<StoryItem>,
+    activeLiveStreams: List<LiveStreamSession> = emptyList(),
     onStoryClick: (StoryItem) -> Unit,
+    onLiveStreamClick: (LiveStreamSession) -> Unit = {},
     onCreateStoryClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -2029,6 +2032,10 @@ fun FacebookStoriesRail(
 
     val displayStories = remember(activeStories, currentUser?.uid) {
         activeStories.filter { it.uid != currentUser?.uid }
+    }
+
+    val activeLives = remember(activeLiveStreams) {
+        activeLiveStreams.filter { it.isLive }
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -2072,23 +2079,50 @@ fun FacebookStoriesRail(
                         )
                     }
                     Text(
-                        text = "Meskot Stories",
+                        text = "Meskot Moments",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Ink
                     )
-                    Surface(
-                        color = CrossRed.copy(alpha = 0.12f),
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(0.8.dp, CrossRed.copy(alpha = 0.35f))
-                    ) {
-                        Text(
-                            text = "${myActiveStories.size + displayStories.size} LIVE",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = CrossRed,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                        )
+                    if (activeLives.isNotEmpty()) {
+                        Surface(
+                            color = Color(0xFFFF1744).copy(alpha = 0.14f),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(0.8.dp, Color(0xFFFF1744).copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFFF1744))
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "${activeLives.size} LIVE",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color(0xFFFF1744)
+                                )
+                            }
+                        }
+                    } else {
+                        Surface(
+                            color = CrossRed.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(0.8.dp, CrossRed.copy(alpha = 0.35f))
+                        ) {
+                            Text(
+                                text = "${myActiveStories.size + displayStories.size} MOMENTS",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = CrossRed,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                            )
+                        }
                     }
                 }
 
@@ -2119,7 +2153,15 @@ fun FacebookStoriesRail(
                     )
                 }
 
-                // 2. User's Own Active Story (if published)
+                // 2. Active Live Streams (TikTok-style with glowing red pulse and "LIVE" indicator)
+                items(activeLives, key = { "live_stream_${it.id}" }) { liveStream ->
+                    FacebookLiveStreamCard(
+                        session = liveStream,
+                        onClick = { onLiveStreamClick(liveStream) }
+                    )
+                }
+
+                // 3. User's Own Active Story (if published)
                 myActiveStories.firstOrNull()?.let { myStory ->
                     item(key = "my_active_story_${myStory.id}") {
                         FacebookStoryCard(
@@ -2132,7 +2174,7 @@ fun FacebookStoriesRail(
                     }
                 }
 
-                // 3. Friends & Community Stories
+                // 4. Friends & Community Stories
                 items(displayStories, key = { "fb_story_${it.id}" }) { story ->
                     val isViewed = currentUser?.uid?.let { story.viewers.contains(it) } ?: false
                     FacebookStoryCard(
@@ -2148,6 +2190,150 @@ fun FacebookStoriesRail(
     }
     FacebookPostDivider(testTag = "stories_separator")
 }
+}
+
+/**
+ * TikTok-style Live Broadcast Card in Stories row with pulsing red LIVE badge and viewer count.
+ */
+@Composable
+fun FacebookLiveStreamCard(
+    session: LiveStreamSession,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cardWidth = 112.dp
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse_live_card")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 0.35f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(850, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_alpha"
+    )
+
+    Card(
+        modifier = modifier
+            .width(cardWidth)
+            .aspectRatio(9f / 16f)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+            .testTag("live_stream_card_${session.id}"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF141414)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        border = BorderStroke(
+            width = 2.dp,
+            brush = Brush.verticalGradient(
+                listOf(
+                    Color(0xFFFF1744).copy(alpha = pulseAlpha),
+                    Color(0xFFD4AF37),
+                    Color(0xFFFF1744)
+                )
+            )
+        )
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (session.hostPhoto.isNotBlank()) {
+                AsyncImage(
+                    model = session.hostPhoto,
+                    contentDescription = session.hostName,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color(0xFF2B0008), Color(0xFF140D05), Color(0xFF1A050A))
+                            )
+                        )
+                )
+            }
+
+            // Dark Scrim for text readability
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.0f to Color.Black.copy(alpha = 0.55f),
+                            0.35f to Color.Transparent,
+                            0.6f to Color.Black.copy(alpha = 0.35f),
+                            1.0f to Color.Black.copy(alpha = 0.92f)
+                        )
+                    )
+            )
+
+            // Top-left: Host Avatar with pulsing red ring
+            Box(
+                modifier = Modifier
+                    .padding(8.dp)
+                    .align(Alignment.TopStart)
+            ) {
+                UserAvatar(
+                    photoUrl = session.hostPhoto,
+                    name = session.hostName,
+                    size = 32,
+                    modifier = Modifier.border(1.5.dp, Color(0xFFFF1744), CircleShape)
+                )
+            }
+
+            // Top-right: Pulsing "LIVE" tag
+            Box(
+                modifier = Modifier
+                    .padding(8.dp)
+                    .align(Alignment.TopEnd)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFFFF1744))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(5.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = "LIVE",
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+            }
+
+            // Bottom: Host name & viewer count
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomStart)
+                    .padding(8.dp)
+            ) {
+                Text(
+                    text = session.hostName,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = session.formattedViewers,
+                    color = Color(0xFFFFB3BA),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
+            }
+        }
+    }
 }
 
 /**
@@ -2237,7 +2423,7 @@ fun FacebookCreateStoryCard(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = "Create Story",
+                            text = "New Moment",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Ink,
@@ -2245,7 +2431,7 @@ fun FacebookCreateStoryCard(
                             lineHeight = 13.sp
                         )
                         Text(
-                            text = "Share moment",
+                            text = "Share with Circle",
                             fontSize = 9.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = GoldDeep
@@ -2267,7 +2453,7 @@ fun FacebookCreateStoryCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Create story",
+                    contentDescription = "Share moment",
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)
                 )

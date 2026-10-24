@@ -615,7 +615,7 @@ fun AdsDashboardScreen(
                                     color = FbDarkText
                                 )
                                 Text(
-                                    text = "Ads Manager · Meskot Ad Server",
+                                    text = "Promotion Hub · Meskot Ad Server",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = FbBlue

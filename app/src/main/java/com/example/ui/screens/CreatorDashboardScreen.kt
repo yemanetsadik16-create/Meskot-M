@@ -2105,7 +2105,7 @@ fun FacebookMonetizationCriteriaModal(
                                 color = Ink
                             )
                             Text(
-                                text = "Meta Partner Monetization Standard",
+                                text = "Meskot Partner Monetization Standard",
                                 fontSize = 11.sp,
                                 color = MutedText
                             )

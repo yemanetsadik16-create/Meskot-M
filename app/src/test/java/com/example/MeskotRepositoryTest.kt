@@ -24,7 +24,7 @@ class MeskotRepositoryTest {
         assertEquals("Home", MeskotStrings.get("navFeed", AppLanguage.EN))
         assertEquals("መነሻ", MeskotStrings.get("navFeed", AppLanguage.AM))
         assertEquals("Connections", MeskotStrings.get("navFriends", AppLanguage.EN))
-        assertEquals("ወዳጆች", MeskotStrings.get("navFriends", AppLanguage.AM))
+        assertEquals("ግንኙነቶች", MeskotStrings.get("navFriends", AppLanguage.AM))
     }
 
     @Test
@@ -116,5 +116,45 @@ class MeskotRepositoryTest {
         repo.addComment(firstPost.id, "Great post!")
         val comments = repo.getCommentsForPost(firstPost.id)
         assertTrue(comments.any { it.text == "Great post!" })
+    }
+
+    @Test
+    fun testPersonalDetailsPrivacy() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = MeskotRepository(context)
+        val user = com.example.data.User(
+            uid = "user_privacy_test",
+            displayName = "Privacy Tester",
+            email = "privacy@meskot.et",
+            workplace = "Meskot Tech",
+            location = "Addis Ababa",
+            birthDate = "1995-05-12",
+            personalDetailsPrivacy = "public"
+        )
+        repo.switchUser(user)
+
+        // 1. By default "public" -> Everyone can view
+        assertEquals("public", repo.currentUser.value?.personalDetailsPrivacy)
+        assertTrue(user.canViewPersonalDetails(viewerUid = "visitor_1", isFriend = false))
+        assertTrue(user.canViewPersonalDetails(viewerUid = "friend_1", isFriend = true))
+        assertTrue(user.canViewPersonalDetails(viewerUid = "user_privacy_test", isFriend = false))
+
+        // 2. Switch to "only_me" -> Only owner can view, strangers and friends cannot
+        repo.setPersonalDetailsPrivacy("only_me")
+        val privateUser = repo.currentUser.value!!
+        assertEquals("only_me", privateUser.personalDetailsPrivacy)
+        assertEquals(true, privateUser.isPersonalDetailsLocked)
+        assertTrue(privateUser.canViewPersonalDetails(viewerUid = "user_privacy_test", isFriend = false))
+        org.junit.Assert.assertFalse(privateUser.canViewPersonalDetails(viewerUid = "stranger_1", isFriend = false))
+        org.junit.Assert.assertFalse(privateUser.canViewPersonalDetails(viewerUid = "friend_1", isFriend = true))
+        org.junit.Assert.assertFalse(privateUser.canViewPersonalDetails(viewerUid = null, isFriend = false))
+
+        // 3. Switch to "friends" (Connections) -> Connections can view, strangers cannot
+        repo.setPersonalDetailsPrivacy("friends")
+        val friendsOnlyUser = repo.currentUser.value!!
+        assertEquals("friends", friendsOnlyUser.personalDetailsPrivacy)
+        assertTrue(friendsOnlyUser.canViewPersonalDetails(viewerUid = "user_privacy_test", isFriend = false))
+        assertTrue(friendsOnlyUser.canViewPersonalDetails(viewerUid = "friend_1", isFriend = true))
+        org.junit.Assert.assertFalse(friendsOnlyUser.canViewPersonalDetails(viewerUid = "stranger_1", isFriend = false))
     }
 }

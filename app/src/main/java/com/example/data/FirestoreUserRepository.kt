@@ -345,9 +345,17 @@ class FirestoreUserRepository(
             verificationSubscribedAt = (d["verificationSubscribedAt"] as? Number)?.toLong(),
             verificationExpiresAt = (d["verificationExpiresAt"] as? Number)?.toLong(),
             verificationPlan = d["verificationPlan"] as? String ?: "MONTHLY_STANDARD",
-            verificationPaymentMethod = d["verificationPaymentMethod"] as? String ?: "",
             savedPostIds = (d["savedPostIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
-            subscribedPostIds = (d["subscribedPostIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+            subscribedPostIds = (d["subscribedPostIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+            isPersonalDetailsLocked = (d["personalDetailsPrivacy"] as? String == "only_me" || d["personalDetailsPrivacy"] as? String == "onlyme") || (d["isPersonalDetailsLocked"] as? Boolean ?: false),
+            personalDetailsPrivacy = d["personalDetailsPrivacy"] as? String ?: (if (d["isPersonalDetailsLocked"] == true) "only_me" else "public"),
+            professionPrivacy = d["professionPrivacy"] as? String ?: "public",
+            locationPrivacy = d["locationPrivacy"] as? String ?: "public",
+            hometownPrivacy = d["hometownPrivacy"] as? String ?: "public",
+            workPrivacy = d["workPrivacy"] as? String ?: "public",
+            educationPrivacy = d["educationPrivacy"] as? String ?: "public",
+            birthdayPrivacy = d["birthdayPrivacy"] as? String ?: "public",
+            genderPrivacy = d["genderPrivacy"] as? String ?: "public"
         )
     }
 
@@ -392,7 +400,16 @@ class FirestoreUserRepository(
         "verificationPlan" to u.verificationPlan,
         "verificationPaymentMethod" to u.verificationPaymentMethod,
         "savedPostIds" to u.savedPostIds,
-        "subscribedPostIds" to u.subscribedPostIds
+        "subscribedPostIds" to u.subscribedPostIds,
+        "isPersonalDetailsLocked" to (u.personalDetailsPrivacy == "only_me" || u.personalDetailsPrivacy == "onlyme" || u.isPersonalDetailsLocked),
+        "personalDetailsPrivacy" to u.personalDetailsPrivacy,
+        "professionPrivacy" to u.professionPrivacy,
+        "locationPrivacy" to u.locationPrivacy,
+        "hometownPrivacy" to u.hometownPrivacy,
+        "workPrivacy" to u.workPrivacy,
+        "educationPrivacy" to u.educationPrivacy,
+        "birthdayPrivacy" to u.birthdayPrivacy,
+        "genderPrivacy" to u.genderPrivacy
     )
 
     private suspend fun <T> Task<T>.awaitTask(): T =
